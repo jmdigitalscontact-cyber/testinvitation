@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#faf6f5">
+  <meta name="description" content="Jason and Rhona Mae wedding gallery.">
+  <title>Photo Gallery | Jason & Rhona Mae</title>
+  <link rel="stylesheet" href="css/gallery.css">
+</head>
+<body>
+  <header class="gallery-header">
+    <div class="gallery-topbar">
+      <a class="back-link" href="index.html#gallery" aria-label="Back to invitation">Back to invitation</a>
+      <span class="gallery-tag">Wedding gallery</span>
+    </div>
+
+    <div class="gallery-hero">
+      <p class="gallery-kicker">A closer look at our favorite memories</p>
+      <h1>Photo Gallery</h1>
+      <p class="gallery-lead">A curated set of moments from our story together, arranged 24 at a time for faster browsing.</p>
+    </div>
+  </header>
+
+  <main class="gallery-main">
+    <p class="gallery-meta" id="gallery-meta">Loading photos...</p>
+    <section class="gallery-grid" id="gallery-grid" aria-live="polite"></section>
+    <nav class="gallery-pagination" aria-label="Gallery pages">
+      <button class="page-btn" id="page-prev" type="button" aria-label="Previous page">Previous</button>
+      <span class="page-indicator" id="page-indicator">Page 1 of 1</span>
+      <button class="page-btn" id="page-next" type="button" aria-label="Next page">Next</button>
+    </nav>
+  </main>
+
+  <div class="lightbox" id="lightbox" aria-hidden="true" role="dialog" aria-modal="true" aria-label="Gallery lightbox">
+    <button class="lightbox-close" type="button" id="lightbox-close" aria-label="Close">&times;</button>
+    <button class="lightbox-nav prev" type="button" id="lightbox-prev" aria-label="Previous">&#10094;</button>
+    <figure class="lightbox-frame">
+      <img id="lightbox-image" src="" alt="Gallery image">
+    </figure>
+    <button class="lightbox-nav next" type="button" id="lightbox-next" aria-label="Next">&#10095;</button>
+  </div>
+
+  <script src="js/gallery.js"></script>
+</body>
+</html>

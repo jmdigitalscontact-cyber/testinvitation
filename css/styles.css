@@ -104,7 +104,7 @@ header.scrolled {
 /* ===== Hero background override (use first photo, hide numbers) ===== */
 .banner {
   /* use the first hero image as the full-bleed background */
-  background-image: url('../images/hero-1.jpg');
+  background-image: url('../images/hero-1.webp');
   background-size: cover;
   background-position: 18% center;
   background-repeat: no-repeat;
@@ -239,9 +239,9 @@ header.scrolled {
 }
 
 /* map each slide's bg img into a CSS variable for large/small */
-.bg-slide.slide-1 { --hero-img: url('../images/hero-1.jpg'); }
-.bg-slide.slide-2 { --hero-img: url('../images/hero-2.jpg'); }
-.bg-slide.slide-3 { --hero-img: url('../images/hero-3.jpg'); }
+.bg-slide.slide-1 { --hero-img: url('../images/hero-1.webp'); }
+.bg-slide.slide-2 { --hero-img: url('../images/hero-2.webp'); }
+.bg-slide.slide-3 { --hero-img: url('../images/hero-3.webp'); }
 
 
 .bg-slide.active .circle.bg {
@@ -619,7 +619,7 @@ audio#wedding-audio { display: none; }
   width: 100%;
   height: 100%;
   padding: 20px;
-  background: url('../images/tree-bg.png') no-repeat center / cover;
+  background: url('../images/tree-bg.webp') no-repeat center / cover;
   opacity: 0.3;
   pointer-events: none;
 }
@@ -746,7 +746,7 @@ audio#wedding-audio { display: none; }
   content: '';
   position: absolute;
   inset: 0;
-  background: url('../images/tree-bg.png') center center / contain no-repeat;
+  background: url('../images/tree-bg.webp') center center / contain no-repeat;
   opacity: 0.12;
   pointer-events: none;
 }
@@ -852,10 +852,11 @@ audio#wedding-audio { display: none; }
   position: relative;
   z-index: 1;
   display: grid;
-  grid-template-columns: 1.1fr 0.9fr;
-  gap: 1.25rem;
-  max-width: 1100px;
+  grid-template-columns: 1.2fr 0.8fr;
+  gap: 1.5rem;
+  width: min(1400px, 100%);
   margin: 0 auto 1.5rem;
+  padding: 0 1.5rem;
 }
 .program-hero-copy,
 .program-hero-card {
@@ -943,8 +944,9 @@ audio#wedding-audio { display: none; }
   z-index: 1;
   display: grid;
   gap: 1rem;
-  max-width: 1100px;
+  width: min(1400px, 100%);
   margin: 0 auto;
+  padding: 0 1.5rem;
 }
 .program-card {
   position: relative;
@@ -1042,27 +1044,89 @@ audio#wedding-audio { display: none; }
 }
 .entourage-list {
   display: grid;
-  gap: 0.75rem;
+  gap: 1rem;
+}
+.program-card--entourage {
+  padding-bottom: 2rem;
+}
+.program-card--entourage h3 {
+  text-align: center;
+  margin-bottom: 1.4rem;
 }
 .entourage-group {
-  padding: 0.9rem 1rem;
-  border-radius: 16px;
-  background: rgba(255, 255, 255, 0.76);
-  border: 1px solid rgba(154, 182, 157, 0.16);
+  padding: 1.4rem 1.5rem;
+  border-radius: 24px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(250, 246, 245, 0.82));
+  border: 1px solid rgba(154, 182, 157, 0.18);
+  box-shadow: 0 18px 45px rgba(45, 61, 50, 0.04);
+  text-align: center;
 }
-.entourage-group span {
-  display: block;
-  margin-bottom: 0.25rem;
-  font-size: 0.73rem;
+.entourage-group h4 {
+  margin: 0 0 0.95rem;
+  font-size: 0.95rem;
   font-weight: 700;
-  letter-spacing: 0.16em;
+  letter-spacing: 0.18em;
   text-transform: uppercase;
   color: var(--primary-dark);
 }
-.entourage-group p {
+.entourage-group ul {
+  list-style: none;
+  padding: 0;
+  margin: 0 auto;
+  display: grid;
+  gap: 0.55rem;
+  justify-items: center;
+}
+.entourage-group li {
+  width: min(100%, 34rem);
   margin: 0;
-  color: var(--muted);
-  line-height: 1.7;
+  color: var(--text);
+  font-size: 0.98rem;
+  font-weight: 500;
+  line-height: 1.8;
+  background: rgba(255, 255, 255, 0.85);
+  border: 1px solid rgba(154, 182, 157, 0.14);
+  border-radius: 16px;
+  padding: 0.85rem 1rem;
+}
+@media (min-width: 900px) {
+  .entourage-list {
+    grid-template-columns: repeat(2, minmax(280px, 1fr));
+    grid-template-areas:
+      "couple couple"
+      "principal secondary"
+      "wedding children";
+    gap: 1.5rem;
+    align-items: start;
+  }
+  .principal-sponsors {
+    grid-area: principal;
+  }
+  .couple {
+    grid-area: couple;
+    justify-self: center;
+    width: min(100%, 46rem);
+  }
+  .secondary-sponsors {
+    grid-area: secondary;
+  }
+  .children-bearers {
+    grid-area: children;
+  }
+  .wedding-party {
+    grid-area: wedding;
+  }
+  .program-card--entourage {
+    padding-bottom: 2.8rem;
+  }
+}
+@media (max-width: 640px) {
+  .entourage-group {
+    padding: 1.1rem 1rem;
+  }
+  .entourage-group li {
+    width: 100%;
+  }
 }
 .faq-list {
   max-width: 760px;

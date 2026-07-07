@@ -28,10 +28,42 @@
     });
   }
 
+  function setupLazyImages() {
+    if (!('IntersectionObserver' in window)) return;
+
+    var lazyImages = Array.from(document.querySelectorAll('img'));
+    var observer = new IntersectionObserver(function (entries) {
+      entries.forEach(function (entry) {
+        if (!entry.isIntersecting) return;
+        var img = entry.target;
+        var src = img.getAttribute('data-src');
+        if (src) {
+          img.setAttribute('src', src);
+          img.removeAttribute('data-src');
+          img.classList.add('is-loaded');
+        }
+        observer.unobserve(img);
+      });
+    }, { rootMargin: '180px 0px' });
+
+    lazyImages.forEach(function (img) {
+      var src = img.getAttribute('src');
+      if (!src || img.getAttribute('data-src') || img.getAttribute('loading') === 'eager' || img.closest('.banner')) return;
+      if (img.getAttribute('loading') === 'lazy' || img.closest('.gallery-item') || img.closest('.photo-card') || img.closest('.page-card') || img.closest('.lightbox-thumbs')) {
+        img.setAttribute('data-src', src);
+        img.removeAttribute('src');
+        img.setAttribute('loading', 'lazy');
+        img.setAttribute('decoding', 'async');
+        observer.observe(img);
+      }
+    });
+  }
+
   /* ===== Banner Slides with Concentric Circle Animation ===== */
   window.addEventListener('load', function () {
     preloadCriticalAssets();
     registerServiceWorker();
+    setupLazyImages();
     var slides = document.querySelectorAll('.bg-slide');
     var slideBtns = document.querySelectorAll('.slide-btn');
 
@@ -269,7 +301,6 @@
   window.addEventListener('load', function () {
     updateGalleryMotion();
     galleryMarquees.forEach(function (marquee) { marquee.classList.add('is-paused'); });
-    startInitialPreload();
     setupGalleryObserver();
   });
 
@@ -334,6 +365,7 @@
     var thumbBatchSize = 20;
     var thumbCursor = 0;
     var renderedAllThumbs = false;
+    var lightboxImageCache = {};
 
     function renderThumbBatch() {
       if (!thumbsWrap || !trpList.length || renderedAllThumbs) return;
@@ -373,48 +405,73 @@
       if (active) active.scrollIntoView({ behavior: 'smooth', inline: 'center' });
     }
 
+    function preloadLightboxImage(src, onReady) {
+      if (!src) return;
+      if (lightboxImageCache[src]) {
+        if (lightboxImageCache[src].ready) {
+          if (onReady) onReady(lightboxImageCache[src].img);
+        } else if (onReady) {
+          lightboxImageCache[src].waiters.push(onReady);
+        }
+        return;
+      }
+
+      var img = new Image();
+      img.decoding = 'async';
+      img.onload = function () {
+        lightboxImageCache[src].ready = true;
+        lightboxImageCache[src].waiters.forEach(function (ready) { ready(img); });
+        lightboxImageCache[src].waiters = [];
+      };
+      img.onerror = function () {
+        lightboxImageCache[src].ready = true;
+        lightboxImageCache[src].waiters.forEach(function (ready) { ready(img); });
+        lightboxImageCache[src].waiters = [];
+      };
+      lightboxImageCache[src] = { img: img, ready: false, waiters: [] };
+      img.src = src;
+      if (onReady) lightboxImageCache[src].waiters.push(onReady);
+    }
+
+    function showLightboxImage(src, alt) {
+      if (!src) return;
+      viewImg.style.opacity = 0;
+      preloadLightboxImage(src, function () {
+        viewImg.src = src;
+        viewImg.alt = alt || '';
+        viewImg.style.opacity = 1;
+      });
+    }
+
     function openLightboxAt(index) {
       currentIndex = (index + trpList.length) % trpList.length;
       var src = 'images/' + trpList[currentIndex];
-      viewImg.style.opacity = 0;
-      // decode image off-DOM to avoid jank, then swap in
-      var decoder = new Image();
-      decoder.src = src;
-      if (decoder.decode) {
-        decoder.decode().then(function () {
-          viewImg.src = src; viewImg.alt = trpList[currentIndex] || ''; viewImg.style.opacity = 1;
-        }).catch(function () { viewImg.src = src; viewImg.style.opacity = 1; });
-      } else {
-        decoder.onload = function () { viewImg.src = src; viewImg.alt = trpList[currentIndex] || ''; viewImg.style.opacity = 1; };
-        decoder.onerror = function () { viewImg.src = src; viewImg.style.opacity = 1; };
-      }
+      showLightboxImage(src, trpList[currentIndex] || '');
       lightbox.classList.add('open');
       document.body.style.overflow = 'hidden';
       updateActiveThumb();
-      // prefetch adjacent images
-      var next = new Image(); next.src = 'images/' + trpList[(currentIndex + 1) % trpList.length];
-      var prev = new Image(); prev.src = 'images/' + trpList[(currentIndex - 1 + trpList.length) % trpList.length];
+
+      var nextIndex = (currentIndex + 1) % trpList.length;
+      var prevIndex = (currentIndex - 1 + trpList.length) % trpList.length;
+      preloadLightboxImage('images/' + trpList[nextIndex]);
+      preloadLightboxImage('images/' + trpList[prevIndex]);
     }
 
     // Fallback: open lightbox directly from a filename when trpList isn't available
     function openLightboxByName(name) {
       if (!name) return;
       var src = name.indexOf('/') === -1 ? ('images/' + name) : name;
-      viewImg.style.opacity = 0;
-      var decoder = new Image(); decoder.src = src;
-      if (decoder.decode) {
-        decoder.decode().then(function () { viewImg.src = src; viewImg.alt = name || ''; viewImg.style.opacity = 1; }).catch(function () { viewImg.src = src; viewImg.style.opacity = 1; });
-      } else {
-        decoder.onload = function () { viewImg.src = src; viewImg.alt = name || ''; viewImg.style.opacity = 1; };
-        decoder.onerror = function () { viewImg.src = src; viewImg.style.opacity = 1; };
-      }
+      showLightboxImage(src, name || '');
       lightbox.classList.add('open');
       document.body.style.overflow = 'hidden';
       // prefetch neighbors if in list
       var idx = trpList.indexOf(name);
-      if (idx !== -1) { var n = new Image(); n.src = 'images/' + trpList[(idx+1)%trpList.length]; var p = new Image(); p.src = 'images/' + trpList[(idx-1+trpList.length)%trpList.length]; }
+      if (idx !== -1) {
+        preloadLightboxImage('images/' + trpList[(idx + 1) % trpList.length]);
+        preloadLightboxImage('images/' + trpList[(idx - 1 + trpList.length) % trpList.length]);
+      }
       // clear active thumb when trpList absent
-      if (thumbsWrap) { var ch = thumbsWrap.children; for (var i=0;i<ch.length;i++) ch[i].classList.remove('active'); }
+      if (thumbsWrap) { var ch = thumbsWrap.children; for (var i = 0; i < ch.length; i++) ch[i].classList.remove('active'); }
     }
 
     function closeLightbox() {
@@ -429,18 +486,39 @@
     function showNext() { openLightboxAt(currentIndex + 1); }
     function showPrev() { openLightboxAt(currentIndex - 1); }
 
+    function getFirstVisibleGalleryImageName() {
+      var firstImg = document.querySelector('.gallery-marquee .gallery-item img');
+      if (!firstImg) return '';
+      var src = firstImg.getAttribute('src') || firstImg.getAttribute('data-src') || '';
+      if (!src) return '';
+      var cleanSrc = src.split('?')[0].split('#')[0];
+      var parts = cleanSrc.split('/');
+      return parts.length ? parts[parts.length - 1] : '';
+    }
+
     function openGalleryFromButton() {
       loadTrpList().then(function () {
         thumbCursor = 0;
         renderedAllThumbs = false;
-        thumbsWrap.innerHTML = '';
+        if (thumbsWrap) thumbsWrap.innerHTML = '';
         if (viewImg) {
           viewImg.src = '';
           viewImg.alt = '';
         }
         renderThumbBatch();
-        lightbox.classList.add('open');
-        document.body.style.overflow = 'hidden';
+
+        if (trpList.length) {
+          openLightboxAt(0);
+          return;
+        }
+
+        var fallbackName = getFirstVisibleGalleryImageName();
+        if (fallbackName) {
+          openLightboxByName(fallbackName);
+          return;
+        }
+
+        openLightboxByName('TRP-1.webp');
       });
     }
 
