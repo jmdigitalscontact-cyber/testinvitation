@@ -1,8 +1,37 @@
 (function () {
   'use strict';
 
+  /* ===== Browser asset caching helpers ===== */
+  function preloadCriticalAssets() {
+    var assets = [
+      'css/styles.css',
+      'js/script.js',
+      'audio/ambient.mp3'
+    ];
+
+    assets.forEach(function (asset) {
+      var link = document.createElement('link');
+      link.rel = 'preload';
+      link.as = asset.endsWith('.css') ? 'style' : asset.endsWith('.js') ? 'script' : 'audio';
+      link.href = asset;
+      document.head.appendChild(link);
+    });
+  }
+
+  function registerServiceWorker() {
+    if (!('serviceWorker' in navigator)) return;
+
+    window.addEventListener('load', function () {
+      navigator.serviceWorker.register('sw.js').catch(function () {
+        console.warn('Service worker registration failed');
+      });
+    });
+  }
+
   /* ===== Banner Slides with Concentric Circle Animation ===== */
   window.addEventListener('load', function () {
+    preloadCriticalAssets();
+    registerServiceWorker();
     var slides = document.querySelectorAll('.bg-slide');
     var slideBtns = document.querySelectorAll('.slide-btn');
 

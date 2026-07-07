@@ -391,12 +391,39 @@
   </section>
 
   <!-- ===== Program ===== -->
-  <section id="program">
-    <h2 class="reveal">Program</h2>
-    <p class="section-sub reveal">A snapshot of the wedding day flow</p>
-    <div class="page-grid reveal">
-      <article class="page-card">
-        <h3>Ceremony</h3>
+  <section id="program" class="program-section">
+    <div class="program-hero reveal">
+      <div class="program-hero-copy">
+        <p class="eyebrow">Wedding day flow</p>
+        <h2>Program</h2>
+        <p>From the first procession to the final send-off, every moment is designed to feel graceful, warm, and unforgettable.</p>
+      </div>
+      <div class="program-hero-card" aria-label="Wedding program overview">
+        <span class="program-badge">November 11, 2026</span>
+        <div class="program-hero-stats">
+          <div>
+            <strong>2:00 PM</strong>
+            <span>Ceremony</span>
+          </div>
+          <div>
+            <strong>5:00 PM</strong>
+            <span>Reception</span>
+          </div>
+          <div>
+            <strong>9:00 PM</strong>
+            <span>Farewell</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="program-stack reveal">
+      <article class="program-card program-card--ceremony">
+        <div class="program-card-top">
+          <span class="program-chip">Ceremony</span>
+          <div class="program-card-line"></div>
+        </div>
+        <h3>Vows & Blessings</h3>
         <ol class="program-list">
           <li>
             <time datetime="2026-11-11T13:30">1:30 PM</time>
@@ -421,8 +448,12 @@
         </ol>
       </article>
 
-      <article class="page-card">
-        <h3>Reception</h3>
+      <article class="program-card program-card--reception">
+        <div class="program-card-top">
+          <span class="program-chip">Reception</span>
+          <div class="program-card-line"></div>
+        </div>
+        <h3>Feast & Celebration</h3>
         <ol class="program-list">
           <li>
             <time datetime="2026-11-11T17:00">5:00 PM</time>
@@ -446,23 +477,34 @@
           </li>
         </ol>
       </article>
-      <article class="page-card">
-        <h3>Wedding Entourage</h3>
-        <p class="section-sub">Family, sponsors, and wedding party</p>
+
+      <article class="program-card program-card--entourage">
+        <div class="program-card-top">
+          <span class="program-chip">Entourage</span>
+          <div class="program-card-line"></div>
+        </div>
+        <h3>With Our Beloved Circle</h3>
         <div class="entourage-list">
-          <p><strong>Groom:</strong> Jason Edward T. Monta&ntilde;a</p>
-          <p><strong>Bride:</strong> Rhona Mae M. Robles</p>
-          <p><strong>Principal sponsors:</strong> Mr. Joey Villajoaquin, Mr. Rito Cuntapay, Mrs. Angelita Villajoaquin, Mrs. Ellen Cuntapay, Juvy Robles, Kate Tenedero, Kristine Juanillias, Aimee Burgos, Kristina Mari, Rosella Orlino, Jenica Seril</p>
-          <p><strong>Secondary sponsors:</strong> Candle: Uly Argame, Bea Odchigue; Veil: Justine Ross Asayas, Cheliza Antonette Asayas; Cord: Luigi D. Sanchez, Vanna Zu&ntilde;iga.</p>
-          <p><strong>Best man:</strong> Jacob Monta&ntilde;a</p>
-          <p><strong>Groomsmen:</strong> Daryl De Castro, MC Potestades, Naza Villena, Angelo Cordero, Kevin Gutierrez, Nel Cosme, Tim Figueroa, Carlo Diaz, Jim Migri&ntilde;o, Leandro Alberto, Maren Salgado, Neil Lacsamana, Kevin Bartolome, Thrina Embudo, Carlo Guevarra</p>
-          <p><strong>Maid of honor:</strong> Reena Theresa M. Robles</p>
-          <p><strong>Bridesmaids &amp; bridesman:</strong> Armie Cabanes, Christal Razonable, Mary Joy Fernando, Harvey Dave Abello, Christelle Bisnar, Elvie Pacurib</p>
-          <p><strong>Flower girls:</strong> Rhian Rose Robles, Elizabeth Fernando, Olivia Villajoaquin, Savy Sacay</p>
-          <p><strong>Ring bearer:</strong> Julius Anthony Fernando</p>
-          <p><strong>Arrhae bearer:</strong> Leonard Castro</p>
-          <p><strong>Bible bearer:</strong> Glenn Virrey</p>
-          <p><strong>Banner bearer:</strong> Ryan Christian Robles</p>
+          <div class="entourage-group">
+            <span>Couple</span>
+            <p>Jason Edward T. Monta&ntilde;a &amp; Rhona Mae M. Robles</p>
+          </div>
+          <div class="entourage-group">
+            <span>Principal sponsors</span>
+            <p>Mr. Joey Villajoaquin, Mr. Rito Cuntapay, Mrs. Angelita Villajoaquin, Mrs. Ellen Cuntapay, Juvy Robles, Kate Tenedero, Kristine Juanillias, Aimee Burgos, Kristina Mari, Rosella Orlino, Jenica Seril</p>
+          </div>
+          <div class="entourage-group">
+            <span>Secondary sponsors</span>
+            <p>Candle: Uly Argame, Bea Odchigue; Veil: Justine Ross Asayas, Cheliza Antonette Asayas; Cord: Luigi D. Sanchez, Vanna Zu&ntilde;iga.</p>
+          </div>
+          <div class="entourage-group">
+            <span>Wedding party</span>
+            <p>Best man Jacob Monta&ntilde;a, maid of honor Reena Theresa M. Robles, groomsmen and bridesmaids led by Daryl De Castro, MC Potestades, Naza Villena, Angelo Cordero, Kevin Gutierrez, Nel Cosme, Tim Figueroa, Carlo Diaz, Jim Migri&ntilde;o, Leandro Alberto, Maren Salgado, Neil Lacsamana, Kevin Bartolome, Thrina Embudo, Carlo Guevarra, Armie Cabanes, Christal Razonable, Mary Joy Fernando, Harvey Dave Abello, Christelle Bisnar, and Elvie Pacurib.</p>
+          </div>
+          <div class="entourage-group">
+            <span>Children & bearers</span>
+            <p>Rhian Rose Robles, Elizabeth Fernando, Olivia Villajoaquin, Savy Sacay, Julius Anthony Fernando, Leonard Castro, Glenn Virrey, and Ryan Christian Robles.</p>
+          </div>
         </div>
       </article>
     </div>
