@@ -201,22 +201,215 @@
 
   document.querySelectorAll('.reveal').forEach(function (el) { revealObserver.observe(el); });
 
+  function getInvitationToken() {
+    var params = new URLSearchParams(window.location.search);
+    return params.get('invitation_id') || params.get('invite') || params.get('token') || '';
+  }
+
+  function getInvitationMode() {
+    var params = new URLSearchParams(window.location.search);
+    var invitationId = params.get('invitation_id') || params.get('invite') || '';
+    var token = params.get('token') || '';
+    return {
+      invitationId: invitationId,
+      token: token,
+      source: invitationId ? 'invite' : (token ? 'token' : '')
+    };
+  }
+
+  function setInviteLoading(loading, message) {
+    var loadingState = document.getElementById('rsvp-loading-state');
+    var form = document.getElementById('rsvp-form');
+    if (loadingState) {
+      loadingState.hidden = !loading;
+      if (message) loadingState.textContent = message;
+    }
+    if (form) {
+      form.hidden = loading;
+    }
+  }
+
+  function renderInvitedParty(invitation) {
+    var title = document.getElementById('rsvp-invite-title');
+    var meta = document.getElementById('rsvp-invite-meta');
+    var list = document.getElementById('invited-party-list');
+    var invitationInput = document.getElementById('invitation-id');
+    var tokenInput = document.getElementById('invitation-token');
+    var invitedNames = Array.isArray(invitation.invited_guest_names) && invitation.invited_guest_names.length
+      ? invitation.invited_guest_names
+      : [invitation.guest_name || 'Guest'];
+
+    if (title) {
+      title.textContent = 'Welcome, ' + (invitation.guest_name || 'Guest');
+    }
+    if (meta) {
+      meta.textContent = 'Please tick each name that will attend. Your invite includes ' + invitedNames.length + ' name' + (invitedNames.length === 1 ? '' : 's') + '.';
+    }
+    if (invitationInput) invitationInput.value = invitation.invitation_id || '';
+    if (tokenInput) tokenInput.value = invitation.token || invitation.invitation_id || '';
+
+    if (!list) return;
+    list.innerHTML = '';
+
+    invitedNames.forEach(function (name, index) {
+      var row = document.createElement('label');
+      row.className = 'invite-party-row';
+      row.setAttribute('data-attendee-row', String(index));
+      var person = document.createElement('span');
+      person.className = 'invite-party-person';
+
+      var personName = document.createElement('span');
+      personName.className = 'invite-party-name';
+      personName.textContent = name;
+
+      var personNote = document.createElement('span');
+      personNote.className = 'invite-party-note';
+      personNote.textContent = 'Tick if attending';
+
+      var checkbox = document.createElement('input');
+      checkbox.type = 'checkbox';
+      checkbox.className = 'invite-party-toggle';
+      checkbox.name = 'attendee-going';
+      checkbox.checked = true;
+
+      person.appendChild(personName);
+      person.appendChild(personNote);
+      row.appendChild(person);
+      row.appendChild(checkbox);
+
+      checkbox.addEventListener('change', function () {
+        row.classList.toggle('is-checked', checkbox.checked);
+      });
+      row.classList.add('is-checked');
+      list.appendChild(row);
+    });
+
+    setInviteLoading(false);
+    var form = document.getElementById('rsvp-form');
+    if (form) form.hidden = false;
+  }
+
+  function loadInvitationDetails() {
+    var mode = getInvitationMode();
+    var lockedState = document.getElementById('rsvp-locked-state');
+    var formState = document.getElementById('rsvp-form-state');
+    if (!lockedState || !formState) return;
+
+    if (!mode.invitationId && !mode.token) {
+      lockedState.hidden = false;
+      formState.hidden = true;
+      setInviteLoading(true, 'RSVP is for invited guests only. Open the personal link or scan the QR code from your invitation to respond.');
+      return;
+    }
+
+    lockedState.hidden = true;
+    formState.hidden = false;
+    setInviteLoading(true, 'Loading invitation details...');
+
+    var endpoint;
+    if (mode.source === 'invite') {
+      endpoint = 'rsvp/api.php?action=verify-invitation-qr&invitation_id=' + encodeURIComponent(mode.invitationId);
+    } else {
+      endpoint = 'rsvp/api.php?action=get-invitation-details&token=' + encodeURIComponent(mode.token);
+    }
+
+    fetch(endpoint, { cache: 'no-cache' })
+      .then(function (response) { return response.json(); })
+      .then(function (data) {
+        if (!data || !data.success || !data.data) {
+          throw new Error(data && data.error ? data.error : 'Unable to load invitation details');
+        }
+        renderInvitedParty(data.data);
+      })
+      .catch(function (error) {
+        setInviteLoading(true, error.message || 'Unable to load invitation details.');
+        if (lockedState) lockedState.hidden = false;
+        if (formState) formState.hidden = true;
+      });
+  }
+
+  function applyRSVPGating() {
+    var mode = getInvitationMode();
+    var lockedState = document.getElementById('rsvp-locked-state');
+    var formState = document.getElementById('rsvp-form-state');
+
+    if (!lockedState || !formState) return;
+
+    if (mode.invitationId || mode.token) {
+      lockedState.hidden = true;
+      formState.hidden = false;
+    } else {
+      lockedState.hidden = false;
+      formState.hidden = true;
+    }
+  }
+
+  applyRSVPGating();
+  loadInvitationDetails();
+
   /* ===== RSVP Form ===== */
   var form = document.getElementById('rsvp-form');
   if (form) {
     form.addEventListener('submit', function (e) {
       e.preventDefault();
       var fb = document.getElementById('rsvp-feedback');
-      var name = form.querySelector('[name="name"]').value.trim();
-      var attending = form.querySelector('[name="attendance"]').value;
       var btn = form.querySelector('.btn-primary');
+      var token = document.getElementById('invitation-token').value.trim();
+      var dietary = document.getElementById('dietary').value.trim();
+      var attendeeRows = Array.from(document.querySelectorAll('.invite-party-row'));
 
-      if (!name) { showFeedback(fb, 'Please enter your name.', 'error'); return; }
-      if (!attending) { showFeedback(fb, 'Please select your attendance.', 'error'); return; }
+      if (!token) {
+        showFeedback(fb, 'Your invitation could not be loaded. Please open the QR link again.', 'error');
+        return;
+      }
 
-      showFeedback(fb, 'Thank you! Your RSVP has been received.', 'success');
+      var attendees = attendeeRows.map(function (row) {
+        var nameEl = row.querySelector('.invite-party-name');
+        var checkbox = row.querySelector('input[type="checkbox"]');
+        return {
+          name: nameEl ? nameEl.textContent.trim() : '',
+          attending: !!(checkbox && checkbox.checked)
+        };
+      }).filter(function (attendee) { return attendee.name; });
+
+      var selectedCount = attendees.filter(function (attendee) { return attendee.attending; }).length;
+      var attending = selectedCount > 0 ? 'yes' : 'no';
+
+      if (attendees.length === 0) {
+        showFeedback(fb, 'We could not find any names on this invitation.', 'error');
+        return;
+      }
+
       btn.disabled = true;
-      btn.textContent = 'RSVP Received';
+      btn.textContent = 'Submitting...';
+
+      fetch('rsvp/api.php?action=submit-rsvp', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          token: token,
+          attending: attending,
+          attendee_count: selectedCount,
+          attendees: attendees,
+          dietary_restrictions: dietary,
+          special_notes: ''
+        })
+      })
+      .then(function (response) { return response.json(); })
+      .then(function (data) {
+        if (!data || !data.success) {
+          throw new Error(data && data.error ? data.error : 'RSVP submission failed');
+        }
+        showFeedback(fb, 'Thank you! Your RSVP has been received.', 'success');
+        btn.textContent = 'RSVP Received';
+      })
+      .catch(function (error) {
+        btn.disabled = false;
+        btn.textContent = 'Submit RSVP';
+        showFeedback(fb, error.message || 'RSVP submission failed.', 'error');
+      });
     });
   }
 
@@ -234,8 +427,7 @@
   function updateGalleryMotion() {
     if (!galleryMarquees.length) return;
     var reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    var isSmallScreen = window.matchMedia('(max-width: 768px)').matches;
-    var shouldAnimate = !reduceMotion && !isSmallScreen;
+    var shouldAnimate = !reduceMotion;
     galleryMarquees.forEach(function (marquee) {
       marquee.classList.toggle('reduced-motion', !shouldAnimate);
       marquee.classList.toggle('is-paused', !shouldAnimate);
@@ -298,7 +490,62 @@
     obs.observe(gallery);
   }
 
+  /* ===== Randomize marquee photo order on each page load ===== */
+  function shuffleMarqueeTracks() {
+    var photoPools = [
+      [
+        { src: 'images/TRP-2.webp',   alt: 'Outfit look 1' },
+        { src: 'images/TRP-66.webp',  alt: 'Outfit look 2' },
+        { src: 'images/TRP-130.webp', alt: 'Outfit look 3' },
+        { src: 'images/TRP-209.webp', alt: 'Outfit look 4' },
+        { src: 'images/TRP-67.webp',  alt: 'Location 1' },
+        { src: 'images/TRP-184.webp', alt: 'Location 2' },
+        { src: 'images/TRP-6.webp',   alt: 'Location 3' },
+        { src: 'images/TRP-208.webp', alt: 'Location 4' }
+      ],
+      [
+        { src: 'images/TRP-8.webp',   alt: 'Outfit look 1' },
+        { src: 'images/TRP-76.webp',  alt: 'Outfit look 2' },
+        { src: 'images/TRP-134.webp', alt: 'Outfit look 3' },
+        { src: 'images/TRP-201.webp', alt: 'Outfit look 4' },
+        { src: 'images/TRP-73.webp',  alt: 'Location 1' },
+        { src: 'images/TRP-177.webp', alt: 'Location 2' },
+        { src: 'images/TRP-3.webp',   alt: 'Location 3' },
+        { src: 'images/TRP-203.webp', alt: 'Location 4' }
+      ]
+    ];
+
+    function shuffle(arr) {
+      var a = arr.slice();
+      for (var i = a.length - 1; i > 0; i--) {
+        var j = Math.floor(Math.random() * (i + 1));
+        var tmp = a[i]; a[i] = a[j]; a[j] = tmp;
+      }
+      return a;
+    }
+
+    function buildTrackHTML(items) {
+      var doubled = items.concat(items); // duplicate for seamless loop
+      return doubled.map(function (p) {
+        return '<div class="gallery-item"><img src="' + p.src + '" alt="' + p.alt + '" loading="lazy"></div>';
+      }).join('');
+    }
+
+    galleryMarquees.forEach(function (marquee, idx) {
+      var track = marquee.querySelector('.gallery-track');
+      var pool = photoPools[idx] || photoPools[0];
+      if (track) track.innerHTML = buildTrackHTML(shuffle(pool));
+    });
+  }
+
   window.addEventListener('load', function () {
+    // Shuffle photos in each marquee row independently on every page load
+    shuffleMarqueeTracks();
+    // Randomly assign which marquee row scrolls in reverse on each page load
+    if (galleryMarquees.length >= 2) {
+      var reverseIdx = Math.random() < 0.5 ? 0 : 1;
+      galleryMarquees[reverseIdx].classList.add('reverse');
+    }
     updateGalleryMotion();
     galleryMarquees.forEach(function (marquee) { marquee.classList.add('is-paused'); });
     setupGalleryObserver();
@@ -322,34 +569,90 @@
   /* ===== Audio Autoplay ===== */
   var audioElement = document.getElementById('wedding-audio');
   if (audioElement) {
-    audioElement.volume = 0.65;
-    audioElement.loop = true;
-    audioElement.autoplay = true;
-    audioElement.playsInline = true;
+    if (window.localStorage && window.localStorage.getItem('wedding-audio-mode') === 'popup') {
+      audioElement.pause();
+      audioElement.removeAttribute('autoplay');
+      audioElement.currentTime = 0;
+    } else {
+      var audioStateKey = 'wedding-audio-state';
+      audioElement.volume = 0.65;
+      audioElement.loop = true;
+      audioElement.autoplay = true;
+      audioElement.playsInline = true;
 
-    function attemptAudioPlay() {
-      audioElement.play().catch(function () {
-        return null;
+      function readAudioState() {
+        try {
+          return JSON.parse(sessionStorage.getItem(audioStateKey) || '{}');
+        } catch (err) {
+          return {};
+        }
+      }
+
+      function saveAudioState() {
+        try {
+          sessionStorage.setItem(audioStateKey, JSON.stringify({
+            currentTime: audioElement.currentTime || 0,
+            playing: !audioElement.paused
+          }));
+        } catch (err) {
+          return null;
+        }
+      }
+
+      function attemptAudioPlay() {
+        audioElement.play().catch(function () {
+          return null;
+        });
+      }
+
+      var savedState = readAudioState();
+      if (typeof savedState.currentTime === 'number' && !Number.isNaN(savedState.currentTime)) {
+        audioElement.currentTime = savedState.currentTime;
+      }
+
+      window.addEventListener('load', attemptAudioPlay);
+      audioElement.addEventListener('timeupdate', saveAudioState);
+      audioElement.addEventListener('play', saveAudioState);
+      audioElement.addEventListener('pause', saveAudioState);
+      window.addEventListener('pagehide', saveAudioState);
+
+      // (Preload functions are defined at top-level so they're always available)
+
+      // (Gallery observer is defined at top-level)
+
+      ['click', 'touchstart', 'keydown'].forEach(function (eventName) {
+        window.addEventListener(eventName, function userGestureHandler() {
+          if (!audioElement.paused) {
+            window.removeEventListener('click', userGestureHandler);
+            window.removeEventListener('touchstart', userGestureHandler);
+            window.removeEventListener('keydown', userGestureHandler);
+            return;
+          }
+          attemptAudioPlay();
+        }, { once: true });
       });
     }
+  }
 
-    window.addEventListener('load', attemptAudioPlay);
+  function openPersistentAudioPlayer() {
+    try {
+      if (window.localStorage) {
+        window.localStorage.setItem('wedding-audio-mode', 'popup');
+      }
+      var existingAudio = document.getElementById('wedding-audio');
+      var playerWindow = window.open('player.html', 'wedding-audio-player', 'popup,width=320,height=180,left=20,top=20');
+      if (!playerWindow) return false;
 
-    // (Preload functions are defined at top-level so they're always available)
+      if (existingAudio) {
+        setTimeout(function () {
+          existingAudio.pause();
+        }, 120);
+      }
 
-    // (Gallery observer is defined at top-level)
-
-    ['click', 'touchstart', 'keydown'].forEach(function (eventName) {
-      window.addEventListener(eventName, function userGestureHandler() {
-        if (!audioElement.paused) {
-          window.removeEventListener('click', userGestureHandler);
-          window.removeEventListener('touchstart', userGestureHandler);
-          window.removeEventListener('keydown', userGestureHandler);
-          return;
-        }
-        attemptAudioPlay();
-      }, { once: true });
-    });
+      return true;
+    } catch (err) {
+      return false;
+    }
   }
 
   /* ===== Lightbox for Gallery (with navigation + thumbnails) ===== */
@@ -497,29 +800,8 @@
     }
 
     function openGalleryFromButton() {
-      loadTrpList().then(function () {
-        thumbCursor = 0;
-        renderedAllThumbs = false;
-        if (thumbsWrap) thumbsWrap.innerHTML = '';
-        if (viewImg) {
-          viewImg.src = '';
-          viewImg.alt = '';
-        }
-        renderThumbBatch();
-
-        if (trpList.length) {
-          openLightboxAt(0);
-          return;
-        }
-
-        var fallbackName = getFirstVisibleGalleryImageName();
-        if (fallbackName) {
-          openLightboxByName(fallbackName);
-          return;
-        }
-
-        openLightboxByName('TRP-1.webp');
-      });
+      openPersistentAudioPlayer();
+      window.location.href = 'gallery.html';
     }
 
     // Keyboard and button handlers

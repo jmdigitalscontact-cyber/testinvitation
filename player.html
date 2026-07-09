@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#faf6f5">
+  <title>Now Playing | Jason & Rhona Mae</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f7f1eb;
+      --surface: rgba(255, 255, 255, 0.88);
+      --text: #243428;
+      --muted: #647168;
+      --primary: #c9a06c;
+      --primary-deep: #9f7c52;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-width: 280px;
+      min-height: 100vh;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background:
+        radial-gradient(circle at top left, rgba(201, 160, 108, 0.2), transparent 45%),
+        radial-gradient(circle at bottom right, rgba(141, 170, 144, 0.18), transparent 42%),
+        var(--bg);
+      display: grid;
+      place-items: center;
+      color: var(--text);
+      padding: 12px;
+    }
+
+    .player {
+      width: min(100%, 320px);
+      padding: 16px;
+      border-radius: 20px;
+      background: var(--surface);
+      border: 1px solid rgba(36, 52, 40, 0.12);
+      box-shadow: 0 24px 60px rgba(45, 61, 50, 0.16);
+      backdrop-filter: blur(16px);
+    }
+
+    .eyebrow {
+      margin: 0 0 0.35rem;
+      text-transform: uppercase;
+      letter-spacing: 0.18em;
+      font-size: 0.68rem;
+      font-weight: 700;
+      color: var(--muted);
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 1.15rem;
+      line-height: 1.2;
+    }
+
+    p {
+      margin: 0.5rem 0 0;
+      color: var(--muted);
+      font-size: 0.88rem;
+      line-height: 1.6;
+    }
+
+    .controls {
+      display: flex;
+      gap: 0.5rem;
+      margin-top: 0.9rem;
+      flex-wrap: wrap;
+    }
+
+    button {
+      border: 0;
+      border-radius: 999px;
+      padding: 0.65rem 0.95rem;
+      font: inherit;
+      font-size: 0.84rem;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .primary {
+      background: linear-gradient(135deg, var(--primary), var(--primary-deep));
+      color: #fff;
+      flex: 1;
+    }
+
+    .secondary {
+      background: rgba(36, 52, 40, 0.08);
+      color: var(--text);
+    }
+
+    .status {
+      margin-top: 0.75rem;
+      font-size: 0.78rem;
+      color: var(--muted);
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    audio { display: none; }
+  </style>
+</head>
+<body>
+  <div class="player" role="status" aria-live="polite">
+    <p class="eyebrow">Background music</p>
+    <h1>Jason & Rhona Mae</h1>
+    <p>Keeping the ceremony soundtrack playing while you browse the invitation and gallery.</p>
+    <div class="controls">
+      <button class="primary" id="play-toggle" type="button">Play / Pause</button>
+      <button class="secondary" id="close-window" type="button">Close</button>
+    </div>
+    <div class="status" id="player-status">Loading audio...</div>
+  </div>
+
+  <audio id="player-audio" src="audio/ambient.mp3" loop preload="auto" autoplay playsinline></audio>
+  <script src="js/player.js"></script>
+</body>
+</html>

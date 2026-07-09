@@ -11,12 +11,91 @@
   var pagePrevBtn = document.getElementById('page-prev');
   var pageNextBtn = document.getElementById('page-next');
   var pageIndicator = document.getElementById('page-indicator');
+  var audioElement = document.getElementById('wedding-audio');
 
   var images = [];
   var currentIndex = 0;
   var currentPage = 1;
   var pageSize = 24;
   var imageCache = {};
+
+  function wireAudioPlayback() {
+    if (!audioElement) return;
+
+    try {
+      if (window.localStorage && window.localStorage.getItem('wedding-audio-mode') === 'popup') {
+        audioElement.pause();
+        audioElement.removeAttribute('autoplay');
+        return;
+      }
+    } catch (err) {
+      // fall through to local audio fallback
+    }
+
+    var audioStateKey = 'wedding-audio-state';
+
+    function readAudioState() {
+      try {
+        return JSON.parse(sessionStorage.getItem(audioStateKey) || '{}');
+      } catch (err) {
+        return {};
+      }
+    }
+
+    function saveAudioState() {
+      try {
+        sessionStorage.setItem(audioStateKey, JSON.stringify({
+          currentTime: audioElement.currentTime || 0,
+          playing: !audioElement.paused
+        }));
+      } catch (err) {
+        return null;
+      }
+    }
+
+    function attemptAudioPlay() {
+      audioElement.play().catch(function () {
+        audioElement.muted = true;
+        return audioElement.play().then(function () {
+          return null;
+        }).catch(function () {
+          return null;
+        });
+      });
+    }
+
+    function unmuteWhenPlaying() {
+      if (!audioElement.muted) return;
+      audioElement.muted = false;
+      audioElement.volume = 0.65;
+    }
+
+    var savedState = readAudioState();
+    audioElement.volume = 0.65;
+    audioElement.loop = true;
+    audioElement.autoplay = true;
+    audioElement.playsInline = true;
+
+    if (typeof savedState.currentTime === 'number' && !Number.isNaN(savedState.currentTime)) {
+      audioElement.currentTime = savedState.currentTime;
+    }
+
+    window.addEventListener('load', attemptAudioPlay);
+    window.addEventListener('pageshow', attemptAudioPlay);
+    audioElement.addEventListener('canplay', attemptAudioPlay);
+    audioElement.addEventListener('playing', unmuteWhenPlaying);
+    audioElement.addEventListener('timeupdate', saveAudioState);
+    audioElement.addEventListener('play', saveAudioState);
+    audioElement.addEventListener('pause', saveAudioState);
+    window.addEventListener('pagehide', saveAudioState);
+
+    ['click', 'touchstart', 'keydown'].forEach(function (eventName) {
+      window.addEventListener(eventName, function userGestureHandler() {
+        if (!audioElement.paused) return;
+        attemptAudioPlay();
+      }, { once: true });
+    });
+  }
 
   function fallbackList() {
     return [
@@ -163,6 +242,7 @@
   }
 
   function init() {
+    wireAudioPlayback();
     bindEvents();
     fetch('js/trp-list.json', { cache: 'no-cache' })
       .then(function (response) { return response.json(); })
