@@ -897,8 +897,8 @@ audio#wedding-audio { display: none; }
 .program-timelines {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 1rem;
-  margin-bottom: 1rem;
+  gap: clamp(0.9rem, 2vw, 1.5rem);
+  margin-bottom: 1.25rem;
 }
 
 .program-panel,
@@ -906,22 +906,22 @@ audio#wedding-audio { display: none; }
   position: relative;
   background: #fffdf9;
   border: 1px solid rgba(201, 160, 108, 0.2);
-  border-radius: 26px;
-  padding: 1.6rem;
+  border-radius: 28px;
+  padding: clamp(1.15rem, 2.2vw, 1.9rem);
   box-shadow: 0 10px 28px rgba(78, 61, 45, 0.06);
 }
 
 .program-panel h3,
 .program-entourage h3 {
   font-family: 'Playfair Display', serif;
-  font-size: 1.35rem;
+  font-size: clamp(1.45rem, 2.2vw, 1.95rem);
   color: var(--text);
-  margin: 0 0 1rem;
+  margin: 0 0 1.25rem;
   text-align: center;
 }
 
 .program-panel h3 {
-  padding-bottom: 0.8rem;
+  padding-bottom: 1rem;
   border-bottom: 1px solid rgba(201, 160, 108, 0.28);
 }
 
@@ -935,10 +935,10 @@ audio#wedding-audio { display: none; }
 
 .program-list li {
   display: grid;
-  grid-template-columns: 95px minmax(0, 1fr);
-  gap: 0.8rem;
+  grid-template-columns: clamp(88px, 18vw, 112px) minmax(0, 1fr);
+  gap: clamp(0.8rem, 1.8vw, 1.1rem);
   align-items: start;
-  padding: 0.95rem 0;
+  padding: clamp(0.95rem, 1.6vw, 1.2rem) 0;
   border-bottom: 1px solid rgba(201, 160, 108, 0.16);
 }
 
@@ -949,39 +949,203 @@ audio#wedding-audio { display: none; }
 .program-list time {
   display: block;
   font-family: 'Playfair Display', serif;
-  font-size: 0.9rem;
-  font-weight: 600;
-  letter-spacing: 0.06em;
+  font-size: clamp(0.95rem, 1.2vw, 1.08rem);
+  font-weight: 700;
+  letter-spacing: 0.05em;
   color: var(--primary-dark);
   margin: 0;
+  white-space: nowrap;
 }
 
 .program-list p {
   margin: 0;
   color: var(--muted);
-  line-height: 1.75;
+  font-size: clamp(1rem, 1.35vw, 1.06rem);
+  line-height: 1.68;
+}
+
+@media (max-width: 1100px) {
+  .program-panel {
+    border-radius: 24px;
+  }
+}
+
+@media (max-width: 767px) {
+  .program-panel {
+    border-radius: 22px;
+    padding: 1.15rem;
+  }
+  .program-panel h3 {
+    margin-bottom: 0.95rem;
+    padding-bottom: 0.75rem;
+  }
+  .program-list li {
+    grid-template-columns: 1fr;
+    gap: 0.3rem;
+  }
+  .program-list time {
+    font-size: 1rem;
+  }
+  .program-list p {
+    line-height: 1.62;
+  }
+}
+
+@media (max-width: 420px) {
+  .program-panel {
+    border-radius: 18px;
+    padding: 1rem;
+  }
+  .program-list li {
+    padding: 0.8rem 0;
+  }
+  .program-list p {
+    font-size: 0.98rem;
+  }
 }
 
 .entourage-list {
   display: grid;
-  gap: 1rem;
+  gap: 0.9rem;
+}
+
+.program-entourage {
+  margin-top: 1.4rem;
+  border-radius: 10px;
+  border: 1px solid rgba(186, 139, 79, 0.42);
+  background: #fffefb;
+  padding: 3.4rem 2.1rem 3.2rem;
+  box-shadow: 0 14px 38px rgba(92, 69, 42, 0.09);
+  overflow: hidden;
+}
+
+.program-entourage::before,
+.program-entourage::after {
+  content: '';
+  position: absolute;
+  top: 94px;
+  bottom: 94px;
+  width: 1px;
+  background: linear-gradient(180deg, rgba(186, 139, 79, 0.1), rgba(186, 139, 79, 0.55), rgba(186, 139, 79, 0.1));
+  pointer-events: none;
+}
+
+.program-entourage::before {
+  left: 24px;
+}
+
+.program-entourage::after {
+  right: 24px;
+}
+
+.program-entourage h3 {
+  margin: 1.7rem 0 1.3rem;
+  font-size: clamp(1.45rem, 3vw, 2rem);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #2f2f2f;
+}
+
+.entourage-corner {
+  position: absolute;
+  width: 96px;
+  height: 96px;
+  opacity: 0.75;
+  background-repeat: no-repeat;
+  background-size: contain;
+  pointer-events: none;
+  z-index: 0;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cg fill='none' stroke='%23ba8b4f' stroke-width='2.1' stroke-linecap='round'%3E%3Cpath d='M8 92V44C8 24 24 8 44 8h48'/%3E%3Cpath d='M20 80V44c0-13 11-24 24-24h36'/%3E%3Cpath d='M36 8c0 7-6 13-13 13'/%3E%3Cpath d='M8 36c7 0 13 6 13 13'/%3E%3C/g%3E%3C/svg%3E");
+}
+
+.corner-tl {
+  top: 14px;
+  left: 14px;
+}
+
+.corner-tr {
+  top: 14px;
+  right: 14px;
+  transform: scaleX(-1);
+}
+
+.corner-bl {
+  bottom: 14px;
+  left: 14px;
+  transform: scaleY(-1);
+}
+
+.corner-br {
+  bottom: 14px;
+  right: 14px;
+  transform: scale(-1);
+}
+
+.entourage-divider {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(320px, 58%);
+  height: 16px;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.entourage-divider::before,
+.entourage-divider::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.entourage-divider::before {
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, rgba(186, 139, 79, 0), rgba(186, 139, 79, 0.85), rgba(186, 139, 79, 0));
+}
+
+.entourage-divider::after {
+  left: 50%;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  background: radial-gradient(circle at 35% 35%, #f4e3c7 0%, #ba8b4f 68%);
+  box-shadow: 0 0 0 6px #fffefb;
+}
+
+.entourage-divider.top {
+  top: 18px;
+}
+
+.entourage-divider.bottom {
+  bottom: 26px;
+}
+
+.program-entourage > h3,
+.program-entourage > .entourage-list {
+  position: relative;
+  z-index: 2;
 }
 
 .entourage-group {
-  padding: 1.2rem 1.25rem;
-  border-radius: 16px;
-  background: #ffffff;
-  border: 1px solid rgba(201, 160, 108, 0.16);
+  padding: 0.7rem 0.7rem;
+  border-radius: 10px;
+  background: transparent;
+  border: none;
   text-align: center;
 }
 
 .entourage-group h4 {
   margin: 0 0 0.8rem;
-  font-size: 0.78rem;
-  font-weight: 600;
-  letter-spacing: 0.2em;
+  font-family: 'Playfair Display', serif;
+  font-size: 0.86rem;
+  font-weight: 700;
+  letter-spacing: 0.09em;
   text-transform: uppercase;
-  color: var(--primary-dark);
+  color: #2f2f2f;
 }
 
 .entourage-group ul {
@@ -989,17 +1153,151 @@ audio#wedding-audio { display: none; }
   padding: 0;
   margin: 0 auto;
   display: grid;
-  gap: 0.45rem;
+  gap: 0.25rem;
   justify-items: center;
 }
 
 .entourage-group li {
   width: min(100%, 34rem);
   margin: 0;
-  color: var(--text);
-  font-size: 0.95rem;
-  line-height: 1.7;
+  color: #232323;
+  font-family: 'Playfair Display', serif;
+  font-size: 0.92rem;
+  line-height: 1.55;
+  font-style: italic;
   padding: 0.1rem 0;
+}
+
+.family-honors h4 {
+  text-transform: none;
+  letter-spacing: 0.02em;
+  font-size: 0.95rem;
+}
+
+.entourage-parents-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1.2rem;
+  align-items: start;
+}
+
+.entourage-grandparent {
+  margin: 0.9rem auto 0;
+  width: min(100%, 26rem);
+}
+
+.sponsor-columns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1.2rem;
+}
+
+.sponsor-column {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.sponsor-column li {
+  width: 100%;
+}
+
+.secondary-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1.1rem;
+}
+
+.sponsor-role {
+  margin: 0 0 0.45rem;
+  color: #76552f;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  font-size: 0.74rem;
+  font-weight: 700;
+}
+
+.wedding-roster {
+  margin-top: 0.35rem;
+}
+
+.wedding-party-top {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1.2rem;
+  margin-bottom: 1rem;
+}
+
+.wedding-party-main {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) minmax(0, 1.1fr);
+  gap: 1.2rem;
+}
+
+.party-role {
+  text-align: center;
+}
+
+.party-role h5 {
+  margin: 0 0 0.5rem;
+  font-family: 'Playfair Display', serif;
+  font-size: 0.92rem;
+  font-style: italic;
+  font-weight: 700;
+  color: #2b2b2b;
+}
+
+.party-role ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.2rem;
+}
+
+.party-role li {
+  width: 100%;
+}
+
+.party-role-center {
+  display: grid;
+  gap: 0.8rem;
+}
+
+.party-subrole h5 {
+  margin-bottom: 0.25rem;
+}
+
+.couple {
+  margin-bottom: 0.25rem;
+}
+
+.entourage-pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.entourage-person {
+  padding: 0.2rem;
+}
+
+.entourage-role {
+  margin: 0;
+  color: #76552f;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+
+.entourage-name {
+  margin: 0.35rem 0 0;
+  color: #222;
+  font-family: 'Playfair Display', serif;
+  font-style: italic;
+  font-size: 0.98rem;
+  font-weight: 700;
 }
 
 @media (min-width: 900px) {
@@ -1007,13 +1305,22 @@ audio#wedding-audio { display: none; }
     grid-template-columns: repeat(2, minmax(280px, 1fr));
     grid-template-areas:
       "couple couple"
-      "principal secondary"
-      "wedding children";
+      "family family"
+      "principal principal"
+      "secondary secondary"
+      "roster roster";
     gap: 1.5rem;
     align-items: start;
   }
+  .family-honors {
+    grid-area: family;
+    width: min(100%, 58rem);
+    justify-self: center;
+  }
   .principal-sponsors {
     grid-area: principal;
+    width: min(100%, 58rem);
+    justify-self: center;
   }
   .couple {
     grid-area: couple;
@@ -1022,12 +1329,13 @@ audio#wedding-audio { display: none; }
   }
   .secondary-sponsors {
     grid-area: secondary;
+    width: min(100%, 58rem);
+    justify-self: center;
   }
-  .children-bearers {
-    grid-area: children;
-  }
-  .wedding-party {
-    grid-area: wedding;
+  .wedding-roster {
+    grid-area: roster;
+    width: min(100%, 58rem);
+    justify-self: center;
   }
 }
 
@@ -1049,8 +1357,42 @@ audio#wedding-audio { display: none; }
   .program-entourage h3 {
     font-size: 1.2rem;
   }
+  .program-entourage {
+    padding: 2.9rem 1.15rem 2.8rem;
+  }
+  .program-entourage::before,
+  .program-entourage::after {
+    top: 86px;
+    bottom: 86px;
+  }
+  .entourage-corner {
+    width: 64px;
+    height: 64px;
+  }
+  .entourage-divider {
+    width: min(230px, 66%);
+  }
+  .sponsor-columns,
+  .secondary-grid,
+  .wedding-party-main,
+  .wedding-party-top {
+    grid-template-columns: 1fr;
+    gap: 0.8rem;
+  }
+  .entourage-pair,
+  .principal-sponsors ul,
+  .secondary-sponsors ul {
+    grid-template-columns: 1fr;
+    column-gap: 0;
+  }
+  .entourage-role {
+    letter-spacing: 0.12em;
+  }
   .entourage-group {
-    padding: 1.1rem 1rem;
+    padding: 0.75rem 0.5rem;
+  }
+  .party-role h5 {
+    font-size: 0.88rem;
   }
   .entourage-group li {
     width: 100%;
