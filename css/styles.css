@@ -123,10 +123,6 @@ header.scrolled {
   z-index: 1050;
 }
 
-/* hide the numeric slide controls and the rotating concentric circles */
-.slide-loader { display: none !important; }
-.circle, .circle.bg > img { display: none !important; }
-
 /* Responsive background position for banner across all viewports */
 @media (max-width: 1280px) {
   .banner { background-position: 20% center; }
@@ -137,45 +133,41 @@ header.scrolled {
 }
 
 @media (max-width: 767px) {
-  .banner { background-position: 25% center; }
+  .banner {
+    background-position: center center;
+    background-size: cover;
+  }
 }
 
 @media (max-width: 600px) {
-  .banner { background-position: 28% center; }
+  .banner {
+    background-position: center center;
+    background-size: cover;
+  }
 }
 
 @media (max-width: 480px) {
-  .banner { background-position: 32% center; }
+  .banner {
+    background-position: 52% center;
+    background-size: cover;
+  }
 }
 
 @media (max-width: 360px) {
-  .banner { background-position: 35% center; }
+  .banner {
+    background-position: 54% center;
+    background-size: cover;
+  }
 }
 
-.bg-slide {
-  position: absolute;
-  top: 0; left: 0; bottom: 0; right: 0;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  overflow: hidden;
-}
-.bg-slide .content {
-  position: absolute;
-  top: 50%; left: 50%;
-  transform: scale(0) translate(-50%, -50%);
+.hero-content {
+  position: relative;
   width: 60vw;
   z-index: 1100;
   text-align: center;
-  transition: ease-in-out 3s;
   pointer-events: none;
 }
-.bg-slide.active .content {
-  transform: scale(1) translate(-50%, -50%);
-  opacity: 1;
-  visibility: visible;
-}
-.bg-slide .content h1 {
+.hero-content h1 {
   font-family: 'Great Vibes', cursive;
   font-size: clamp(3rem, 8vw, 6rem);
   font-weight: 400;
@@ -183,138 +175,19 @@ header.scrolled {
   line-height: 1.05;
   margin-bottom: 0.3rem;
 }
-.bg-slide .content .amp {
+.hero-content .amp {
   font-family: 'Playfair Display', serif;
   font-style: italic;
   font-size: clamp(1.2rem, 3vw, 2rem);
   display: block;
   color: var(--primary);
 }
-.bg-slide .content p {
+.hero-content p {
   font-family: 'Great Vibes', cursive;
   font-weight: 200;
   font-size: 1.5em;
   letter-spacing: 1px;
   color: var(--muted);
-}
-
-/* ===== Concentric Circles ===== */
-.circle {
-  border-radius: 50%;
-  overflow: hidden;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  transform: translate(0,0) rotateZ(0);
-  opacity: 0;
-  visibility: hidden;
-  transition: 3s;
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform-origin: center;
-  pointer-events: none;
-}
-.circle.bg {
-  background: transparent;
-  width: 140vw;
-  height: 140vw;
-  border-radius: 0;
-  transform: translate(-50%, -50%) rotateZ(0);
-}
-.circle.large {
-  width: 70vw;
-  height: 70vw;
-  transform: translate(-50%, -50%) rotateZ(0);
-}
-.circle.small {
-  width: 35vw;
-  height: 35vw;
-  transform: translate(-50%, -50%) rotateZ(0);
-}
-
-/* One image per banner slide: bg image is used as the source for large/small via CSS background */
-.circle.bg > img {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  border-radius: 0;
-  object-fit: cover;
-  object-position: center;
-  opacity: 1;
-}
-
-.circle.large::before,
-.circle.small::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  background: var(--hero-img);
-  background-size: cover;
-  background-position: center;
-  border-radius: 50%;
-  opacity: 1;
-}
-
-/* map each slide's bg img into a CSS variable for large/small */
-.bg-slide.slide-1 { --hero-img: url('../images/hero-1.webp'); }
-.bg-slide.slide-2 { --hero-img: url('../images/hero-2.webp'); }
-.bg-slide.slide-3 { --hero-img: url('../images/hero-3.webp'); }
-
-
-.bg-slide.active .circle.bg {
-  transform: translate(-50%, -50%) rotateZ(-360deg);
-  opacity: 1;
-  visibility: visible;
-  --hero-img: none;
-}
-
-.bg-slide.active .circle.large {
-  transform: translate(-50%, -50%) rotateZ(720deg);
-  opacity: 1;
-  visibility: visible;
-}
-.bg-slide.active .circle.small {
-  transform: translate(-50%, -50%) rotateZ(-720deg);
-  opacity: 1;
-  visibility: visible;
-}
-
-/* ===== Slide Controls ===== */
-.slide-loader {
-  position: absolute;
-  z-index: 1100;
-  bottom: 50px;
-  right: 100px;
-  display: flex;
-  gap: 20px;
-  list-style: none;
-  margin-bottom: 0;
-}
-.slide-loader li { list-style: none; display: flex; align-items: end; }
-.slide-loader li a {
-  text-decoration: none;
-  color: var(--muted);
-  font-size: 2em;
-  font-weight: 800;
-  transition: 0.5s;
-  line-height: 1em;
-  cursor: pointer;
-  padding: 0;
-}
-.slide-loader li a.active,
-.slide-loader li a:hover { font-size: 4em; color: var(--text); }
-.slide-loader::before {
-  position: absolute;
-  content: '';
-  top: 50%;
-  left: -70%;
-  width: 100%;
-  height: 2px;
-  background: var(--muted);
 }
 
 .share {
@@ -577,9 +450,8 @@ audio#wedding-audio { display: none; }
 
 /* ===== 3D Photo Cards (matching test folder) ===== */
 .photo-cards {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   align-items: stretch;
   gap: 2rem;
   max-width: 1200px;
@@ -589,7 +461,7 @@ audio#wedding-audio { display: none; }
   position: relative;
   display: flex;
   flex-direction: column;
-  width: clamp(280px, 90vw, 380px);
+  width: 100%;
   background: #ffffff;
   border-radius: 12px;
   overflow: hidden;
@@ -625,8 +497,15 @@ audio#wedding-audio { display: none; }
   object-fit: cover;
   transition: transform 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94);
 }
+.photo-card .card-img img.moment-photo-upright {
+  transform: rotate(-90deg) scale(1.18);
+  object-position: center;
+}
 .photo-card:hover .card-img img {
   transform: scale(1.08);
+}
+.photo-card:hover .card-img img.moment-photo-upright {
+  transform: rotate(-90deg) scale(1.26);
 }
 .photo-card .card-body {
   position: relative;
@@ -710,6 +589,9 @@ audio#wedding-audio { display: none; }
   display: block;
   object-fit: cover;
   height: clamp(180px, 25vw, 260px);
+}
+.page-card-media img.attire-zoomable {
+  cursor: zoom-in;
 }
 .story-book {
   display: grid;
@@ -1579,6 +1461,10 @@ audio#wedding-audio { display: none; }
 .lightbox-thumbs .thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .lightbox-thumbs .thumb.active { border-color: var(--accent); }
 .lightbox .lightbox-nav[disabled] { opacity: 0.35; pointer-events: none; }
+.lightbox.is-standalone .lightbox-nav,
+.lightbox.is-standalone .lightbox-thumbs {
+  display: none;
+}
 
 /* ===== RSVP ===== */
 .rsvp-card {
@@ -1782,6 +1668,7 @@ footer .footer-names {
 @media (max-width: 1280px) and (min-width: 992px) {
   header { padding: 18px 48px; }
   .nav li { margin: 0 12px; }
+  .banner { background-position: 46% center; }
 }
 
 /* Tablet landscape & small laptops */
@@ -1807,12 +1694,17 @@ footer .footer-names {
   .nav.open li { margin: 0.4rem 0; }
   .nav.open li a { display: block; padding: 8px 4px; }
   .menu-toggle { display: block; }
-  .banner { padding: 0 24px; background-position: 20% center; }
-  .bg-slide .content { width: 70vw; }
-  .bg-slide .content h1 { font-size: clamp(2rem, 5vw, 3rem); }
-  .bg-slide .content p { font-size: clamp(0.85rem, 1.8vw, 1.1rem); }
+  .banner {
+    padding: 0 24px;
+    background-position: 56% center;
+    background-size: cover;
+  }
+  .hero-content { width: 70vw; }
+  .hero-content h1 { font-size: clamp(2rem, 5vw, 3rem); }
+  .hero-content p { font-size: clamp(0.85rem, 1.8vw, 1.1rem); }
   section { padding: 60px 28px; }
-  .photo-card { width: 100%; max-width: 320px; }
+  .photo-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .photo-card { width: 100%; max-width: none; }
   .photo-card:hover { transform: none; }
   .photo-card:hover .card-img { transform: none; }
   .photo-card .card-img { height: 250px; }
@@ -1825,18 +1717,26 @@ footer .footer-names {
   header { padding: 12px 18px; }
   .logo { font-size: 24px; }
   .nav.open { top: 58px; }
-  .banner { padding: 0 16px; background-position: 22% center; }
-  .bg-slide .content { width: 88vw; }
-  .bg-slide .content h1 { font-size: clamp(1.7rem, 6vw, 2.4rem); }
-  .bg-slide .content p { font-size: clamp(0.78rem, 2.5vw, 0.95rem); }
-  .circle.bg { width: 180vw; height: 180vw; }
-  .circle.large { width: 90vw; height: 90vw; }
-  .circle.small { width: 45vw; height: 45vw; }
+  .banner {
+    padding: 0 16px;
+    background-position: center center;
+    background-size: cover;
+    filter: saturate(0.92) brightness(0.98) contrast(1.02);
+  }
+  .banner::after { background: rgba(250,246,245,0.22); }
+  .banner::before {
+    background: linear-gradient(180deg, rgba(250,246,245,0.08) 0%, rgba(250,246,245,0.18) 55%, rgba(250,246,245,0.24) 100%);
+    mix-blend-mode: normal;
+  }
+  .hero-content { width: 88vw; }
+  .hero-content h1 { font-size: clamp(1.7rem, 6vw, 2.4rem); }
+  .hero-content p { font-size: clamp(0.78rem, 2.5vw, 0.95rem); }
   .scroll-ring { width: 180px; height: 160px; bottom: 16px; }
   .scroll-ring svg { max-width: 22vmin; }
   .scroll-ring .move-down svg { width: 2em; height: 2em; }
   section { padding: 50px 18px; }
   .events-grid { grid-template-columns: 1fr; }
+  .photo-cards { grid-template-columns: 1fr; }
   .photo-card {
     width: 100%;
     max-width: 100%;
@@ -1856,7 +1756,7 @@ footer .footer-names {
 
 /* Large phones */
 @media (max-width: 600px) {
-  .banner { background-position: 25% center; }
+  .banner { background-position: 52% center; }
   .events-grid { grid-template-columns: 1fr; }
   .details-grid { grid-template-columns: 1fr; }
   .page-grid { grid-template-columns: 1fr; }
@@ -1868,10 +1768,10 @@ footer .footer-names {
   header { padding: 10px 14px; }
   .logo { font-size: 20px; }
   .nav.open { top: 52px; right: 12px; }
-  .banner { background-position: 28% center; }
-  .bg-slide .content { width: 92vw; }
-  .bg-slide .content h1 { font-size: clamp(1.5rem, 7vw, 2rem); }
-  .bg-slide .content p { font-size: clamp(0.72rem, 3vw, 0.85rem); }
+  .banner { background-position: 54% center; }
+  .hero-content { width: 92vw; }
+  .hero-content h1 { font-size: clamp(1.5rem, 7vw, 2rem); }
+  .hero-content p { font-size: clamp(0.72rem, 3vw, 0.85rem); }
   section { padding: 40px 14px; }
   .gallery-grid { gap: 0.5rem; }
   .countdown-wrap { padding: 1.1rem; margin: -30px 12px 0; }
@@ -1899,8 +1799,6 @@ footer .footer-names {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .circle { transition: none; }
-  .bg-slide.active .circle { transform: none; opacity: 1; visibility: visible; }
   .reveal { opacity: 1; transform: none; transition: none; }
   .photo-card, .photo-card .card-img { transition: none; }
   .photo-card:hover { transform: none; }
