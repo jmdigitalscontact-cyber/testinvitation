@@ -78,22 +78,21 @@
     return RECEPTION_KEY.trim().length > 0;
   }
 
-  function renderQrOnlyLock() {
-    if (els.searchStatus) {
-      els.searchStatus.textContent = "Please scan the official reception QR code to open this page.";
+  function applyAccessLock() {
+    const lockOverlay = document.getElementById("rec-lock-overlay");
+    const appEl = document.getElementById("reception-app");
+
+    if (!hasReceptionAccessKey()) {
+      // Show lock overlay, hide app content
+      if (lockOverlay) lockOverlay.hidden = false;
+      if (appEl) appEl.hidden = true;
+      document.title = "Reception (Access Required) | Jason & Rhona Mae";
+      return;
     }
-    if (els.searchInput) {
-      els.searchInput.value = "";
-      els.searchInput.disabled = true;
-      els.searchInput.placeholder = "QR access required";
-    }
-    if (els.searchResults) {
-      els.searchResults.innerHTML = "";
-    }
-    els.tabButtons.forEach((btn) => {
-      const isSearch = btn.dataset.tab === "search";
-      btn.disabled = !isSearch;
-    });
+
+    // Key is present — hide lock, show app
+    if (lockOverlay) lockOverlay.hidden = true;
+    if (appEl) appEl.hidden = false;
   }
 
   function renderAccessError(message) {
@@ -779,8 +778,9 @@
   }
 
   function init() {
+    applyAccessLock();
+
     if (!hasReceptionAccessKey()) {
-      renderQrOnlyLock();
       return;
     }
 
