@@ -808,15 +808,28 @@ body.reception-lightbox-open {
   text-align: center;
 }
 
+.rec-gifts-cols {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  align-items: start;
+}
+
+.rec-gifts-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
 .rec-gifts-qr-wrap {
   display: flex;
   justify-content: center;
-  margin-bottom: 1rem;
+  margin-bottom: 0.75rem;
 }
 
 .rec-gifts-qr {
-  width: min(200px, 60vw);
-  height: min(200px, 60vw);
+  width: min(160px, 40vw);
+  height: min(160px, 40vw);
   border-radius: 12px;
   box-shadow: 0 6px 20px rgba(23, 42, 30, 0.12);
   border: 2px solid var(--rec-blush);
@@ -824,13 +837,13 @@ body.reception-lightbox-open {
 }
 
 .rec-gifts-details {
-  margin-bottom: 0.85rem;
+  text-align: center;
 }
 
 .rec-gifts-details__title {
   margin: 0 0 0.2rem;
   font-family: var(--rec-font-display);
-  font-size: 1rem;
+  font-size: 0.95rem;
   font-weight: 600;
   color: var(--rec-sage-envelope);
   letter-spacing: 0.03em;
@@ -838,7 +851,7 @@ body.reception-lightbox-open {
 
 .rec-gifts-details__number {
   margin: 0;
-  font-size: 1.15rem;
+  font-size: 1rem;
   font-weight: 700;
   color: var(--rec-text);
   letter-spacing: 0.06em;
@@ -847,24 +860,19 @@ body.reception-lightbox-open {
 
 .rec-gifts-details__name {
   margin: 0.15rem 0 0;
-  font-size: 0.88rem;
+  font-size: 0.82rem;
   color: var(--rec-muted);
 }
 
-.rec-gifts-divider {
-  width: 3rem;
-  height: 1px;
-  background: linear-gradient(90deg, transparent, var(--rec-gold-soft), transparent);
-  margin: 0.5rem auto 0.85rem;
-}
-
 .rec-gifts-thanks {
-  margin: 0.65rem 0 0;
+  margin: 1rem 0 0;
   font-family: var(--rec-font-accent);
   font-size: 0.95rem;
   font-style: italic;
   color: var(--rec-muted);
   line-height: 1.55;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--rec-border-accent);
 }
 
 .reception-toast[hidden] {
