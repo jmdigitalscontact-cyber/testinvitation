@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>RSVP Admin Access</title>
+    <style>
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        background: linear-gradient(135deg, #f4f7f2 0%, #eef3ec 100%);
+        color: #2d3c31;
+        padding: 1rem;
+      }
+      .card {
+        width: min(560px, 100%);
+        background: #fff;
+        border: 1px solid #d5dfd3;
+        border-radius: 14px;
+        padding: 1.2rem 1.25rem;
+        box-shadow: 0 12px 30px rgba(0, 0, 0, 0.08);
+      }
+      h1 {
+        margin: 0 0 0.7rem;
+        font-size: 1.6rem;
+      }
+      p {
+        margin: 0.55rem 0;
+      }
+      .actions {
+        margin-top: 1rem;
+        display: flex;
+        gap: 0.6rem;
+        flex-wrap: wrap;
+      }
+      .btn {
+        text-decoration: none;
+        padding: 0.65rem 1rem;
+        border-radius: 999px;
+        border: 1px solid #87a089;
+        color: #2f4533;
+        background: #f8fbf7;
+        font-weight: 600;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <h1>RSVP Admin Dashboard</h1>
+      <p>This dashboard runs through PHP (`admin.php`) with API access.</p>
+      <p id="status">Checking environment...</p>
+      <div class="actions">
+        <a class="btn" href="./admin.php">Open Admin Dashboard</a>
+        <a class="btn" href="../rsvp.html">Back to RSVP Page</a>
+      </div>
+    </div>
+    <script>
+      const statusEl = document.getElementById("status");
+      if (window.location.protocol === "file:") {
+        statusEl.textContent =
+          "You are viewing files directly. Please run this project on a PHP server to use the admin dashboard.";
+      } else {
+        statusEl.textContent = "Server detected. Redirecting to admin dashboard...";
+        setTimeout(() => {
+          window.location.replace("./admin.php");
+        }, 300);
+      }
+    </script>
+  </body>
+</html>
