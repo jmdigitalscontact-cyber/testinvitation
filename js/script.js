@@ -134,24 +134,109 @@
   }
 
   /* ===== Section Navigation ===== */
-  document.querySelectorAll('.nav-btn').forEach(function (navBtn) {
+  var navButtons = Array.from(document.querySelectorAll('.nav-btn'));
+
+  function setActiveNav(targetId) {
+    if (!targetId) return;
+    navButtons.forEach(function (btn) {
+      btn.classList.toggle('active', btn.getAttribute('data-target') === targetId);
+    });
+  }
+
+  navButtons.forEach(function (navBtn) {
     navBtn.addEventListener('click', function (e) {
       e.preventDefault();
       var target = navBtn.getAttribute('data-target');
       if (!target) return;
       var section = document.getElementById(target);
       if (section) section.scrollIntoView({ behavior: 'smooth' });
-      document.querySelectorAll('.nav-btn').forEach(function (n) { n.classList.remove('active'); });
-      navBtn.classList.add('active');
+      setActiveNav(target);
     });
   });
 
-  /* ===== Scroll Reveal ===== */
-  var revealObserver = new IntersectionObserver(function (entries) {
-    entries.forEach(function (entry) {
-      if (entry.isIntersecting) entry.target.classList.add('visible');
+  var navSections = navButtons
+    .map(function (btn) { return btn.getAttribute('data-target'); })
+    .filter(Boolean)
+    .map(function (id) { return document.getElementById(id); })
+    .filter(Boolean);
+
+  function initHeroScrollEffect() {
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+
+    var heroContent = document.querySelector('.hero-content');
+    var scrollRing = document.querySelector('.scroll-ring');
+    var banner = document.querySelector('.banner');
+    if (!heroContent || !banner) return;
+
+    var ticking = false;
+    function updateHero() {
+      var top = window.scrollY || 0;
+      var limit = Math.max(1, banner.offsetHeight || window.innerHeight);
+      var progress = Math.min(1, Math.max(0, top / limit));
+
+      heroContent.style.transform = 'translateY(' + (progress * 38) + 'px) scale(' + (1 - (progress * 0.03)) + ')';
+      heroContent.style.opacity = String(1 - (progress * 0.38));
+      if (scrollRing) {
+        scrollRing.style.transform = 'translateX(-50%) translateY(' + (progress * 24) + 'px)';
+        scrollRing.style.opacity = String(1 - (progress * 0.45));
+      }
+      ticking = false;
+    }
+
+    function onScroll() {
+      if (ticking) return;
+      ticking = true;
+      window.requestAnimationFrame(updateHero);
+    }
+
+    updateHero();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    window.addEventListener('resize', onScroll);
+  }
+
+  function applyRevealStagger() {
+    var revealItems = Array.from(document.querySelectorAll('.reveal'));
+    revealItems.forEach(function (el, index) {
+      el.style.setProperty('--reveal-delay', ((index % 6) * 70) + 'ms');
     });
-  }, { threshold: 0.08, rootMargin: '0px 0px -40px 0px' });
+  }
+
+  initHeroScrollEffect();
+  applyRevealStagger();
+
+  if ('IntersectionObserver' in window && navSections.length) {
+    var currentSectionId = navSections[0].id;
+
+    var navObserver = new IntersectionObserver(function (entries) {
+      entries.forEach(function (entry) {
+        if (!entry.isIntersecting) return;
+        currentSectionId = entry.target.id;
+      });
+      setActiveNav(currentSectionId);
+    }, {
+      root: null,
+      rootMargin: '-40% 0px -50% 0px',
+      threshold: 0.01
+    });
+
+    navSections.forEach(function (section) { navObserver.observe(section); });
+
+    var initialHashId = window.location.hash ? window.location.hash.replace('#', '') : '';
+    if (initialHashId && document.getElementById(initialHashId)) {
+      setActiveNav(initialHashId);
+    } else {
+      setActiveNav(currentSectionId);
+    }
+  }
+
+  /* ===== Scroll Reveal ===== */
+  var revealObserver = new IntersectionObserver(function (entries, observer) {
+    entries.forEach(function (entry) {
+      if (!entry.isIntersecting) return;
+      entry.target.classList.add('visible');
+      observer.unobserve(entry.target);
+    });
+  }, { threshold: 0.12, rootMargin: '0px 0px -20% 0px' });
 
   document.querySelectorAll('.reveal').forEach(function (el) { revealObserver.observe(el); });
 

@@ -1,0 +1,93 @@
+{
+  "sections": [
+    {
+      "id": "appetizers",
+      "title": "Appetizers",
+      "items": [
+        {
+          "name": "Garden Greens with Champagne Vinaigrette",
+          "description": "Seasonal leaves, edible flowers, and toasted almonds",
+          "tags": ["V", "GF"]
+        },
+        {
+          "name": "Caprese Skewers",
+          "description": "Fresh mozzarella, heirloom tomato, basil oil",
+          "tags": ["GF"]
+        },
+        {
+          "name": "Mini Crab Cakes",
+          "description": "Lemon aioli and micro herbs",
+          "tags": []
+        }
+      ]
+    },
+    {
+      "id": "mains",
+      "title": "Main Course",
+      "items": [
+        {
+          "name": "Herb-Crusted Beef Tenderloin",
+          "description": "Roasted garlic jus, truffle potato puree, broccolini",
+          "tags": ["GF"]
+        },
+        {
+          "name": "Pan-Seared Salmon",
+          "description": "Citrus beurre blanc, asparagus, saffron rice",
+          "tags": ["GF"]
+        },
+        {
+          "name": "Wild Mushroom Risotto",
+          "description": "Parmesan crisp, aged balsamic",
+          "tags": ["V", "GF"]
+        }
+      ]
+    },
+    {
+      "id": "desserts",
+      "title": "Desserts",
+      "items": [
+        {
+          "name": "Wedding Cake",
+          "description": "Vanilla bean sponge, berry compote",
+          "tags": ["N"]
+        },
+        {
+          "name": "Chocolate Mousse",
+          "description": "Gold leaf and fresh raspberries",
+          "tags": ["GF"]
+        },
+        {
+          "name": "Seasonal Fruit Tart",
+          "description": "Pastry cream and mint",
+          "tags": ["N"]
+        }
+      ]
+    },
+    {
+      "id": "drinks",
+      "title": "Drinks",
+      "items": [
+        {
+          "name": "Signature Cocktails",
+          "description": "Berber Bloom (gin) and Golden Hour (sparkling wine)",
+          "tags": []
+        },
+        {
+          "name": "Wine Selection",
+          "description": "White, red, and rosé — service with dinner",
+          "tags": []
+        },
+        {
+          "name": "Coffee & Tea",
+          "description": "Espresso, herbal tea, and chilled water",
+          "tags": ["V", "GF"]
+        }
+      ]
+    }
+  ],
+  "tagLegend": {
+    "V": "Vegan",
+    "GF": "Gluten-Free",
+    "N": "Contains Nuts"
+  }
+}

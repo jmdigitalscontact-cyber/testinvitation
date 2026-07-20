@@ -6,7 +6,10 @@
 function receptionRequireApiKey() {
     $expected = trim((string)EnvironmentLoader::get('RECEPTION_API_KEY', ''));
     if ($expected === '') {
-        return;
+        sendResponse([
+            'success' => false,
+            'error' => 'Reception access is not configured. Please set RECEPTION_API_KEY in .env.'
+        ], 503);
     }
 
     $provided = trim((string)($_SERVER['HTTP_X_RECEPTION_KEY'] ?? $_GET['key'] ?? ''));
@@ -257,9 +260,61 @@ function receptionPhotoPublicUrl($storagePath) {
     return $base !== '' ? $base . $path : $path;
 }
 
+function receptionCanConvertToWebp() {
+    return function_exists('imagewebp')
+        && function_exists('imagecreatefromjpeg')
+        && function_exists('imagecreatefrompng')
+        && function_exists('imagecreatefromwebp');
+}
+
+function receptionCreateImageResource($tmpPath, $mime) {
+    switch ($mime) {
+        case 'image/jpeg':
+        case 'image/jpg':
+        case 'image/pjpeg':
+            return @imagecreatefromjpeg($tmpPath);
+        case 'image/png':
+            return @imagecreatefrompng($tmpPath);
+        case 'image/webp':
+        case 'image/x-webp':
+            return @imagecreatefromwebp($tmpPath);
+        default:
+            return false;
+    }
+}
+
+function receptionConvertToWebp($tmpPath, $mime, $destPath) {
+    $image = receptionCreateImageResource($tmpPath, $mime);
+    if (!$image) {
+        return false;
+    }
+
+    if (function_exists('imagepalettetotruecolor')) {
+        @imagepalettetotruecolor($image);
+    }
+    @imagealphablending($image, true);
+    @imagesavealpha($image, true);
+
+    $quality = (int)EnvironmentLoader::get('RECEPTION_WEBP_QUALITY', 82);
+    if ($quality < 50) $quality = 50;
+    if ($quality > 100) $quality = 100;
+
+    $ok = @imagewebp($image, $destPath, $quality);
+    imagedestroy($image);
+
+    return $ok && is_file($destPath) && filesize($destPath) > 0;
+}
+
 function handleUploadReceptionPhoto() {
     receptionRequireApiKey();
     [$rateIp, $rateData] = receptionAssertUploadRateLimit();
+
+    if (!receptionCanConvertToWebp()) {
+        sendResponse([
+            'success' => false,
+            'error' => 'Server image conversion is not available. Please enable PHP GD with WebP support.'
+        ], 500);
+    }
 
     if (!isset($_FILES['photo']) || !is_array($_FILES['photo'])) {
         sendResponse(['success' => false, 'error' => 'No photo uploaded'], 400);
@@ -303,15 +358,15 @@ function handleUploadReceptionPhoto() {
     }
 
     $uploadsDir = receptionUploadsDir();
-    $ext = $allowed[$mime] ?? 'jpg';
-    $safeName = 'reception-' . date('Ymd-His') . '-' . bin2hex(random_bytes(4)) . '.' . $ext;
+    $safeName = 'reception-' . date('Ymd-His') . '-' . bin2hex(random_bytes(4)) . '.webp';
     $destPath = $uploadsDir . DIRECTORY_SEPARATOR . $safeName;
 
-    if (!move_uploaded_file($file['tmp_name'], $destPath)) {
-        sendResponse(['success' => false, 'error' => 'Could not save file'], 500);
+    if (!receptionConvertToWebp($file['tmp_name'], $mime, $destPath)) {
+        sendResponse(['success' => false, 'error' => 'Could not convert image to WebP'], 500);
     }
 
     $storagePath = 'reception/uploads/' . $safeName;
+    $storedMime = 'image/webp';
     $db = Database::getInstance();
     $mysqli = $db->getConnection();
     receptionEnsurePhotosTable($mysqli);
@@ -321,7 +376,7 @@ function handleUploadReceptionPhoto() {
         VALUES (?, ?, ?)
     ");
     $originalName = basename((string)($file['name'] ?? $safeName));
-    $stmt->bind_param('sss', $originalName, $storagePath, $mime);
+    $stmt->bind_param('sss', $originalName, $storagePath, $storedMime);
 
     if (!$stmt->execute()) {
         @unlink($destPath);
@@ -346,7 +401,7 @@ function handleUploadReceptionPhoto() {
             'id' => $id,
             'fileName' => $originalName,
             'url' => receptionPhotoPublicUrl($storagePath),
-            'mimeType' => $mime,
+            'mimeType' => $storedMime,
             'uploadedAt' => date('c'),
         ],
     ]);

@@ -1,0 +1,7 @@
+[
+  { "id": "mock-1", "name": "Jason Berber", "tableNumber": 1, "seatNumber": null, "invitationId": "MOCK-001" },
+  { "id": "mock-2", "name": "Rhona Mae Berber", "tableNumber": 1, "seatNumber": null, "invitationId": "MOCK-001" },
+  { "id": "mock-3", "name": "Maria Santos", "tableNumber": 3, "seatNumber": 2, "invitationId": "MOCK-002" },
+  { "id": "mock-4", "name": "John Doe", "tableNumber": 5, "seatNumber": null, "invitationId": "MOCK-003" },
+  { "id": "mock-5", "name": "Jane Doe", "tableNumber": null, "seatNumber": null, "invitationId": "MOCK-004" }
+]

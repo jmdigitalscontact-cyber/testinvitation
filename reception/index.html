@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#faf6f5" />
+    <meta name="description" content="Jason & Rhona Mae — reception seating, menu, and photo gallery." />
+    <meta name="robots" content="noindex,nofollow" />
+    <title>Reception | Jason & Rhona Mae</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=Manrope:wght@400;500;600;700&family=Playfair+Display:wght@500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./reception.css" />
+  </head>
+  <body>
+    <div class="reception-app" id="reception-app">
+      <header class="reception-header">
+        <p class="reception-header__eyebrow">Jason &amp; Rhona Mae</p>
+        <h1 class="reception-header__title">Reception</h1>
+        <div class="reception-header__ornament" aria-hidden="true">
+          <span class="reception-header__line"></span>
+          <span class="reception-header__gem"></span>
+          <span class="reception-header__line"></span>
+        </div>
+      </header>
+
+      <main class="reception-main" id="reception-main">
+        <!-- Search -->
+        <section class="reception-panel is-active" id="panel-search" data-panel="search" aria-labelledby="tab-search">
+          <div class="reception-panel__inner">
+            <h2 class="reception-panel__heading">Find your seat</h2>
+            <p class="reception-panel__lead">Your seat is shown only after you search your name.</p>
+            <label class="reception-search">
+              <span class="visually-hidden">Search guests</span>
+              <input
+                type="search"
+                id="guest-search-input"
+                class="reception-search__input"
+                placeholder="Type your name…"
+                autocomplete="name"
+                enterkeyhint="search"
+              />
+            </label>
+            <p class="reception-status" id="guest-search-status" role="status" aria-live="polite"></p>
+            <ul class="reception-results" id="guest-search-results"></ul>
+          </div>
+        </section>
+
+        <!-- Floor plan -->
+        <section class="reception-panel" id="panel-floor" data-panel="floor" hidden aria-labelledby="tab-floor">
+          <div class="reception-panel__inner reception-panel__inner--floor">
+            <h2 class="reception-panel__heading">Floor plan</h2>
+            <p class="reception-panel__lead">Pinch to zoom. Drag to pan.</p>
+            <div class="reception-legend" id="floor-legend"></div>
+            <div class="reception-floor-wrap" id="floor-plan-viewport">
+              <div class="reception-floor-stage" id="floor-plan-stage">
+                <img
+                  class="reception-floor__img"
+                  id="floor-plan-image"
+                  src="./assets/floor-plan.svg"
+                  alt="Reception floor plan"
+                  draggable="false"
+                />
+                <div class="reception-floor__hotspots" id="floor-plan-hotspots" aria-hidden="true"></div>
+              </div>
+            </div>
+            <p class="reception-floor-hint" id="floor-highlight-hint" hidden></p>
+          </div>
+        </section>
+
+        <!-- Menu -->
+        <section class="reception-panel" id="panel-menu" data-panel="menu" hidden aria-labelledby="tab-menu">
+          <div class="reception-panel__inner">
+            <h2 class="reception-panel__heading">Tonight&apos;s menu</h2>
+            <p class="reception-panel__lead">With love from our kitchen.</p>
+            <div class="reception-menu-legend" id="menu-tag-legend"></div>
+            <div class="reception-menu" id="menu-root"></div>
+          </div>
+        </section>
+
+        <!-- Photos -->
+        <section class="reception-panel" id="panel-photos" data-panel="photos" hidden aria-labelledby="tab-photos">
+          <div class="reception-panel__inner">
+            <h2 class="reception-panel__heading">Live gallery</h2>
+            <p class="reception-panel__lead">Share a moment from our celebration.</p>
+            <div class="reception-upload">
+              <input
+                type="file"
+                id="photo-upload-input"
+                class="reception-upload__input visually-hidden"
+                accept="image/jpeg,image/png,image/webp,image/*"
+                capture="environment"
+                multiple
+              />
+              <button type="button" class="reception-btn reception-btn--primary" id="photo-upload-btn">
+                Upload photos
+              </button>
+              <p class="reception-upload__hint">Select one or more · JPEG, PNG, or WebP · max 5MB each</p>
+            </div>
+            <p class="reception-status" id="photo-gallery-status" role="status" aria-live="polite"></p>
+            <div class="reception-gallery-viewport" id="photo-gallery-wrap" hidden>
+              <div class="reception-gallery-track" id="photo-gallery" aria-label="Guest photos"></div>
+            </div>
+          </div>
+        </section>
+      </main>
+
+      <nav class="reception-tabs" aria-label="Reception sections">
+        <button type="button" class="reception-tabs__btn is-active" id="tab-search" data-tab="search" aria-current="page">
+          <span class="reception-tabs__icon" aria-hidden="true">⌕</span>
+          <span>Search</span>
+        </button>
+        <button type="button" class="reception-tabs__btn" id="tab-floor" data-tab="floor">
+          <span class="reception-tabs__icon" aria-hidden="true">▦</span>
+          <span>Floor</span>
+        </button>
+        <button type="button" class="reception-tabs__btn" id="tab-menu" data-tab="menu">
+          <span class="reception-tabs__icon" aria-hidden="true">☰</span>
+          <span>Menu</span>
+        </button>
+        <button type="button" class="reception-tabs__btn" id="tab-photos" data-tab="photos">
+          <span class="reception-tabs__icon" aria-hidden="true">✦</span>
+          <span>Photos</span>
+        </button>
+      </nav>
+    </div>
+
+    <div
+      class="reception-photo-lightbox"
+      id="photo-lightbox"
+      hidden
+      role="dialog"
+      aria-modal="true"
+      aria-label="Photo viewer"
+    >
+      <div class="reception-photo-lightbox__backdrop" data-photo-lightbox-close tabindex="-1" aria-hidden="true"></div>
+      <div class="reception-photo-lightbox__panel">
+        <button type="button" class="reception-photo-lightbox__close" data-photo-lightbox-close aria-label="Close">
+          &times;
+        </button>
+        <button
+          type="button"
+          class="reception-photo-lightbox__nav reception-photo-lightbox__nav--prev"
+          data-photo-lightbox-prev
+          aria-label="Previous photo"
+        >
+          <span aria-hidden="true">&#8249;</span>
+        </button>
+        <button
+          type="button"
+          class="reception-photo-lightbox__nav reception-photo-lightbox__nav--next"
+          data-photo-lightbox-next
+          aria-label="Next photo"
+        >
+          <span aria-hidden="true">&#8250;</span>
+        </button>
+        <figure class="reception-photo-lightbox__figure">
+          <img class="reception-photo-lightbox__img" alt="Guest photo" decoding="async" />
+        </figure>
+        <p class="reception-photo-lightbox__count" id="photo-lightbox-count" aria-live="polite"></p>
+      </div>
+    </div>
+
+    <div class="reception-toast" id="reception-toast" role="status" aria-live="polite" hidden></div>
+
+    <script src="./reception.js"></script>
+  </body>
+</html>
