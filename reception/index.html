@@ -106,6 +106,39 @@
             </div>
           </div>
         </section>
+
+        <!-- Gifts -->
+        <section class="reception-panel" id="panel-gifts" data-panel="gifts" hidden aria-labelledby="tab-gifts">
+          <div class="reception-panel__inner">
+            <h2 class="reception-panel__heading">Wedding gifts</h2>
+            <p class="reception-panel__lead">Your presence is our greatest gift. If you wish to give something more, here's how.</p>
+            <div class="rec-gifts-card">
+              <div class="rec-gifts-qr-wrap">
+                <img
+                  class="rec-gifts-qr"
+                  src="https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=GCash%3A%200912345678%20%7C%20Jason%20%26%20Rhona%20Mae"
+                  alt="QR code for GCash transfer"
+                  width="300"
+                  height="300"
+                  loading="lazy"
+                  decoding="async"
+                />
+              </div>
+              <div class="rec-gifts-details">
+                <h3 class="rec-gifts-details__title">GCash / PayMaya</h3>
+                <p class="rec-gifts-details__number">0912 345 6789</p>
+                <p class="rec-gifts-details__name">Jason &amp; Rhona Mae Berber</p>
+              </div>
+              <div class="rec-gifts-divider" aria-hidden="true"></div>
+              <div class="rec-gifts-details">
+                <h3 class="rec-gifts-details__title">Bank Transfer</h3>
+                <p class="rec-gifts-details__number">1234 5678 9012 3456</p>
+                <p class="rec-gifts-details__name">BDO · Jason Berber</p>
+              </div>
+              <p class="rec-gifts-thanks">Thank you for celebrating with us. Your love and generosity mean the world to us.</p>
+            </div>
+          </div>
+        </section>
       </main>
 
       <nav class="reception-tabs" aria-label="Reception sections">
@@ -124,6 +157,10 @@
         <button type="button" class="reception-tabs__btn" id="tab-photos" data-tab="photos">
           <span class="reception-tabs__icon" aria-hidden="true">✦</span>
           <span>Photos</span>
+        </button>
+        <button type="button" class="reception-tabs__btn" id="tab-gifts" data-tab="gifts">
+          <span class="reception-tabs__icon" aria-hidden="true">🎁</span>
+          <span>Gifts</span>
         </button>
       </nav>
     </div>

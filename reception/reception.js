@@ -303,7 +303,7 @@
     });
 
     const hash = (window.location.hash || "").replace("#", "");
-    if (["search", "floor", "menu", "photos"].includes(hash)) {
+    if (["search", "floor", "menu", "photos", "gifts"].includes(hash)) {
       switchTab(hash);
     }
   }
