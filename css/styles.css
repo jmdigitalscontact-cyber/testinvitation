@@ -1369,16 +1369,16 @@ audio#wedding-audio { display: none; }
   border: none;
   border-radius: 999px;
   padding: 0.8rem 1.2rem;
-  background: linear-gradient(135deg, var(--accent), #0ce253);
+  background: linear-gradient(135deg, var(--primary), var(--primary-dark));
   color: #fff;
   font-weight: 600;
   cursor: pointer;
-  box-shadow: 0 10px 24px rgba(184, 140, 102, 0.24);
+  box-shadow: 0 8px 20px rgba(39, 61, 48, 0.28);
   transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 .gallery-open-btn:hover {
   transform: translateY(-2px);
-  box-shadow: 0 12px 26px rgba(184, 140, 102, 0.3);
+  box-shadow: 0 12px 26px rgba(39, 61, 48, 0.35);
 }
 .gallery-grid {
   display: grid;
