@@ -906,4 +906,120 @@
     });
   });
 
+  /* ===== Entourage Photo Book (photo 1..5 = pages 1..5) ===== */
+  var book = document.getElementById('book');
+  var photoPages = Array.prototype.slice.call(document.querySelectorAll('#book .photo-page'));
+  var bookPrev = document.getElementById('book-prev');
+  var bookNext = document.getElementById('book-next');
+  var bookLabel = document.getElementById('book-page-label');
+  var isFlipping = false;
+  var currentIndex = 0;
+  var photoTotal = photoPages.length;
+
+  function prefersReducedMotion() {
+    return window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  }
+
+  function setBookLabel() {
+    if (!bookLabel) return;
+    bookLabel.textContent = 'Photo ' + (currentIndex + 1) + ' of ' + photoTotal;
+    if (bookPrev) bookPrev.disabled = currentIndex === 0;
+    if (bookNext) bookNext.disabled = currentIndex >= photoTotal - 1;
+  }
+
+  function waitForFlipEnd(el, cb) {
+    var done = false;
+    function finish() {
+      if (done) return;
+      done = true;
+      el.removeEventListener('transitionend', finish);
+      cb();
+    }
+    if (prefersReducedMotion()) {
+      finish();
+      return;
+    }
+    el.addEventListener('transitionend', finish);
+    setTimeout(finish, 950);
+  }
+
+  function resetAllPages() {
+    photoPages.forEach(function (p) {
+      p.classList.remove('visible', 'flipped', 'above');
+    });
+  }
+
+  function goToNext() {
+    if (isFlipping || currentIndex >= photoTotal - 1) return;
+    isFlipping = true;
+
+    var cur = photoPages[currentIndex];
+    var nxt = photoPages[currentIndex + 1];
+
+    resetAllPages();
+    cur.classList.add('visible', 'above');
+    nxt.classList.add('visible');
+
+    void cur.offsetWidth;
+    cur.classList.add('flipped');
+
+    waitForFlipEnd(cur, function () {
+      resetAllPages();
+      nxt.classList.add('visible', 'above');
+      currentIndex++;
+      setBookLabel();
+      isFlipping = false;
+    });
+  }
+
+  function goToPrev() {
+    if (isFlipping || currentIndex <= 0) return;
+    isFlipping = true;
+
+    var cur = photoPages[currentIndex];
+    var prev = photoPages[currentIndex - 1];
+
+    resetAllPages();
+    prev.classList.add('visible', 'above', 'flipped');
+    cur.classList.add('visible');
+
+    void prev.offsetWidth;
+    prev.classList.remove('flipped');
+
+    waitForFlipEnd(prev, function () {
+      resetAllPages();
+      prev.classList.add('visible', 'above');
+      currentIndex--;
+      setBookLabel();
+      isFlipping = false;
+    });
+  }
+
+  if (book && photoPages.length && bookPrev && bookNext && bookLabel) {
+    bookPrev.addEventListener('click', goToPrev);
+    bookNext.addEventListener('click', goToNext);
+
+    // Keyboard support
+    document.addEventListener('keydown', function (e) {
+      var section = document.getElementById('entourage-photos');
+      if (!section) return;
+      var rect = section.getBoundingClientRect();
+      var isVisible = rect.top < window.innerHeight && rect.bottom > 0;
+      if (!isVisible) return;
+
+      if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+        e.preventDefault();
+        goToNext();
+      } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        goToPrev();
+      }
+    });
+
+    // Show the first photo on load
+    resetAllPages();
+    photoPages[0].classList.add('visible', 'above');
+    setBookLabel();
+  }
+
 })();

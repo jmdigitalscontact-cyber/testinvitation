@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <meta name="theme-color" content="#faf6f5" />
+    <meta name="theme-color" content="#1a2e23" />
     <meta name="description" content="Jason & Rhona Mae — reception seating, menu, and photo gallery." />
     <meta name="robots" content="noindex,nofollow" />
     <title>Reception | Jason & Rhona Mae</title>
@@ -16,19 +16,48 @@
     <link rel="stylesheet" href="./reception.css" />
   </head>
   <body>
-    <!-- Lock screen shown when no access key is present -->
+    <!-- Canvas for ambient particles -->
+    <canvas id="particle-canvas" class="particle-canvas" aria-hidden="true"></canvas>
+
+    <!-- ===== LOCK SCREEN ===== -->
     <div class="rec-lock-overlay" id="rec-lock-overlay">
-      <div class="rec-lock-card">
-        <div class="rec-lock-icon" aria-hidden="true">🎀</div>
-        <h2 class="rec-lock-heading">This page is private</h2>
-        <p class="rec-lock-text">The reception page is accessible only to our invited guests. Please scan the QR code from your physical wedding invitation to enter.</p>
+      <div class="rec-lock-card" id="rec-lock-card">
+        <div class="rec-lock-glow" aria-hidden="true"></div>
+        <div class="rec-lock-icon-wrap">
+          <span class="rec-lock-icon" aria-hidden="true">💍</span>
+          <span class="rec-lock-ring" aria-hidden="true"></span>
+        </div>
+        <h2 class="rec-lock-heading">Welcome to the Celebration</h2>
+        <p class="rec-lock-text">You're invited to Jason &amp; Rhona Mae's wedding reception. Please scan the QR code from your physical invitation to enter.</p>
         <div class="rec-lock-divider" aria-hidden="true"></div>
-        <p class="rec-lock-hint">If you have the QR code but can't access this page, please contact Jason &amp; Rhona Mae directly.</p>
+        <div class="rec-lock-key-wrap">
+          <input
+            type="text"
+            id="rec-lock-key-input"
+            class="rec-lock-key-input"
+            placeholder="Paste access key or scan QR"
+            autocomplete="off"
+            enterkeyhint="done"
+          />
+          <button type="button" class="rec-lock-enter-btn" id="rec-lock-enter-btn">
+            <span>Enter</span>
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5">
+              <path d="M5 12h14M13 5l7 7-7 7"/>
+            </svg>
+          </button>
+        </div>
+        <p class="rec-lock-error" id="rec-lock-error" hidden></p>
+        <p class="rec-lock-hint">Questions? Contact Jason &amp; Rhona Mae directly.</p>
       </div>
     </div>
 
-    <div class="reception-app" id="reception-app">
-      <header class="reception-header">
+    <!-- ===== MAIN APP ===== -->
+    <div class="reception-app" id="reception-app" hidden>
+      <header class="reception-header" id="reception-header">
+        <div class="reception-header__bg" aria-hidden="true"></div>
+        <button type="button" class="reception-theme-toggle" id="theme-toggle" aria-label="Toggle theme">
+          <span class="reception-theme-toggle__icon" aria-hidden="true">☀️</span>
+        </button>
         <p class="reception-header__eyebrow">Jason &amp; Rhona Mae</p>
         <h1 class="reception-header__title">Reception</h1>
         <div class="reception-header__ornament" aria-hidden="true">
@@ -36,68 +65,125 @@
           <span class="reception-header__gem"></span>
           <span class="reception-header__line"></span>
         </div>
+        <!-- Guest wall pill -->
+        <div class="rec-guest-wall-pill" id="guest-wall-pill" hidden>
+          <span class="rec-guest-wall-dot" aria-hidden="true"></span>
+          <span id="guest-wall-count">0</span> guests checked in
+        </div>
       </header>
 
       <main class="reception-main" id="reception-main">
-        <!-- Search -->
+        <!-- ===== TAB: Search ===== -->
         <section class="reception-panel is-active" id="panel-search" data-panel="search" aria-labelledby="tab-search">
           <div class="reception-panel__inner">
             <h2 class="reception-panel__heading">Find your seat</h2>
             <p class="reception-panel__lead">Your seat is shown only after you search your name.</p>
+            
+            <div class="reception-suggestion-pills" id="suggestion-pills"></div>
+
             <label class="reception-search">
               <span class="visually-hidden">Search guests</span>
               <input
                 type="search"
                 id="guest-search-input"
                 class="reception-search__input"
-                placeholder="Type your name…"
+                placeholder="Type your name..."
                 autocomplete="name"
                 enterkeyhint="search"
               />
+              <span class="reception-search__icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.3-4.3"/>
+                </svg>
+              </span>
             </label>
             <p class="reception-status" id="guest-search-status" role="status" aria-live="polite"></p>
             <ul class="reception-results" id="guest-search-results"></ul>
           </div>
         </section>
 
-        <!-- Floor plan -->
+        <!-- ===== TAB: Floor ===== -->
         <section class="reception-panel" id="panel-floor" data-panel="floor" hidden aria-labelledby="tab-floor">
           <div class="reception-panel__inner reception-panel__inner--floor">
-            <h2 class="reception-panel__heading">Floor plan</h2>
-            <p class="reception-panel__lead">Pinch to zoom. Drag to pan.</p>
+            <div class="reception-floor-top">
+              <h2 class="reception-panel__heading">Floor plan</h2>
+              <button type="button" class="reception-floor-reset-btn" id="floor-reset-btn" aria-label="Reset view">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
+                  <path d="M3 3v5h5"/>
+                </svg>
+              </button>
+            </div>
+            <p class="reception-panel__lead">Pinch to zoom. Drag to pan. Tap a table for details.</p>
             <div class="reception-legend" id="floor-legend"></div>
-            <div class="reception-floor-wrap" id="floor-plan-viewport">
-              <div class="reception-floor-stage" id="floor-plan-stage">
-                <img
-                  class="reception-floor__img"
-                  id="floor-plan-image"
-                  src="./assets/floor-plan.svg"
-                  alt="Reception floor plan"
-                  draggable="false"
-                />
-                <div class="reception-floor__hotspots" id="floor-plan-hotspots" aria-hidden="true"></div>
+            <div class="reception-floor-3d" id="floor-3d-container">
+              <div class="reception-floor-wrap" id="floor-plan-viewport">
+                <div class="reception-floor-stage" id="floor-plan-stage">
+                  <div class="reception-floor__img-wrap">
+                    <div class="reception-floor__room" id="floor-room">
+                      <!-- Stage -->
+                      <div class="rec-floor-marker rec-floor-marker--stage" data-marker="stage">
+                        <div class="rec-floor-marker__label">Stage</div>
+                      </div>
+                      <!-- Tables -->
+                      <div class="rec-floor-tables" id="floor-tables"></div>
+                      <!-- Entrance -->
+                      <div class="rec-floor-marker rec-floor-marker--entrance" data-marker="entrance">
+                        <div class="rec-floor-marker__label">Entrance</div>
+                      </div>
+                      <!-- Bar -->
+                      <div class="rec-floor-marker rec-floor-marker--bar" data-marker="bar">
+                        <div class="rec-floor-marker__label">Buffet / Bar</div>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="reception-floor__hotspots" id="floor-plan-hotspots" aria-hidden="true"></div>
+                </div>
               </div>
             </div>
             <p class="reception-floor-hint" id="floor-highlight-hint" hidden></p>
           </div>
         </section>
 
-        <!-- Menu -->
+        <!-- Table popup -->
+        <div class="rec-table-popup" id="table-popup" hidden role="dialog" aria-label="Table details">
+          <div class="rec-table-popup__backdrop" data-table-popup-close></div>
+          <div class="rec-table-popup__card">
+            <button type="button" class="rec-table-popup__close" data-table-popup-close aria-label="Close">&times;</button>
+            <h3 class="rec-table-popup__title" id="table-popup-title"></h3>
+            <ul class="rec-table-popup__list" id="table-popup-list"></ul>
+          </div>
+        </div>
+
+        <!-- ===== TAB: Menu ===== -->
         <section class="reception-panel" id="panel-menu" data-panel="menu" hidden aria-labelledby="tab-menu">
           <div class="reception-panel__inner">
-            <h2 class="reception-panel__heading">Tonight&apos;s menu</h2>
+            <h2 class="reception-panel__heading">Tonight's menu</h2>
             <p class="reception-panel__lead">With love from our kitchen.</p>
             <div class="reception-menu-legend" id="menu-tag-legend"></div>
+            <div class="reception-menu-filters" id="menu-filters">
+              <button type="button" class="reception-menu-filter is-active" data-filter="all">All</button>
+            </div>
             <div class="reception-menu" id="menu-root"></div>
           </div>
         </section>
 
-        <!-- Photos -->
+        <!-- ===== TAB: Photos ===== -->
         <section class="reception-panel" id="panel-photos" data-panel="photos" hidden aria-labelledby="tab-photos">
           <div class="reception-panel__inner">
             <h2 class="reception-panel__heading">Live gallery</h2>
             <p class="reception-panel__lead">Share a moment from our celebration.</p>
-            <div class="reception-upload">
+            
+            <div class="reception-upload-zone" id="upload-zone">
+              <div class="reception-upload-zone__icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="1.5">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                  <polyline points="17 8 12 3 7 8"/>
+                  <line x1="12" y1="3" x2="12" y2="15"/>
+                </svg>
+              </div>
+              <p class="reception-upload-zone__text">Drop photos here or tap to upload</p>
+              <p class="reception-upload-zone__hint">JPEG, PNG, or WebP · max 5MB each</p>
               <input
                 type="file"
                 id="photo-upload-input"
@@ -107,91 +193,211 @@
                 multiple
               />
               <button type="button" class="reception-btn reception-btn--primary" id="photo-upload-btn">
-                Upload photos
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                  <polyline points="17 8 12 3 7 8"/>
+                  <line x1="12" y1="3" x2="12" y2="15"/>
+                </svg>
+                Select photos
               </button>
-              <p class="reception-upload__hint">Select one or more · JPEG, PNG, or WebP · max 5MB each</p>
             </div>
+
             <p class="reception-status" id="photo-gallery-status" role="status" aria-live="polite"></p>
             <div class="reception-gallery-viewport" id="photo-gallery-wrap" hidden>
-              <div class="reception-gallery-track" id="photo-gallery" aria-label="Guest photos"></div>
+              <div class="reception-gallery-masonry" id="photo-gallery" aria-label="Guest photos"></div>
             </div>
           </div>
         </section>
 
-        <!-- Gifts -->
+        <!-- ===== TAB: Gifts ===== -->
         <section class="reception-panel" id="panel-gifts" data-panel="gifts" hidden aria-labelledby="tab-gifts">
           <div class="reception-panel__inner">
             <h2 class="reception-panel__heading">Wedding gifts</h2>
             <p class="reception-panel__lead">Your presence is our greatest gift. If you wish to give something more, here's how.</p>
+            
             <div class="rec-gifts-card">
-              <div class="rec-gifts-cols">
-                <div class="rec-gifts-col">
-                  <div class="rec-gifts-qr-wrap">
-                    <img
-                      class="rec-gifts-qr"
-                      src="https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=GCash%3A%200912345678%20%7C%20Jason%20%26%20Rhona%20Mae%20Berber"
-                      alt="QR code for GCash transfer"
-                      width="300"
-                      height="300"
-                      loading="lazy"
-                      decoding="async"
-                    />
+              <!-- Gift Box Animation -->
+              <div class="rec-gift-box-wrap" id="gift-box-wrap">
+                <button type="button" class="rec-gift-box" id="gift-box" aria-label="Open gift box">
+                  <div class="rec-gift-box__lid" id="gift-box-lid">
+                    <div class="rec-gift-box__ribbon rec-gift-box__ribbon--h"></div>
+                    <div class="rec-gift-box__ribbon rec-gift-box__ribbon--v"></div>
+                    <div class="rec-gift-box__bow" aria-hidden="true">🎀</div>
                   </div>
-                  <div class="rec-gifts-details">
-                    <h3 class="rec-gifts-details__title">GCash / PayMaya</h3>
-                    <p class="rec-gifts-details__number">0912 345 6789</p>
-                    <p class="rec-gifts-details__name">Jason &amp; Rhona Mae Berber</p>
+                  <div class="rec-gift-box__body">
+                    <div class="rec-gift-box__ribbon rec-gift-box__ribbon--h"></div>
+                    <div class="rec-gift-box__ribbon rec-gift-box__ribbon--v"></div>
                   </div>
-                </div>
-                <div class="rec-gifts-col">
-                  <div class="rec-gifts-qr-wrap">
-                    <img
-                      class="rec-gifts-qr"
-                      src="https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=BDO%20Savings%3A%201234567890123456%20%7C%20Jason%20Berber"
-                      alt="QR code for bank transfer"
-                      width="300"
-                      height="300"
-                      loading="lazy"
-                      decoding="async"
-                    />
-                  </div>
-                  <div class="rec-gifts-details">
-                    <h3 class="rec-gifts-details__title">Bank Transfer</h3>
-                    <p class="rec-gifts-details__number">1234 5678 9012 3456</p>
-                    <p class="rec-gifts-details__name">BDO · Jason Berber</p>
-                  </div>
-                </div>
+                </button>
+                <p class="rec-gift-box__cta">Tap the gift box to open</p>
               </div>
-              <p class="rec-gifts-thanks">Thank you for celebrating with us. Your love and generosity mean the world to us.</p>
+
+              <!-- Gift details (hidden until box is opened) -->
+              <div class="rec-gifts-details-wrap" id="gifts-details" hidden>
+                <div class="rec-gifts-cols">
+                  <div class="rec-gifts-col">
+                    <div class="rec-gifts-qr-wrap">
+                      <div class="rec-gifts-qr-animated" aria-hidden="true">
+                        <svg viewBox="0 0 100 100" class="rec-gifts-qr-svg">
+                          <rect width="100" height="100" fill="none" stroke="currentColor" stroke-width="2" rx="4"/>
+                          <g fill="currentColor" opacity="0.9">
+                            <rect x="8" y="8" width="6" height="6"/>
+                            <rect x="20" y="8" width="6" height="6"/>
+                            <rect x="32" y="8" width="6" height="6"/>
+                            <rect x="8" y="20" width="6" height="6"/>
+                            <rect x="8" y="32" width="6" height="6"/>
+                            <rect x="20" y="20" width="6" height="6"/>
+                            <rect x="44" y="8" width="6" height="6"/>
+                            <rect x="56" y="8" width="6" height="6"/>
+                            <rect x="68" y="8" width="6" height="6"/>
+                            <rect x="80" y="8" width="6" height="6"/>
+                            <rect x="56" y="20" width="6" height="6"/>
+                            <rect x="80" y="20" width="6" height="6"/>
+                            <rect x="44" y="32" width="6" height="6"/>
+                            <rect x="56" y="32" width="6" height="6"/>
+                            <rect x="80" y="32" width="6" height="6"/>
+                            <rect x="8" y="44" width="6" height="6"/>
+                            <rect x="20" y="44" width="6" height="6"/>
+                            <rect x="32" y="44" width="6" height="6"/>
+                            <rect x="44" y="44" width="6" height="6"/>
+                            <rect x="68" y="44" width="6" height="6"/>
+                            <rect x="8" y="56" width="6" height="6"/>
+                            <rect x="44" y="56" width="6" height="6"/>
+                            <rect x="56" y="56" width="6" height="6"/>
+                            <rect x="68" y="56" width="6" height="6"/>
+                            <rect x="80" y="56" width="6" height="6"/>
+                            <rect x="8" y="68" width="6" height="6"/>
+                            <rect x="20" y="68" width="6" height="6"/>
+                            <rect x="56" y="68" width="6" height="6"/>
+                            <rect x="20" y="80" width="6" height="6"/>
+                            <rect x="44" y="80" width="6" height="6"/>
+                            <rect x="56" y="80" width="6" height="6"/>
+                            <rect x="68" y="80" width="6" height="6"/>
+                            <rect x="80" y="80" width="6" height="6"/>
+                          </g>
+                        </svg>
+                      </div>
+                    </div>
+                    <div class="rec-gifts-details">
+                      <h3 class="rec-gifts-details__title">GCash / PayMaya</h3>
+                      <p class="rec-gifts-details__number animated-number" data-value="09123456789">0912 345 6789</p>
+                      <p class="rec-gifts-details__name">Jason &amp; Rhona Mae Berber</p>
+                    </div>
+                  </div>
+                  <div class="rec-gifts-col">
+                    <div class="rec-gifts-qr-wrap">
+                      <div class="rec-gifts-qr-animated" aria-hidden="true">
+                        <svg viewBox="0 0 100 100" class="rec-gifts-qr-svg">
+                          <rect width="100" height="100" fill="none" stroke="currentColor" stroke-width="2" rx="4"/>
+                          <g fill="currentColor" opacity="0.9">
+                            <rect x="8" y="8" width="6" height="6"/>
+                            <rect x="20" y="8" width="6" height="6"/>
+                            <rect x="32" y="8" width="6" height="6"/>
+                            <rect x="8" y="20" width="6" height="6"/>
+                            <rect x="20" y="32" width="6" height="6"/>
+                            <rect x="32" y="32" width="6" height="6"/>
+                            <rect x="44" y="8" width="6" height="6"/>
+                            <rect x="56" y="8" width="6" height="6"/>
+                            <rect x="68" y="8" width="6" height="6"/>
+                            <rect x="44" y="20" width="6" height="6"/>
+                            <rect x="56" y="20" width="6" height="6"/>
+                            <rect x="80" y="8" width="6" height="6"/>
+                            <rect x="80" y="20" width="6" height="6"/>
+                            <rect x="68" y="32" width="6" height="6"/>
+                            <rect x="80" y="32" width="6" height="6"/>
+                            <rect x="8" y="44" width="6" height="6"/>
+                            <rect x="20" y="44" width="6" height="6"/>
+                            <rect x="32" y="44" width="6" height="6"/>
+                            <rect x="68" y="44" width="6" height="6"/>
+                            <rect x="8" y="56" width="6" height="6"/>
+                            <rect x="32" y="56" width="6" height="6"/>
+                            <rect x="44" y="56" width="6" height="6"/>
+                            <rect x="56" y="56" width="6" height="6"/>
+                            <rect x="68" y="56" width="6" height="6"/>
+                            <rect x="80" y="56" width="6" height="6"/>
+                            <rect x="20" y="68" width="6" height="6"/>
+                            <rect x="32" y="68" width="6" height="6"/>
+                            <rect x="44" y="68" width="6" height="6"/>
+                            <rect x="68" y="68" width="6" height="6"/>
+                            <rect x="80" y="68" width="6" height="6"/>
+                            <rect x="8" y="80" width="6" height="6"/>
+                            <rect x="20" y="80" width="6" height="6"/>
+                            <rect x="44" y="80" width="6" height="6"/>
+                            <rect x="56" y="80" width="6" height="6"/>
+                          </g>
+                        </svg>
+                      </div>
+                    </div>
+                    <div class="rec-gifts-details">
+                      <h3 class="rec-gifts-details__title">Bank Transfer</h3>
+                      <p class="rec-gifts-details__number animated-number" data-value="1234567890123456">1234 5678 9012 3456</p>
+                      <p class="rec-gifts-details__name">BDO · Jason Berber</p>
+                    </div>
+                  </div>
+                </div>
+                <p class="rec-gifts-thanks">Thank you for celebrating with us. Your love and generosity mean the world to us.</p>
+              </div>
             </div>
           </div>
         </section>
       </main>
 
+      <!-- ===== TAB BAR ===== -->
       <nav class="reception-tabs" aria-label="Reception sections">
+        <div class="reception-tabs__indicator" id="tab-indicator" aria-hidden="true"></div>
         <button type="button" class="reception-tabs__btn is-active" id="tab-search" data-tab="search" aria-current="page">
-          <span class="reception-tabs__icon" aria-hidden="true">⌕</span>
+          <span class="reception-tabs__icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.3-4.3"/>
+            </svg>
+          </span>
           <span>Search</span>
         </button>
         <button type="button" class="reception-tabs__btn" id="tab-floor" data-tab="floor">
-          <span class="reception-tabs__icon" aria-hidden="true">▦</span>
+          <span class="reception-tabs__icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="3" y="3" width="7" height="7"/>
+              <rect x="14" y="3" width="7" height="7"/>
+              <rect x="14" y="14" width="7" height="7"/>
+              <rect x="3" y="14" width="7" height="7"/>
+            </svg>
+          </span>
           <span>Floor</span>
         </button>
         <button type="button" class="reception-tabs__btn" id="tab-menu" data-tab="menu">
-          <span class="reception-tabs__icon" aria-hidden="true">☰</span>
+          <span class="reception-tabs__icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/>
+            </svg>
+          </span>
           <span>Menu</span>
         </button>
         <button type="button" class="reception-tabs__btn" id="tab-photos" data-tab="photos">
-          <span class="reception-tabs__icon" aria-hidden="true">✦</span>
+          <span class="reception-tabs__icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+              <circle cx="8.5" cy="8.5" r="1.5"/>
+              <polyline points="21 15 16 10 5 21"/>
+            </svg>
+          </span>
           <span>Photos</span>
         </button>
         <button type="button" class="reception-tabs__btn" id="tab-gifts" data-tab="gifts">
-          <span class="reception-tabs__icon" aria-hidden="true">🎁</span>
+          <span class="reception-tabs__icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="20 12 20 22 4 22 4 12"/>
+              <rect x="2" y="7" width="20" height="5"/>
+              <line x1="12" y1="22" x2="12" y2="7"/>
+              <path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/>
+              <path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/>
+            </svg>
+          </span>
           <span>Gifts</span>
         </button>
       </nav>
     </div>
 
+    <!-- ===== Lightbox ===== -->
     <div
       class="reception-photo-lightbox"
       id="photo-lightbox"
@@ -203,7 +409,9 @@
       <div class="reception-photo-lightbox__backdrop" data-photo-lightbox-close tabindex="-1" aria-hidden="true"></div>
       <div class="reception-photo-lightbox__panel">
         <button type="button" class="reception-photo-lightbox__close" data-photo-lightbox-close aria-label="Close">
-          &times;
+          <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+          </svg>
         </button>
         <button
           type="button"
@@ -211,25 +419,43 @@
           data-photo-lightbox-prev
           aria-label="Previous photo"
         >
-          <span aria-hidden="true">&#8249;</span>
-        </button>
-        <button
-          type="button"
-          class="reception-photo-lightbox__nav reception-photo-lightbox__nav--next"
-          data-photo-lightbox-next
-          aria-label="Next photo"
-        >
-          <span aria-hidden="true">&#8250;</span>
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="15 18 9 12 15 6"/>
+          </svg>
         </button>
         <figure class="reception-photo-lightbox__figure">
-          <img class="reception-photo-lightbox__img" alt="Guest photo" decoding="async" />
+          <div class="reception-photo-lightbox__img-wrap">
+            <img class="reception-photo-lightbox__img" alt="Guest photo" decoding="async" />
+          </div>
+          <div class="reception-photo-lightbox__reactions">
+            <button type="button" class="rec-photo-like-btn" id="photo-like-btn" aria-label="Like this photo">
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
+              </svg>
+            </button>
+          </div>
         </figure>
         <p class="reception-photo-lightbox__count" id="photo-lightbox-count" aria-live="polite"></p>
       </div>
+      <button
+        type="button"
+        class="reception-photo-lightbox__nav reception-photo-lightbox__nav--next"
+        data-photo-lightbox-next
+        aria-label="Next photo"
+      >
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="9 18 15 12 9 6"/>
+        </svg>
+      </button>
     </div>
 
+    <!-- ===== Toast ===== -->
     <div class="reception-toast" id="reception-toast" role="status" aria-live="polite" hidden></div>
+
+    <!-- ===== Confetti Canvas ===== -->
+    <canvas id="confetti-canvas" class="confetti-canvas" aria-hidden="true" hidden></canvas>
 
     <script src="./reception.js"></script>
   </body>
 </html>
+

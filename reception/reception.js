@@ -1,56 +1,99 @@
 (function () {
   "use strict";
 
+  /* ───────────────────────────────────────────
+     CONFIG
+     ─────────────────────────────────────────── */
   const API_BASE = "../rsvp/api.php";
   const params = new URLSearchParams(window.location.search);
   const RECEPTION_KEY_STORAGE = "reception_access_key";
   const RECEPTION_KEY_PARAM = params.get("key") || "";
   const RECEPTION_KEY = RECEPTION_KEY_PARAM || localStorage.getItem(RECEPTION_KEY_STORAGE) || "";
   const MIN_SEARCH_CHARS = 2;
+  const THEME_STORAGE = "reception_theme";
 
   if (RECEPTION_KEY_PARAM) {
     localStorage.setItem(RECEPTION_KEY_STORAGE, RECEPTION_KEY_PARAM);
   }
 
+  /* ───────────────────────────────────────────
+     STATE
+     ─────────────────────────────────────────── */
   const state = {
     guests: [],
     guestsLoaded: false,
     photos: [],
-    floorPlanMeta: null,
-    highlightTable: null,
     activeTab: "search",
     floorTransform: { scale: 1, x: 0, y: 0 },
+    theme: localStorage.getItem(THEME_STORAGE) || "dark",
+    guestWallCount: 0,
+    likedPhotos: new Set(),
+    giftBoxOpened: false,
   };
 
-  const els = {
-    panels: document.querySelectorAll(".reception-panel"),
-    tabButtons: document.querySelectorAll(".reception-tabs__btn"),
-    searchInput: document.getElementById("guest-search-input"),
-    searchStatus: document.getElementById("guest-search-status"),
-    searchResults: document.getElementById("guest-search-results"),
-    floorViewport: document.getElementById("floor-plan-viewport"),
-    floorStage: document.getElementById("floor-plan-stage"),
-    floorHotspots: document.getElementById("floor-plan-hotspots"),
-    floorLegend: document.getElementById("floor-legend"),
-    floorHint: document.getElementById("floor-highlight-hint"),
-    menuRoot: document.getElementById("menu-root"),
-    menuLegend: document.getElementById("menu-tag-legend"),
-    photoGalleryWrap: document.getElementById("photo-gallery-wrap"),
-    photoGallery: document.getElementById("photo-gallery"),
-    photoStatus: document.getElementById("photo-gallery-status"),
-    photoUploadBtn: document.getElementById("photo-upload-btn"),
-    photoUploadInput: document.getElementById("photo-upload-input"),
-    photoLightbox: document.getElementById("photo-lightbox"),
-    photoLightboxImg: document.querySelector(".reception-photo-lightbox__img"),
-    photoLightboxCount: document.getElementById("photo-lightbox-count"),
-    photoLightboxPrev: document.querySelector("[data-photo-lightbox-prev]"),
-    photoLightboxNext: document.querySelector("[data-photo-lightbox-next]"),
-    toast: document.getElementById("reception-toast"),
-  };
+  /* ───────────────────────────────────────────
+     DOM REFS
+     ─────────────────────────────────────────── */
+  const els = {};
+  function cacheEls() {
+    els.panels = document.querySelectorAll(".reception-panel");
+    els.tabButtons = document.querySelectorAll(".reception-tabs__btn");
+    els.tabIndicator = document.getElementById("tab-indicator");
+    els.searchInput = document.getElementById("guest-search-input");
+    els.searchStatus = document.getElementById("guest-search-status");
+    els.searchResults = document.getElementById("guest-search-results");
+    els.suggestionPills = document.getElementById("suggestion-pills");
+    els.floorViewport = document.getElementById("floor-plan-viewport");
+    els.floorStage = document.getElementById("floor-plan-stage");
+    els.floorLegend = document.getElementById("floor-legend");
+    els.floorHint = document.getElementById("floor-highlight-hint");
+    els.floorTables = document.getElementById("floor-tables");
+    els.floorContainer = document.getElementById("floor-3d-container");
+    els.floorResetBtn = document.getElementById("floor-reset-btn");
+    els.tablePopup = document.getElementById("table-popup");
+    els.tablePopupTitle = document.getElementById("table-popup-title");
+    els.tablePopupList = document.getElementById("table-popup-list");
+    els.menuRoot = document.getElementById("menu-root");
+    els.menuLegend = document.getElementById("menu-tag-legend");
+    els.menuFilters = document.getElementById("menu-filters");
+    els.photoGalleryWrap = document.getElementById("photo-gallery-wrap");
+    els.photoGallery = document.getElementById("photo-gallery");
+    els.photoStatus = document.getElementById("photo-gallery-status");
+    els.photoUploadBtn = document.getElementById("photo-upload-btn");
+    els.photoUploadInput = document.getElementById("photo-upload-input");
+    els.uploadZone = document.getElementById("upload-zone");
+    els.photoLightbox = document.getElementById("photo-lightbox");
+    els.photoLightboxImg = document.querySelector(".reception-photo-lightbox__img");
+    els.photoLightboxCount = document.getElementById("photo-lightbox-count");
+    els.photoLightboxPrev = document.querySelector("[data-photo-lightbox-prev]");
+    els.photoLightboxNext = document.querySelector("[data-photo-lightbox-next]");
+    els.photoLikeBtn = document.getElementById("photo-like-btn");
+    els.toast = document.getElementById("reception-toast");
+    els.particleCanvas = document.getElementById("particle-canvas");
+    els.confettiCanvas = document.getElementById("confetti-canvas");
+    els.themeToggle = document.getElementById("theme-toggle");
+    els.themeToggleIcon = document.querySelector(".reception-theme-toggle__icon");
+    els.guestWallPill = document.getElementById("guest-wall-pill");
+    els.guestWallCount = document.getElementById("guest-wall-count");
+    els.giftBox = document.getElementById("gift-box");
+    els.giftBoxLid = document.getElementById("gift-box-lid");
+    els.giftBoxCta = document.querySelector(".rec-gift-box__cta");
+    els.giftDetails = document.getElementById("gifts-details");
+    els.lockOverlay = document.getElementById("rec-lock-overlay");
+    els.lockCard = document.getElementById("rec-lock-card");
+    els.lockKeyInput = document.getElementById("rec-lock-key-input");
+    els.lockEnterBtn = document.getElementById("rec-lock-enter-btn");
+    els.lockError = document.getElementById("rec-lock-error");
+    els.app = document.getElementById("reception-app");
+    els.receptionMain = document.getElementById("reception-main");
+  }
 
   let photoLightboxIndex = 0;
   let photoLightboxLastFocus = null;
 
+  /* ───────────────────────────────────────────
+     UTILITY
+     ─────────────────────────────────────────── */
   function apiHeaders(isJson) {
     const headers = {};
     if (isJson) headers["Content-Type"] = "application/json";
@@ -63,67 +106,333 @@
     els.toast.textContent = message;
     els.toast.hidden = false;
     clearTimeout(showToast._timer);
-    showToast._timer = setTimeout(() => {
-      els.toast.hidden = true;
-    }, durationMs || 2800);
+    showToast._timer = setTimeout(() => { els.toast.hidden = true; }, durationMs || 2800);
   }
 
   async function apiGet(action) {
     const url = `${API_BASE}?action=${encodeURIComponent(action)}`;
     const res = await fetch(url, { headers: apiHeaders(false) });
+    if (!res.ok) throw new Error(`API error ${res.status}`);
     return res.json();
   }
 
+  function escapeHtml(value) {
+    const div = document.createElement("div");
+    div.textContent = String(value || "");
+    return div.innerHTML;
+  }
+
+  function normalizeQuery(q) {
+    return String(q || "").trim().toLowerCase().normalize("NFD").replace(/\p{M}/gu, "");
+  }
+
+  function getInitials(name) {
+    return (name || "").split(/\s+/).slice(0, 2).map(w => w[0] || "").join("").toUpperCase() || "?";
+  }
+
+  function getAvatarColor(name) {
+    const colors = ["#4a7c5c", "#6b8c78", "#6b9a7e", "#c9a87c", "#d4a5b4", "#4a6b56", "#d4af47", "#8fa89a"];
+    let hash = 0;
+    for (let i = 0; i < (name || "").length; i++) {
+      hash = name.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    return colors[Math.abs(hash) % colors.length];
+  }
+
+  /* ───────────────────────────────────────────
+     THEME
+     ─────────────────────────────────────────── */
+  function setTheme(theme) {
+    state.theme = theme;
+    document.documentElement.setAttribute("data-theme", theme);
+    localStorage.setItem(THEME_STORAGE, theme);
+    if (els.themeToggleIcon) {
+      els.themeToggleIcon.textContent = theme === "dark" ? "☀️" : "🌙";
+    }
+  }
+
+  function toggleTheme() {
+    setTheme(state.theme === "dark" ? "light" : "dark");
+  }
+
+  /* ───────────────────────────────────────────
+     PARTICLE SYSTEM
+     ─────────────────────────────────────────── */
+  let particles = [];
+  let particleAnimId = null;
+
+  function initParticles() {
+    const canvas = els.particleCanvas;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    function resize() {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+    }
+    resize();
+    window.addEventListener("resize", resize);
+
+    const count = Math.min(60, Math.floor((canvas.width * canvas.height) / 15000));
+    particles = [];
+    for (let i = 0; i < count; i++) {
+      particles.push({
+        x: Math.random() * canvas.width,
+        y: Math.random() * canvas.height,
+        size: Math.random() * 3 + 1,
+        speedX: (Math.random() - 0.5) * 0.3,
+        speedY: (Math.random() - 0.5) * 0.3 - 0.1,
+        opacity: Math.random() * 0.5 + 0.1,
+        hue: Math.random() > 0.5 ? (Math.random() > 0.5 ? 45 : 120) : 340, // gold, sage, or blush
+      });
+    }
+
+    function animate() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      const isLight = state.theme === "light";
+
+      particles.forEach(p => {
+        p.x += p.speedX;
+        p.y += p.speedY;
+        if (p.x < 0) p.x = canvas.width;
+        if (p.x > canvas.width) p.x = 0;
+        if (p.y < 0) p.y = canvas.height;
+        if (p.y > canvas.height) p.y = 0;
+
+        const alpha = isLight ? p.opacity * 0.4 : p.opacity;
+        const color = p.hue === 45
+          ? `rgba(212, 175, 71, ${alpha})`
+          : p.hue === 120
+          ? `rgba(107, 140, 120, ${alpha})`
+          : `rgba(212, 165, 180, ${alpha})`;
+
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+        ctx.fillStyle = color;
+        ctx.fill();
+      });
+
+      particleAnimId = requestAnimationFrame(animate);
+    }
+    animate();
+  }
+
+  /* ───────────────────────────────────────────
+     CONFETTI SYSTEM
+     ─────────────────────────────────────────── */
+  let confettiPieces = [];
+  let confettiAnimId = null;
+
+  function fireConfetti() {
+    const canvas = els.confettiCanvas;
+    if (!canvas) return;
+    canvas.hidden = false;
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    const colors = ["#d4af47", "#c9a87c", "#ff6b6b", "#6b8c78", "#d4a5b4", "#ffffff", "#4a7c5c", "#e8ca7a"];
+    confettiPieces = [];
+    for (let i = 0; i < 120; i++) {
+      confettiPieces.push({
+        x: canvas.width / 2 + (Math.random() - 0.5) * 100,
+        y: canvas.height / 2,
+        size: Math.random() * 8 + 3,
+        color: colors[Math.floor(Math.random() * colors.length)],
+        speedX: (Math.random() - 0.5) * 12,
+        speedY: -Math.random() * 14 - 4,
+        rotation: Math.random() * 360,
+        rotSpeed: (Math.random() - 0.5) * 10,
+        gravity: 0.3,
+        opacity: 1,
+      });
+    }
+
+    let frame = 0;
+    function animate() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      frame++;
+      let alive = false;
+
+      confettiPieces.forEach(p => {
+        p.x += p.speedX;
+        p.y += p.speedY;
+        p.speedY += p.gravity;
+        p.rotation += p.rotSpeed;
+        p.speedX *= 0.99;
+
+        if (frame > 30) p.opacity -= 0.012;
+        if (p.opacity <= 0) return;
+
+        alive = true;
+        ctx.save();
+        ctx.translate(p.x, p.y);
+        ctx.rotate((p.rotation * Math.PI) / 180);
+        ctx.globalAlpha = Math.max(0, p.opacity);
+        ctx.fillStyle = p.color;
+        ctx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size * 0.6);
+        ctx.restore();
+      });
+
+      if (alive) {
+        confettiAnimId = requestAnimationFrame(animate);
+      } else {
+        canvas.hidden = true;
+        confettiPieces = [];
+      }
+    }
+    animate();
+  }
+
+  /* ───────────────────────────────────────────
+     LOCK SCREEN
+     ─────────────────────────────────────────── */
   function hasReceptionAccessKey() {
     return RECEPTION_KEY.trim().length > 0;
   }
 
   function applyAccessLock() {
-    const lockOverlay = document.getElementById("rec-lock-overlay");
-    const appEl = document.getElementById("reception-app");
-
     if (!hasReceptionAccessKey()) {
-      // Show lock overlay, hide app content
-      if (lockOverlay) lockOverlay.hidden = false;
-      if (appEl) appEl.hidden = true;
-      document.title = "Reception (Access Required) | Jason & Rhona Mae";
+      if (els.lockOverlay) els.lockOverlay.hidden = false;
+      if (els.app) els.app.hidden = true;
       return;
     }
-
-    // Key is present — hide lock, show app
-    if (lockOverlay) lockOverlay.hidden = true;
-    if (appEl) appEl.hidden = false;
+    unlockApp();
   }
 
-  function renderAccessError(message) {
-    if (els.searchStatus) {
-      els.searchStatus.textContent = message || "Reception access is unavailable.";
+  function unlockApp() {
+    if (els.lockOverlay) {
+      els.lockOverlay.classList.add("is-exiting");
+      setTimeout(() => {
+        els.lockOverlay.hidden = true;
+      }, 500);
     }
-    if (els.searchInput) {
-      els.searchInput.disabled = true;
-      els.searchInput.placeholder = "Access required";
+    if (els.app) {
+      els.app.hidden = false;
+      els.app.classList.add("is-entering");
+      setTimeout(() => els.app.classList.remove("is-entering"), 600);
     }
-    clearSearchResults();
+    document.title = "Reception | Jason & Rhona Mae";
   }
 
+  function handleLockEnter() {
+    const inputKey = (els.lockKeyInput?.value || "").trim();
+    if (!inputKey) {
+      if (els.lockError) {
+        els.lockError.textContent = "Please enter your access key.";
+        els.lockError.hidden = false;
+      }
+      return;
+    }
+    localStorage.setItem(RECEPTION_KEY_STORAGE, inputKey);
+    window.location.reload();
+  }
+
+  /* ───────────────────────────────────────────
+     TABS
+     ─────────────────────────────────────────── */
+  function updateTabIndicator() {
+    if (!els.tabIndicator) return;
+    const active = document.querySelector(".reception-tabs__btn.is-active");
+    if (!active) return;
+    const parent = active.closest(".reception-tabs");
+    if (!parent) return;
+    const left = active.offsetLeft;
+    const width = active.offsetWidth;
+    els.tabIndicator.style.left = `${left}px`;
+    els.tabIndicator.style.width = `${width}px`;
+  }
+
+  function switchTab(tabId) {
+    state.activeTab = tabId;
+    const hash = tabId === "search" ? "" : tabId;
+    if (hash) history.replaceState(null, "", `#${hash}`);
+    else history.replaceState(null, "", window.location.pathname + window.location.search);
+
+    els.panels.forEach(panel => {
+      const isActive = panel.dataset.panel === tabId;
+      panel.classList.toggle("is-active", isActive);
+      panel.hidden = !isActive;
+    });
+
+    els.tabButtons.forEach(btn => {
+      const isActive = btn.dataset.tab === tabId;
+      btn.classList.toggle("is-active", isActive);
+      if (isActive) btn.setAttribute("aria-current", "page");
+      else btn.removeAttribute("aria-current");
+    });
+
+    updateTabIndicator();
+
+    if (tabId === "photos" && !state.photos.length) loadPhotos();
+  }
+
+  let touchStartX = 0;
+  let touchStartY = 0;
+  let isSwiping = false;
+
+  function initTabs() {
+    els.tabButtons.forEach(btn => {
+      btn.addEventListener("click", () => switchTab(btn.dataset.tab));
+    });
+
+    const hash = (window.location.hash || "").replace("#", "");
+    if (["search", "floor", "menu", "photos", "gifts"].includes(hash)) {
+      switchTab(hash);
+    }
+
+    updateTabIndicator();
+    window.addEventListener("resize", updateTabIndicator);
+
+    // Swipe gestures
+    const main = els.receptionMain;
+    if (main) {
+      main.addEventListener("touchstart", e => {
+        touchStartX = e.touches[0].clientX;
+        touchStartY = e.touches[0].clientY;
+        isSwiping = false;
+      }, { passive: true });
+
+      main.addEventListener("touchmove", e => {
+        if (isSwiping) return;
+        const dx = e.touches[0].clientX - touchStartX;
+        const dy = e.touches[0].clientY - touchStartY;
+        if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy) * 1.5) {
+          isSwiping = true;
+          const tabs = ["search", "floor", "menu", "photos", "gifts"];
+          const idx = tabs.indexOf(state.activeTab);
+          if (dx < 0 && idx < tabs.length - 1) switchTab(tabs[idx + 1]);
+          else if (dx > 0 && idx > 0) switchTab(tabs[idx - 1]);
+        }
+      }, { passive: true });
+    }
+  }
+
+  /* ───────────────────────────────────────────
+     GUEST SEARCH
+     ─────────────────────────────────────────── */
   async function loadGuests() {
+    if (!els.searchStatus) return;
     els.searchStatus.textContent = "Loading guest list…";
     try {
       const result = await apiGet("get-reception-guests");
       if (result.success && Array.isArray(result.data)) {
         state.guests = result.data;
         state.guestsLoaded = true;
+        state.guestWallCount = state.guests.length;
+        updateGuestWall();
         showSearchIdleStatus();
         clearSearchResults();
+        renderSuggestionPills();
         return;
       }
       throw new Error(result.error || "Could not load guests");
     } catch (err) {
       const msg = String(err?.message || "").toLowerCase();
       if (msg.includes("unauthorized")) {
-        renderAccessError("Invalid or expired reception QR link. Please scan the official reception QR code again.");
-      } else if (msg.includes("not configured")) {
-        renderAccessError("Reception access is not configured yet. Please contact the hosts.");
+        els.searchStatus.textContent = "Invalid reception link.";
       } else {
         els.searchStatus.textContent = "Could not load guest list.";
       }
@@ -131,20 +440,22 @@
     }
   }
 
-  function normalizeQuery(q) {
-    return String(q || "")
-      .trim()
-      .toLowerCase()
-      .normalize("NFD")
-      .replace(/\p{M}/gu, "");
-  }
+  function renderSuggestionPills() {
+    if (!els.suggestionPills) return;
+    const names = state.guests.slice(0, 6);
+    if (!names.length) return;
+    els.suggestionPills.innerHTML = names.map(g =>
+      `<button type="button" class="rec-suggestion-pill" data-name="${escapeHtml(g.name)}">${escapeHtml(g.name.split(" ")[0])}</button>`
+    ).join("");
 
-  function getSearchQuery() {
-    return normalizeQuery(els.searchInput?.value || "");
-  }
-
-  function isSearchActive(query) {
-    return query.length >= MIN_SEARCH_CHARS;
+    els.suggestionPills.querySelectorAll(".rec-suggestion-pill").forEach(btn => {
+      btn.addEventListener("click", () => {
+        if (els.searchInput) {
+          els.searchInput.value = btn.dataset.name;
+          els.searchInput.dispatchEvent(new Event("input"));
+        }
+      });
+    });
   }
 
   function showSearchIdleStatus() {
@@ -157,21 +468,15 @@
   }
 
   function guestMatches(guest, query) {
-    if (!isSearchActive(query)) return false;
+    if (query.length < MIN_SEARCH_CHARS) return false;
     const name = normalizeQuery(guest.name);
     const parts = query.split(/\s+/).filter(Boolean);
-    return parts.every((part) => name.includes(part));
-  }
-
-  function escapeHtml(value) {
-    const div = document.createElement("div");
-    div.textContent = String(value || "");
-    return div.innerHTML;
+    return parts.every(part => name.includes(part));
   }
 
   function formatTableLabel(guest) {
     if (guest.tableNumber == null || guest.tableNumber < 1) {
-      return { text: "Table not assigned yet — please ask the hosts", unassigned: true };
+      return { text: "Not assigned yet", unassigned: true };
     }
     let label = `Table ${guest.tableNumber}`;
     if (guest.seatNumber != null && guest.seatNumber > 0) {
@@ -180,22 +485,49 @@
     return { text: label, unassigned: false };
   }
 
+  function onSearchInput() {
+    if (!state.guestsLoaded) {
+      clearSearchResults();
+      return;
+    }
+
+    const query = normalizeQuery(els.searchInput?.value || "");
+
+    if (!query.length) {
+      showSearchIdleStatus();
+      clearSearchResults();
+      renderSuggestionPills();
+      return;
+    }
+
+    if (query.length < MIN_SEARCH_CHARS) {
+      if (els.searchStatus) els.searchStatus.textContent = `Type at least ${MIN_SEARCH_CHARS} letters of your name.`;
+      clearSearchResults();
+      return;
+    }
+
+    const filtered = state.guests.filter(g => guestMatches(g, query));
+    renderSearchResults(filtered);
+
+    if (!els.searchStatus) return;
+    if (filtered.length === 0) {
+      els.searchStatus.textContent = "No matches — try another spelling";
+    } else if (filtered.length === 1) {
+      els.searchStatus.textContent = "1 match";
+    } else {
+      els.searchStatus.textContent = `${filtered.length} matches`;
+    }
+  }
+
   function renderSearchResults(list) {
     if (!els.searchResults) return;
     els.searchResults.innerHTML = "";
-
-    const query = getSearchQuery();
-    if (!isSearchActive(query)) {
-      return;
-    }
+    els.suggestionPills.innerHTML = "";
 
     if (!list.length) {
       const empty = document.createElement("li");
       empty.className = "reception-status";
-      empty.textContent =
-        state.guests.length === 0
-          ? "No confirmed guests yet — please ask the hosts."
-          : "No matching names found — check your spelling or ask the hosts.";
+      empty.textContent = "No matching names found.";
       els.searchResults.appendChild(empty);
       return;
     }
@@ -203,155 +535,105 @@
     list.forEach((guest, index) => {
       const li = document.createElement("li");
       const table = formatTableLabel(guest);
+      const initials = getInitials(guest.name);
+      const avatarColor = getAvatarColor(guest.name);
+
       li.innerHTML = `
-        <article class="reception-result-card">
-          <p class="reception-result-card__name">${escapeHtml(guest.name)}</p>
-          <p class="reception-result-card__table ${table.unassigned ? "is-unassigned" : ""}">${escapeHtml(table.text)}</p>
-          ${
-            guest.tableNumber
-              ? `<div class="reception-result-card__actions">
-                  <button type="button" class="reception-btn reception-btn--secondary" data-view-table="${guest.tableNumber}">
-                    View on floor plan
-                  </button>
-                </div>`
-              : ""
-          }
-        </article>
+        <div class="reception-result-card" style="animation-delay:${Math.min(index, 8) * 50}ms">
+          <div class="rec-result-avatar" style="background:${avatarColor}">${initials}</div>
+          <div class="reception-result-card__info">
+            <p class="reception-result-card__name">${escapeHtml(guest.name)}</p>
+            <p class="reception-result-card__table ${table.unassigned ? "is-unassigned" : ""}">${escapeHtml(table.text)}</p>
+          </div>
+          ${guest.tableNumber ? `
+            <div class="reception-result-card__actions">
+              <button type="button" class="reception-btn reception-btn--secondary" data-view-table="${guest.tableNumber}">
+                View
+              </button>
+            </div>
+          ` : ""}
+        </div>
       `;
-      const card = li.querySelector(".reception-result-card");
-      if (card) {
-        card.style.animationDelay = `${Math.min(index, 8) * 45}ms`;
-      }
       els.searchResults.appendChild(li);
     });
 
-    els.searchResults.querySelectorAll("[data-view-table]").forEach((btn) => {
+    els.searchResults.querySelectorAll("[data-view-table]").forEach(btn => {
       btn.addEventListener("click", () => {
         const tableNum = parseInt(btn.getAttribute("data-view-table"), 10);
         switchTab("floor");
-        highlightTable(tableNum);
+        setTimeout(() => highlightTable(tableNum), 100);
       });
     });
   }
 
-  function onSearchInput() {
-    if (!state.guestsLoaded) {
-      clearSearchResults();
-      return;
-    }
-
-    const query = getSearchQuery();
-
-    if (!query.length) {
-      showSearchIdleStatus();
-      clearSearchResults();
-      return;
-    }
-
-    if (!isSearchActive(query)) {
-      els.searchStatus.textContent = `Type at least ${MIN_SEARCH_CHARS} letters of your name.`;
-      clearSearchResults();
-      return;
-    }
-
-    const filtered = state.guests.filter((g) => guestMatches(g, query));
-    renderSearchResults(filtered);
-
-    if (filtered.length === 0) {
-      els.searchStatus.textContent = "No matches — try another spelling";
-    } else if (filtered.length === 1) {
-      els.searchStatus.textContent = "1 match";
-    } else {
-      els.searchStatus.textContent = `${filtered.length} matches — select yours if listed`;
-    }
+  /* ───────────────────────────────────────────
+     GUEST WALL
+     ─────────────────────────────────────────── */
+  function updateGuestWall() {
+    if (!els.guestWallPill || !els.guestWallCount) return;
+    els.guestWallCount.textContent = state.guestWallCount;
+    els.guestWallPill.hidden = false;
   }
 
-  function switchTab(tabId) {
-    state.activeTab = tabId;
-    const hash = tabId === "search" ? "" : tabId;
-    if (hash) {
-      history.replaceState(null, "", `#${hash}`);
-    } else {
-      history.replaceState(null, "", window.location.pathname + window.location.search);
-    }
+  /* ───────────────────────────────────────────
+     FLOOR PLAN — 3D Interactive
+     ─────────────────────────────────────────── */
+  function initFloorPlan() {
+    renderFloorTables();
+    initFloorPlanGestures();
+    initFloorTilt();
+  }
 
-    els.panels.forEach((panel) => {
-      const isActive = panel.dataset.panel === tabId;
-      panel.classList.toggle("is-active", isActive);
-      panel.hidden = !isActive;
+  function renderFloorTables() {
+    if (!els.floorTables) return;
+    const positions = [
+      { n: 1, x: 180, y: 280 }, { n: 2, x: 280, y: 280 },
+      { n: 3, x: 380, y: 280 }, { n: 4, x: 480, y: 280 },
+      { n: 5, x: 580, y: 280 }, { n: 6, x: 180, y: 360 },
+      { n: 7, x: 280, y: 360 }, { n: 8, x: 380, y: 360 },
+      { n: 9, x: 480, y: 360 }, { n: 10, x: 580, y: 360 },
+    ];
+
+    els.floorTables.innerHTML = positions.map(t =>
+      `<button type="button" class="rec-floor-table" data-table="${t.n}" style="left:${t.x}px;top:${t.y}px">
+        <span class="rec-floor-table__number">${t.n}</span>
+      </button>`
+    ).join("");
+
+    els.floorTables.querySelectorAll(".rec-floor-table").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const tableNum = parseInt(btn.dataset.table, 10);
+        showTablePopup(tableNum);
+      });
     });
-
-    els.tabButtons.forEach((btn) => {
-      const isActive = btn.dataset.tab === tabId;
-      btn.classList.toggle("is-active", isActive);
-      if (isActive) {
-        btn.setAttribute("aria-current", "page");
-      } else {
-        btn.removeAttribute("aria-current");
-      }
-    });
-
-    if (tabId === "photos" && !state.photos.length) {
-      loadPhotos();
-    }
   }
 
-  function initTabs() {
-    els.tabButtons.forEach((btn) => {
-      btn.addEventListener("click", () => switchTab(btn.dataset.tab));
-    });
+  function showTablePopup(tableNum) {
+    if (!els.tablePopup || !els.tablePopupTitle || !els.tablePopupList) return;
 
-    const hash = (window.location.hash || "").replace("#", "");
-    if (["search", "floor", "menu", "photos", "gifts"].includes(hash)) {
-      switchTab(hash);
-    }
-  }
+    const guestsAtTable = state.guests.filter(g => g.tableNumber === tableNum);
+    els.tablePopupTitle.textContent = `Table ${tableNum}`;
+    els.tablePopupList.innerHTML = guestsAtTable.length
+      ? guestsAtTable.map((g, i) =>
+          `<li style="animation-delay:${i * 40}ms">${escapeHtml(g.name)}</li>`
+        ).join("")
+      : `<li style="color:var(--rec-muted)">No guests assigned yet</li>`;
 
-  async function loadFloorPlanMeta() {
-    try {
-      const res = await fetch("./data/floor-plan.json");
-      if (res.ok) {
-        state.floorPlanMeta = await res.json();
-        renderFloorLegend();
-        renderFloorHotspots();
-      }
-    } catch {
-      /* optional metadata */
-    }
-  }
+    els.tablePopup.hidden = false;
 
-  function renderFloorLegend() {
-    if (!els.floorLegend || !state.floorPlanMeta?.legend) return;
-    els.floorLegend.innerHTML = state.floorPlanMeta.legend
-      .map((item) => `<span class="reception-legend__chip">${escapeHtml(item.label)}</span>`)
-      .join("");
-  }
-
-  function renderFloorHotspots() {
-    if (!els.floorHotspots || !state.floorPlanMeta?.tables) return;
-    els.floorHotspots.innerHTML = "";
-    state.floorPlanMeta.tables.forEach((t) => {
-      const el = document.createElement("div");
-      el.className = "reception-hotspot";
-      el.dataset.table = String(t.number);
-      el.style.left = `${t.left}%`;
-      el.style.top = `${t.top}%`;
-      el.style.width = `${t.width}%`;
-      el.style.height = `${t.height}%`;
-      el.title = `Table ${t.number}`;
-      els.floorHotspots.appendChild(el);
+    els.tablePopup.querySelectorAll("[data-table-popup-close]").forEach(el => {
+      el.addEventListener("click", () => { els.tablePopup.hidden = true; });
     });
   }
 
   function highlightTable(tableNumber) {
-    state.highlightTable = tableNumber;
-    els.floorHotspots?.querySelectorAll(".reception-hotspot").forEach((el) => {
+    els.floorTables?.querySelectorAll(".rec-floor-table").forEach(el => {
       const num = parseInt(el.dataset.table, 10);
       el.classList.toggle("is-highlighted", num === tableNumber);
     });
     if (els.floorHint) {
       els.floorHint.hidden = false;
-      els.floorHint.textContent = `Showing Table ${tableNumber}`;
+      els.floorHint.textContent = `Table ${tableNumber} highlighted`;
     }
     resetFloorView();
   }
@@ -379,77 +661,59 @@
     let dragStart = { x: 0, y: 0 };
     let transformStart = { x: 0, y: 0 };
 
-    function getPinchDistance() {
+    function getPinchDist() {
       const pts = [...pointers.values()];
       if (pts.length < 2) return 0;
-      const dx = pts[1].x - pts[0].x;
-      const dy = pts[1].y - pts[0].y;
-      return Math.hypot(dx, dy);
+      return Math.hypot(pts[1].x - pts[0].x, pts[1].y - pts[0].y);
     }
 
-    viewport.addEventListener(
-      "pointerdown",
-      (e) => {
-        viewport.setPointerCapture(e.pointerId);
-        pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
-        if (pointers.size === 1) {
-          isDragging = true;
-          dragStart = { x: e.clientX, y: e.clientY };
-          transformStart = { x: state.floorTransform.x, y: state.floorTransform.y };
-          viewport.classList.add("is-dragging");
-        } else if (pointers.size === 2) {
-          lastPinchDist = getPinchDistance();
-        }
-      },
-      { passive: true }
-    );
+    viewport.addEventListener("pointerdown", e => {
+      viewport.setPointerCapture(e.pointerId);
+      pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (pointers.size === 1) {
+        isDragging = true;
+        dragStart = { x: e.clientX, y: e.clientY };
+        transformStart = { x: state.floorTransform.x, y: state.floorTransform.y };
+        viewport.classList.add("is-dragging");
+      } else if (pointers.size === 2) {
+        lastPinchDist = getPinchDist();
+      }
+    }, { passive: true });
 
-    viewport.addEventListener(
-      "pointermove",
-      (e) => {
-        if (!pointers.has(e.pointerId)) return;
-        pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    viewport.addEventListener("pointermove", e => {
+      if (!pointers.has(e.pointerId)) return;
+      pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
 
-        if (pointers.size >= 2) {
-          const dist = getPinchDistance();
-          if (lastPinchDist > 0) {
-            const ratio = dist / lastPinchDist;
-            state.floorTransform.scale = Math.min(4, Math.max(0.5, state.floorTransform.scale * ratio));
-            applyFloorTransform();
-          }
-          lastPinchDist = dist;
-          isDragging = false;
-        } else if (isDragging && pointers.size === 1) {
-          state.floorTransform.x = transformStart.x + (e.clientX - dragStart.x);
-          state.floorTransform.y = transformStart.y + (e.clientY - dragStart.y);
+      if (pointers.size >= 2) {
+        const dist = getPinchDist();
+        if (lastPinchDist > 0) {
+          state.floorTransform.scale = Math.min(4, Math.max(0.5, state.floorTransform.scale * (dist / lastPinchDist)));
           applyFloorTransform();
         }
-      },
-      { passive: true }
-    );
+        lastPinchDist = dist;
+        isDragging = false;
+      } else if (isDragging) {
+        state.floorTransform.x = transformStart.x + (e.clientX - dragStart.x);
+        state.floorTransform.y = transformStart.y + (e.clientY - dragStart.y);
+        applyFloorTransform();
+      }
+    }, { passive: true });
 
     function endPointer(e) {
       pointers.delete(e.pointerId);
       if (pointers.size < 2) lastPinchDist = 0;
-      if (pointers.size === 0) {
-        isDragging = false;
-        viewport.classList.remove("is-dragging");
-      }
+      if (pointers.size === 0) { isDragging = false; viewport.classList.remove("is-dragging"); }
     }
 
     viewport.addEventListener("pointerup", endPointer);
     viewport.addEventListener("pointercancel", endPointer);
 
-    viewport.addEventListener(
-      "wheel",
-      (e) => {
-        e.preventDefault();
-        const delta = e.deltaY > 0 ? 0.92 : 1.08;
-        state.floorTransform.scale = Math.min(4, Math.max(0.5, state.floorTransform.scale * delta));
-        applyFloorTransform();
-      },
-      { passive: false }
-    );
+    viewport.addEventListener("wheel", e => {
+      e.preventDefault();
+      const delta = e.deltaY > 0 ? 0.92 : 1.08;
+      state.floorTransform.scale = Math.min(4, Math.max(0.5, state.floorTransform.scale * delta));
+      applyFloorTransform();
+    }, { passive: false });
 
     stage.style.position = "absolute";
     stage.style.top = "50%";
@@ -457,6 +721,61 @@
     applyFloorTransform();
   }
 
+  function initFloorTilt() {
+    const container = els.floorContainer;
+    if (!container || !window.DeviceOrientationEvent) return;
+
+    let tiltActive = false;
+    let tiltX = 0, tiltY = 0;
+
+    function onDeviceOrientation(e) {
+      if (e.gamma == null || e.beta == null) return;
+      tiltY = Math.max(-15, Math.min(15, (e.gamma || 0) * 0.5));
+      tiltX = Math.max(-10, Math.min(10, (e.beta || 0) * 0.3));
+      tiltActive = true;
+      updateTilt();
+    }
+
+    function updateTilt() {
+      if (els.floorViewport) {
+        const rx = tiltActive ? tiltX : 5;
+        const ry = tiltActive ? tiltY : 0;
+        els.floorViewport.style.setProperty("--rec-floor-rotate-x", `${rx}deg`);
+        els.floorViewport.style.setProperty("--rec-floor-rotate-y", `${ry}deg`);
+      }
+    }
+
+    // Try to request permission on iOS
+    if (typeof DeviceOrientationEvent !== "undefined" && typeof DeviceOrientationEvent.requestPermission === "function") {
+      // Will be activated on user gesture
+    } else {
+      window.addEventListener("deviceorientation", onDeviceOrientation);
+    }
+
+    // Fallback: gentle auto-rotation
+    let autoAngle = 0;
+    function autoTilt() {
+      if (!tiltActive) {
+        autoAngle += 0.002;
+        const rx = 5 + Math.sin(autoAngle) * 2;
+        const ry = Math.cos(autoAngle * 0.7) * 3;
+        if (els.floorViewport) {
+          els.floorViewport.style.setProperty("--rec-floor-rotate-x", `${rx}deg`);
+          els.floorViewport.style.setProperty("--rec-floor-rotate-y", `${ry}deg`);
+        }
+      }
+      requestAnimationFrame(autoTilt);
+    }
+    autoTilt();
+
+    if (els.floorResetBtn) {
+      els.floorResetBtn.addEventListener("click", resetFloorView);
+    }
+  }
+
+  /* ───────────────────────────────────────────
+     MENU
+     ─────────────────────────────────────────── */
   async function loadMenu() {
     try {
       const res = await fetch("./data/menu.json");
@@ -464,11 +783,15 @@
       const data = await res.json();
       renderMenu(data);
     } catch {
-      els.menuRoot.innerHTML = "<p class=\"reception-status\">Menu unavailable.</p>";
+      if (els.menuRoot) els.menuRoot.innerHTML = "<p class=\"reception-status\">Menu unavailable.</p>";
     }
   }
 
+  let menuData = null;
+  let activeMenuFilter = "all";
+
   function renderMenu(data) {
+    menuData = data;
     if (!els.menuRoot) return;
 
     if (els.menuLegend && data.tagLegend) {
@@ -477,41 +800,76 @@
         .join("");
     }
 
-    els.menuRoot.innerHTML = (data.sections || [])
-      .map((section) => {
-        const items = (section.items || [])
-          .map((item) => {
-            const tags = (item.tags || [])
-              .map((t) => `<span class="reception-tag">${escapeHtml(t)}</span>`)
-              .join("");
-            return `
-              <article class="reception-menu-item">
-                <p class="reception-menu-item__name">${escapeHtml(item.name)}</p>
-                <p class="reception-menu-item__desc">${escapeHtml(item.description || "")}</p>
-                ${tags ? `<div class="reception-tags">${tags}</div>` : ""}
-              </article>
-            `;
-          })
-          .join("");
-        return `
-          <section class="reception-menu-section">
-            <h3 class="reception-menu-section__title">${escapeHtml(section.title)}</h3>
-            ${items}
-          </section>
-        `;
-      })
-      .join("");
+    // Build filter buttons
+    if (els.menuFilters && data.tagLegend) {
+      const filtersHtml = ["all", ...Object.keys(data.tagLegend)].map(key => {
+        const label = key === "all" ? "All" : key;
+        return `<button type="button" class="reception-menu-filter ${key === activeMenuFilter ? "is-active" : ""}" data-filter="${key}">${label}</button>`;
+      }).join("");
+      els.menuFilters.innerHTML = filtersHtml;
+
+      els.menuFilters.querySelectorAll(".reception-menu-filter").forEach(btn => {
+        btn.addEventListener("click", () => {
+          activeMenuFilter = btn.dataset.filter;
+          renderMenuItems();
+        });
+      });
+    }
+
+    renderMenuItems();
   }
 
+  function renderMenuItems() {
+    if (!els.menuRoot || !menuData) return;
+
+    const filteredSections = menuData.sections.map(section => ({
+      ...section,
+      items: section.items.filter(item => {
+        if (activeMenuFilter === "all") return true;
+        return (item.tags || []).includes(activeMenuFilter);
+      }),
+    })).filter(s => s.items.length > 0);
+
+    els.menuRoot.innerHTML = filteredSections.map(section => {
+      const items = section.items.map((item, idx) => {
+        const tags = (item.tags || []).map(t => `<span class="reception-tag">${escapeHtml(t)}</span>`).join("");
+        const isRec = idx === 0 && section.id !== "drinks";
+        return `
+          <article class="reception-menu-item ${isRec ? "is-recommended" : ""}" style="animation-delay:${idx * 60}ms">
+            <p class="reception-menu-item__name">${escapeHtml(item.name)}</p>
+            <p class="reception-menu-item__desc">${escapeHtml(item.description || "")}</p>
+            ${tags ? `<div class="reception-tags">${tags}</div>` : ""}
+          </article>
+        `;
+      }).join("");
+      return `
+        <section class="reception-menu-section">
+          <h3 class="reception-menu-section__title">${escapeHtml(section.title)}</h3>
+          ${items}
+        </section>
+      `;
+    }).join("");
+
+    // Update active filter button
+    els.menuFilters?.querySelectorAll(".reception-menu-filter").forEach(btn => {
+      btn.classList.toggle("is-active", btn.dataset.filter === activeMenuFilter);
+    });
+  }
+
+  /* ───────────────────────────────────────────
+     PHOTOS
+     ─────────────────────────────────────────── */
   async function loadPhotos() {
+    if (!els.photoStatus) return;
     els.photoStatus.textContent = "Loading gallery…";
     try {
       const result = await apiGet("get-reception-photos");
       if (result.success && Array.isArray(result.data)) {
         state.photos = result.data;
         renderPhotos();
-        els.photoStatus.textContent =
-          state.photos.length === 0 ? "Be the first to share a photo!" : `${state.photos.length} photo(s)`;
+        els.photoStatus.textContent = state.photos.length === 0
+          ? "Be the first to share a photo!"
+          : `${state.photos.length} photo(s)`;
         return;
       }
       throw new Error(result.error || "Failed");
@@ -520,41 +878,49 @@
     }
   }
 
-  function photoItemHtml(photo, index) {
-    return `
-      <button type="button" class="reception-gallery__item" data-photo-index="${index}" aria-label="View photo ${index + 1}">
-        <img src="${escapeHtml(photo.url)}" alt="" loading="lazy" decoding="async" />
-      </button>
-    `;
-  }
-
-  function buildPhotoGridHtml() {
-    return state.photos.map((p, i) => photoItemHtml(p, i)).join("");
-  }
-
   function renderPhotos() {
     if (!els.photoGallery) return;
-
     if (!state.photos.length) {
       els.photoGallery.innerHTML = "";
       if (els.photoGalleryWrap) els.photoGalleryWrap.hidden = true;
       return;
     }
 
-    const grid = buildPhotoGridHtml();
-    els.photoGallery.innerHTML = `
-      <div class="reception-gallery-set">${grid}</div>
-      <div class="reception-gallery-set" aria-hidden="true">${grid}</div>
-    `;
-
-    const cols = 3;
-    const rows = Math.ceil(state.photos.length / cols);
-    const duration = Math.max(28, rows * state.photos.length * 2.5);
-    els.photoGallery.style.setProperty("--gallery-scroll-duration", `${duration}s`);
+    els.photoGallery.innerHTML = state.photos.map((p, i) => `
+      <button type="button" class="reception-gallery__item" data-photo-index="${i}" aria-label="View photo ${i + 1}">
+        <img src="${escapeHtml(p.url)}" alt="" loading="lazy" decoding="async" />
+        <div class="rec-photo-overlay">
+          <button type="button" class="rec-photo-heart-btn ${state.likedPhotos.has(i) ? "is-liked" : ""}" data-like-index="${i}" aria-label="${state.likedPhotos.has(i) ? "Unlike" : "Like"} photo">
+            ${state.likedPhotos.has(i) ? "❤️" : "🤍"}
+          </button>
+        </div>
+      </button>
+    `).join("");
 
     if (els.photoGalleryWrap) els.photoGalleryWrap.hidden = false;
+
+    // Like buttons
+    els.photoGallery.querySelectorAll(".rec-photo-heart-btn").forEach(btn => {
+      btn.addEventListener("click", e => {
+        e.stopPropagation();
+        const idx = parseInt(btn.dataset.likeIndex, 10);
+        togglePhotoLike(idx);
+      });
+    });
   }
 
+  function togglePhotoLike(index) {
+    if (state.likedPhotos.has(index)) {
+      state.likedPhotos.delete(index);
+    } else {
+      state.likedPhotos.add(index);
+    }
+    renderPhotos();
+  }
+
+  /* ───────────────────────────────────────────
+     PHOTO LIGHTBOX
+     ─────────────────────────────────────────── */
   function updatePhotoLightboxView() {
     const photo = state.photos[photoLightboxIndex];
     if (!photo || !els.photoLightboxImg) return;
@@ -569,6 +935,11 @@
     const single = state.photos.length <= 1;
     if (els.photoLightboxPrev) els.photoLightboxPrev.disabled = single;
     if (els.photoLightboxNext) els.photoLightboxNext.disabled = single;
+
+    if (els.photoLikeBtn) {
+      const isLiked = state.likedPhotos.has(photoLightboxIndex);
+      els.photoLikeBtn.classList.toggle("is-liked", isLiked);
+    }
   }
 
   function openPhotoLightbox(index) {
@@ -588,31 +959,27 @@
 
   function closePhotoLightbox() {
     if (!els.photoLightbox) return;
-
     els.photoLightbox.classList.remove("is-open");
     document.body.classList.remove("reception-lightbox-open");
 
-    const onEnd = () => {
+    setTimeout(() => {
       if (!els.photoLightbox.classList.contains("is-open")) {
         els.photoLightbox.hidden = true;
         if (els.photoLightboxImg) els.photoLightboxImg.removeAttribute("src");
       }
       photoLightboxLastFocus?.focus({ preventScroll: true });
       photoLightboxLastFocus = null;
-    };
-
-    setTimeout(onEnd, 200);
+    }, 200);
   }
 
   function stepPhotoLightbox(delta) {
     if (state.photos.length <= 1) return;
-    photoLightboxIndex =
-      (photoLightboxIndex + delta + state.photos.length) % state.photos.length;
+    photoLightboxIndex = (photoLightboxIndex + delta + state.photos.length) % state.photos.length;
     updatePhotoLightboxView();
   }
 
   function initPhotoGallery() {
-    els.photoGalleryWrap?.addEventListener("click", (event) => {
+    els.photoGallery?.addEventListener("click", event => {
       const item = event.target.closest("[data-photo-index]");
       if (!item) return;
       const index = parseInt(item.getAttribute("data-photo-index"), 10);
@@ -622,30 +989,29 @@
 
     if (!els.photoLightbox) return;
 
-    els.photoLightbox.addEventListener("click", (event) => {
-      if (event.target.closest("[data-photo-lightbox-close]")) {
-        closePhotoLightbox();
-      }
+    els.photoLightbox.addEventListener("click", event => {
+      if (event.target.closest("[data-photo-lightbox-close]")) closePhotoLightbox();
     });
 
     els.photoLightboxPrev?.addEventListener("click", () => stepPhotoLightbox(-1));
     els.photoLightboxNext?.addEventListener("click", () => stepPhotoLightbox(1));
 
-    els.photoLightbox.addEventListener("keydown", (event) => {
+    els.photoLikeBtn?.addEventListener("click", () => {
+      togglePhotoLike(photoLightboxIndex);
+      updatePhotoLightboxView();
+    });
+
+    els.photoLightbox.addEventListener("keydown", event => {
       if (!els.photoLightbox.classList.contains("is-open")) return;
-      if (event.key === "Escape") {
-        event.preventDefault();
-        closePhotoLightbox();
-      } else if (event.key === "ArrowLeft") {
-        event.preventDefault();
-        stepPhotoLightbox(-1);
-      } else if (event.key === "ArrowRight") {
-        event.preventDefault();
-        stepPhotoLightbox(1);
-      }
+      if (event.key === "Escape") { event.preventDefault(); closePhotoLightbox(); }
+      else if (event.key === "ArrowLeft") { event.preventDefault(); stepPhotoLightbox(-1); }
+      else if (event.key === "ArrowRight") { event.preventDefault(); stepPhotoLightbox(1); }
     });
   }
 
+  /* ───────────────────────────────────────────
+     PHOTO UPLOAD with drag & drop
+     ─────────────────────────────────────────── */
   async function uploadPhoto(file) {
     const form = new FormData();
     form.append("action", "upload-reception-photo");
@@ -661,28 +1027,11 @@
     });
 
     const raw = await res.text();
-    let result = null;
-    try {
-      result = raw ? JSON.parse(raw) : null;
-    } catch {
-      throw new Error(res.ok ? "Invalid server response" : `Upload failed (${res.status})`);
-    }
+    let result;
+    try { result = raw ? JSON.parse(raw) : null; } catch { throw new Error(res.ok ? "Invalid server response" : `Upload failed (${res.status})`); }
 
-    if (!result || typeof result !== "object") {
-      throw new Error(`Upload failed (${res.status})`);
-    }
-
-    if (!res.ok || result.success === false) {
-      const message =
-        result.error ||
-        (res.status === 401
-          ? "Upload not authorized — check the venue link includes ?key= if required"
-          : res.status === 429
-            ? "Too many uploads — please wait a few minutes"
-            : `Upload failed (${res.status})`);
-      throw new Error(message);
-    }
-
+    if (!result || typeof result !== "object") throw new Error(`Upload failed (${res.status})`);
+    if (!res.ok || result.success === false) throw new Error(result.error || `Upload failed (${res.status})`);
     return result;
   }
 
@@ -693,106 +1042,141 @@
     const allowedExt = ["jpg", "jpeg", "png", "webp"];
     const typeOk = !file.type || allowedTypes.includes(file.type);
     const extOk = allowedExt.includes(ext);
-
-    if (!typeOk && !extOk) {
-      return { ok: false, error: `${file.name}: use JPEG, PNG, or WebP` };
-    }
-    if (file.size > maxBytes) {
-      return { ok: false, error: `${file.name}: must be under 5MB` };
-    }
+    if (!typeOk && !extOk) return { ok: false, error: `${file.name}: use JPEG, PNG, or WebP` };
+    if (file.size > maxBytes) return { ok: false, error: `${file.name}: must be under 5MB` };
     return { ok: true };
   }
 
   function initPhotoUpload() {
-    els.photoUploadBtn?.addEventListener("click", () => {
-      els.photoUploadInput?.click();
-    });
+    els.photoUploadBtn?.addEventListener("click", () => els.photoUploadInput?.click());
 
     els.photoUploadInput?.addEventListener("change", async () => {
       const files = [...(els.photoUploadInput.files || [])];
       if (!files.length) return;
-
-      const valid = [];
-      const errors = [];
-      files.forEach((file) => {
-        const check = isAllowedPhotoFile(file);
-        if (check.ok) valid.push(file);
-        else errors.push(check.error);
-      });
-
-      if (errors.length) {
-        showToast(errors[0]);
-      }
-      if (!valid.length) {
-        els.photoUploadInput.value = "";
-        return;
-      }
-
-      els.photoUploadBtn.disabled = true;
-      let uploaded = 0;
-      let failed = 0;
-
-      for (let i = 0; i < valid.length; i++) {
-        els.photoStatus.textContent =
-          valid.length > 1
-            ? `Uploading ${i + 1} of ${valid.length}…`
-            : "Uploading…";
-
-        try {
-          const result = await uploadPhoto(valid[i]);
-          if (result.success && result.data) {
-            state.photos.unshift(result.data);
-            uploaded++;
-          } else {
-            failed++;
-            if (i === 0) throw new Error(result.error || "Upload failed");
-          }
-        } catch (err) {
-          failed++;
-          if (uploaded === 0 && i === 0) {
-            showToast(err.message || "Upload failed");
-            els.photoStatus.textContent = "Upload failed — try again";
-            els.photoUploadBtn.disabled = false;
-            els.photoUploadInput.value = "";
-            return;
-          }
-        }
-      }
-
-      if (uploaded > 0) {
-        renderPhotos();
-        els.photoStatus.textContent = `${state.photos.length} photo(s)`;
-        if (uploaded === 1) {
-          showToast("Photo shared — thank you!");
-        } else {
-          showToast(`${uploaded} photos shared — thank you!`);
-        }
-      }
-      if (failed > 0 && uploaded > 0) {
-        showToast(`${failed} photo(s) could not be uploaded`);
-      }
-
-      els.photoUploadBtn.disabled = false;
+      await processUploads(files);
       els.photoUploadInput.value = "";
+    });
+
+    // Drag & drop
+    const zone = els.uploadZone;
+    if (!zone) return;
+
+    zone.addEventListener("dragover", e => {
+      e.preventDefault();
+      zone.classList.add("is-dragover");
+    });
+
+    zone.addEventListener("dragleave", e => {
+      e.preventDefault();
+      zone.classList.remove("is-dragover");
+    });
+
+    zone.addEventListener("drop", async e => {
+      e.preventDefault();
+      zone.classList.remove("is-dragover");
+      const files = [...(e.dataTransfer?.files || [])].filter(f => f.type.startsWith("image/"));
+      if (files.length) await processUploads(files);
     });
   }
 
+  async function processUploads(files) {
+    const valid = [];
+    const errors = [];
+    files.forEach(file => {
+      const check = isAllowedPhotoFile(file);
+      if (check.ok) valid.push(file);
+      else errors.push(check.error);
+    });
+
+    if (errors.length) showToast(errors[0]);
+    if (!valid.length) return;
+
+    if (els.photoUploadBtn) els.photoUploadBtn.disabled = true;
+    let uploaded = 0;
+    let failed = 0;
+
+    for (let i = 0; i < valid.length; i++) {
+      if (els.photoStatus) {
+        els.photoStatus.textContent = valid.length > 1 ? `Uploading ${i + 1} of ${valid.length}…` : "Uploading…";
+      }
+      try {
+        const result = await uploadPhoto(valid[i]);
+        if (result.success && result.data) {
+          state.photos.unshift(result.data);
+          uploaded++;
+        } else {
+          failed++;
+          if (i === 0) throw new Error(result.error || "Upload failed");
+        }
+      } catch (err) {
+        failed++;
+        if (uploaded === 0 && i === 0) {
+          showToast(err.message || "Upload failed");
+          if (els.photoStatus) els.photoStatus.textContent = "Upload failed — try again";
+          if (els.photoUploadBtn) els.photoUploadBtn.disabled = false;
+          return;
+        }
+      }
+    }
+
+    if (uploaded > 0) {
+      renderPhotos();
+      if (els.photoStatus) els.photoStatus.textContent = `${state.photos.length} photo(s)`;
+      showToast(uploaded === 1 ? "Photo shared! 🎉" : `${uploaded} photos shared! 🎉`);
+    }
+    if (failed > 0 && uploaded > 0) showToast(`${failed} photo(s) could not be uploaded`);
+    if (els.photoUploadBtn) els.photoUploadBtn.disabled = false;
+  }
+
+  /* ───────────────────────────────────────────
+     GIFT BOX
+     ─────────────────────────────────────────── */
+  function initGiftBox() {
+    if (!els.giftBox) return;
+    els.giftBox.addEventListener("click", () => {
+      if (state.giftBoxOpened) return;
+      state.giftBoxOpened = true;
+      els.giftBox.classList.add("is-open");
+      if (els.giftBoxCta) els.giftBoxCta.textContent = "🎉 Thank you!";
+      setTimeout(() => {
+        if (els.giftDetails) els.giftDetails.hidden = false;
+        fireConfetti();
+      }, 600);
+    });
+  }
+
+  /* ───────────────────────────────────────────
+     INIT
+     ─────────────────────────────────────────── */
   function init() {
+    cacheEls();
     applyAccessLock();
+    setTheme(state.theme);
 
     if (!hasReceptionAccessKey()) {
+      initParticles();
+      initLockScreen();
       return;
     }
 
+    initParticles();
     initTabs();
-    initFloorPlanGestures();
+    initFloorPlan();
     initPhotoGallery();
     initPhotoUpload();
+    initGiftBox();
     loadGuests();
-    loadFloorPlanMeta();
     loadMenu();
 
     els.searchInput?.addEventListener("input", onSearchInput);
+    els.themeToggle?.addEventListener("click", toggleTheme);
+  }
+
+  function initLockScreen() {
+    els.lockEnterBtn?.addEventListener("click", handleLockEnter);
+    els.lockKeyInput?.addEventListener("keydown", e => {
+      if (e.key === "Enter") handleLockEnter();
+    });
   }
 
   if (document.readyState === "loading") {
@@ -801,3 +1185,4 @@
     init();
   }
 })();
+
