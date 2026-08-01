@@ -1,19 +1,39 @@
 <?php
 /**
- * Apply PostgreSQL schema files (idempotent where supported).
+ * Apply schema files for the configured database engine.
  * Run from project root: php rsvp/apply-schema.php
+ *
+ * Uses MySQL schema files by default (compatible with GoDaddy phpMyAdmin).
+ * Uses PostgreSQL schema files when DB_ENGINE=pgsql.
  */
 
 require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/Database.php';
 
-$files = [
-    'database-schema.sql',
-    'database-schema-additional.sql',
-    'database-table-assignments.sql',
-    'database-migration-edit-once.sql',
-    'database-reception-photos.sql',
-];
+$engine = defined('DB_ENGINE') ? DB_ENGINE : 'mysql';
+
+if ($engine === 'mysql') {
+    echo "Database engine: MySQL/MariaDB\n";
+    $files = [
+        // Single consolidated migration file (recommended for GoDaddy).
+        'database-full-mysql.sql',
+        // Granular files applied for backwards compatibility (safe to re-run).
+        'database-schema-mysql.sql',
+        'database-schema-additional-mysql.sql',
+        'database-table-assignments-mysql.sql',
+        'database-migration-edit-once.sql',
+        'database-reception-photos-mysql.sql',
+    ];
+} else {
+    echo "Database engine: PostgreSQL\n";
+    $files = [
+        'database-schema.sql',
+        'database-schema-additional.sql',
+        'database-table-assignments.sql',
+        'database-migration-edit-once.sql',
+        'database-reception-photos.sql',
+    ];
+}
 
 $db = Database::getInstance();
 $conn = $db->getConnection();

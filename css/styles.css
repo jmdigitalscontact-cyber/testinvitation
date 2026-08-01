@@ -1516,6 +1516,26 @@ audio#wedding-audio { display: none; }
 .lightbox.is-standalone .lightbox-thumbs {
   display: none;
 }
+.lightbox.is-entourage .lightbox-thumbs {
+  display: none;
+}
+
+.lightbox-counter {
+  position: absolute;
+  bottom: 0.8rem;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0, 0, 0, 0.45);
+  color: #fff;
+  font-size: 0.82rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  padding: 0.35rem 0.9rem;
+  border-radius: 999px;
+  z-index: 2010;
+  white-space: nowrap;
+  user-select: none;
+}
 
 /* ===== RSVP ===== */
 .rsvp-card {
@@ -1940,12 +1960,20 @@ footer .footer-names {
   width: 100%;
   max-width: 620px;
   margin: 0 auto 1rem;
-  aspect-ratio: 16 / 20;
+  /* Responsive height: min between aspect-ratio and viewport-aware clamp */
+  height: clamp(420px, 72vh, 780px);
   perspective: 2400px;
   -webkit-perspective: 2400px;
   border-radius: 4px;
   background: #f5f0ea;
   overflow: visible;
+}
+
+@supports (aspect-ratio: 1) {
+  .book {
+    aspect-ratio: 16 / 20;
+    height: auto;
+  }
 }
 
 /* ---- Photo Pages (each photo is a single page/leaf) ---- */
@@ -1991,14 +2019,23 @@ footer .footer-names {
 
 .page-front {
   z-index: 2;
+  cursor: zoom-in;
+}
+
+.page-front {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f5f0ea;
 }
 
 .page-front img {
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
   object-position: center;
   display: block;
+  background: #f5f0ea;
 }
 
 .page-back {

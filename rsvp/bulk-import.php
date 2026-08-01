@@ -2,11 +2,21 @@
 /**
  * Bulk Invitation Generator
  * Create multiple invitations from a CSV file
+ *
+ * SECURITY: This tool is DISABLED by default. To enable it (development
+ * only), set ENABLE_BULK_IMPORT=true in .env. It must never be enabled
+ * on a live production server without additional authentication.
  */
 
 require_once 'config.php';
 require_once 'Database.php';
 require_once 'QRCodeGenerator.php';
+
+$bulkImportEnabled = isTruthyEnvValue(EnvironmentLoader::get('ENABLE_BULK_IMPORT', 'false'));
+if (!$bulkImportEnabled) {
+    http_response_code(403);
+    die('Bulk import is disabled. Set ENABLE_BULK_IMPORT=true in .env to enable it (development only).');
+}
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file'])) {
     $file = $_FILES['csv_file']['tmp_name'];

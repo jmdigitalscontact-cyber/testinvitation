@@ -1,0 +1,12 @@
+# ── RSVP API / admin — Apache hardening ─────────────────────────────
+Options -Indexes
+
+# Protect env + secrets inside /rsvp
+<FilesMatch "^(\.env|\.htaccess)$">
+    Require all denied
+</FilesMatch>
+
+<FilesMatch "\.(log|sql|bak|key|pem|crt|ini)$">
+    Require all denied
+</FilesMatch>
+

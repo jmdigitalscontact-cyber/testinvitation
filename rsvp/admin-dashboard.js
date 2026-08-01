@@ -241,8 +241,10 @@
 
     const guestName = $("guest-name").value.trim();
     const maxGuests = parseInt($("max-guests").value, 10);
-    const password = $("invite-password").value;
+    const passwordEl = $("invite-password");
+    const password = passwordEl ? passwordEl.value.trim() : "";
     const email = $("invite-email").value.trim();
+    const autoSend = !!$("auto-send-invite") && $("auto-send-invite").checked;
     const invitedGuestNames = String($("invited-guest-names").value || "")
       .split(/\r?\n/)
       .map((name) => name.trim())
@@ -260,18 +262,59 @@
     })
       .then((response) => response.json())
       .then((data) => {
-        if (data.success) {
-          showFlash("invitations-message", "Invitation created.", "success");
-          $("create-invitation-form").reset();
-          $("max-guests").value = "1";
-          loadInvitations();
-          loadStats();
-        } else {
-          showFlash("invitations-message", data.error || "Failed to create invitation.", "error");
+        if (!data.success) {
+          throw new Error(data.error || "Failed to create invitation.");
         }
+        const newInvitationId = data.data && data.data.invitation_id;
+        if (autoSend && newInvitationId) {
+          // Attempt to send the email, but don't fail the whole flow if it errors.
+          return sendInvitation(newInvitationId, true)
+            .then(() => ({ data, emailSent: true }))
+            .catch((error) => ({ data, emailSent: false, emailError: error.message }));
+        }
+        return { data, emailSent: true };
+      })
+      .then(({ data, emailSent, emailError }) => {
+        if (emailSent) {
+          showFlash("invitations-message", "Invitation created and email sent.", "success");
+        } else {
+          showFlash(
+            "invitations-message",
+            "Invitation created, but the email could not be sent: " + (emailError || "unknown error"),
+            "error"
+          );
+        }
+        $("create-invitation-form").reset();
+        $("max-guests").value = "1";
+        if ($("auto-send-invite")) $("auto-send-invite").checked = false;
+        loadInvitations();
+        loadStats();
       })
       .catch((error) => {
         showFlash("invitations-message", error.message || "Failed to create invitation.", "error");
+      });
+  };
+
+  window.sendInvitation = function sendInvitation(invitationId, silent) {
+    return AdminAuth.apiCall("api.php?action=send-invitation", {
+      method: "POST",
+      body: JSON.stringify({ invitation_id: invitationId }),
+    })
+      .then((response) => response.json())
+      .then((data) => {
+        if (data.success) {
+          if (!silent) {
+            showFlash("invitations-message", data.message || "Invitation email sent.", "success");
+          }
+          return data;
+        }
+        throw new Error(data.error || "Failed to send invitation.");
+      })
+      .catch((error) => {
+        if (!silent) {
+          showFlash("invitations-message", error.message || "Failed to send invitation.", "error");
+        }
+        throw error;
       });
   };
 
@@ -306,12 +349,12 @@
         tbody.innerHTML = "";
 
         if (!data.success) {
-          tbody.innerHTML = '<tr><td colspan="6" class="admin-empty">Failed to load invitations.</td></tr>';
+          tbody.innerHTML = '<tr><td colspan="7" class="admin-empty">Failed to load invitations.</td></tr>';
           return;
         }
 
         if (!data.data.length) {
-          tbody.innerHTML = '<tr><td colspan="6" class="admin-empty">No invitations yet.</td></tr>';
+          tbody.innerHTML = '<tr><td colspan="7" class="admin-empty">No invitations yet.</td></tr>';
           return;
         }
 
@@ -323,6 +366,7 @@
             <td>${escapeHtml(String(inv.max_guests))}</td>
             <td>${statusBadge(inv.rsvp_status)}</td>
             <td></td>
+            <td></td>
             <td class="admin-actions"></td>
           `;
 
@@ -333,6 +377,16 @@
           qrBtn.dataset.action = "qr";
           qrBtn.dataset.id = inv.invitation_id;
           tr.children[4].appendChild(qrBtn);
+
+          const sendBtn = document.createElement("button");
+          sendBtn.type = "button";
+          sendBtn.className = "admin-btn admin-btn-secondary admin-btn-sm";
+          sendBtn.textContent = "Send";
+          sendBtn.title = "Send invitation email to this guest";
+          sendBtn.dataset.action = "send";
+          sendBtn.dataset.id = inv.invitation_id;
+          sendBtn.dataset.email = inv.email || "";
+          tr.children[5].appendChild(sendBtn);
 
           const editBtn = document.createElement("button");
           editBtn.type = "button";
@@ -348,14 +402,14 @@
           deleteBtn.dataset.action = "delete";
           deleteBtn.dataset.id = inv.invitation_id;
 
-          tr.children[5].appendChild(editBtn);
-          tr.children[5].appendChild(deleteBtn);
+          tr.children[6].appendChild(editBtn);
+          tr.children[6].appendChild(deleteBtn);
           tbody.appendChild(tr);
         });
       })
       .catch(() => {
         $("invitations-tbody").innerHTML =
-          '<tr><td colspan="6" class="admin-empty">Failed to load invitations.</td></tr>';
+          '<tr><td colspan="7" class="admin-empty">Failed to load invitations.</td></tr>';
       });
   };
 
@@ -511,7 +565,8 @@
       $("edit-guest-name").value = invitation.guest_name || "";
       $("edit-max-guests").value = invitation.max_guests || 1;
       $("edit-email").value = invitation.email || "";
-      $("edit-password").value = "";
+      const passwordEl = $("edit-password");
+      if (passwordEl) passwordEl.value = "";
       $("edit-invited-names").value = Array.isArray(invitation.invited_guest_names)
         ? invitation.invited_guest_names.join("\n")
         : "";
@@ -537,7 +592,8 @@
         .filter(Boolean),
     };
 
-    const password = $("edit-password").value.trim();
+    const passwordEl = $("edit-password");
+    const password = passwordEl ? passwordEl.value.trim() : "";
     if (password) payload.password = password;
 
     AdminAuth.apiCall("api.php?action=update-invitation", {
@@ -1085,7 +1141,25 @@
       const id = btn.dataset.id;
       const action = btn.dataset.action;
       if (action === "qr") showQRCode(id);
-      else if (action === "edit") openEditInvitation(id);
+      else if (action === "send") {
+        if (!btn.dataset.email) {
+          showFlash(
+            "invitations-message",
+            "This invitation has no email address. Edit the invitation to add one before sending.",
+            "error"
+          );
+          return;
+        }
+        if (!confirm(`Send the invitation email to ${btn.dataset.email}?`)) return;
+        const originalText = btn.textContent;
+        btn.textContent = "Sending…";
+        btn.disabled = true;
+        sendInvitation(id)
+          .finally(() => {
+            btn.textContent = originalText;
+            btn.disabled = false;
+          });
+      } else if (action === "edit") openEditInvitation(id);
       else if (action === "delete") deleteInvitation(id);
     });
 

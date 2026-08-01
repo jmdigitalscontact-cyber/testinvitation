@@ -2,12 +2,29 @@
 // Load environment configuration from .env file
 require_once __DIR__ . '/EnvironmentLoader.php';
 
-// PostgreSQL configuration
+// ──────────────────────────────────────────────────────────
+// Database Configuration (MySQL/MariaDB — primary for GoDaddy)
+// ──────────────────────────────────────────────────────────
+define('DB_HOST', EnvironmentLoader::get('DB_HOST', 'localhost'));
+define('DB_PORT', (int)EnvironmentLoader::get('DB_PORT', 3306));
+define('DB_NAME', EnvironmentLoader::get('DB_NAME', 'wedding_rsvp'));
+define('DB_USER', EnvironmentLoader::get('DB_USER', 'root'));
+define('DB_PASS', EnvironmentLoader::get('DB_PASS', ''));
+
+// ──────────────────────────────────────────────────────────
+// PostgreSQL configuration (legacy — used for local dev only)
+// ──────────────────────────────────────────────────────────
 define('PG_HOST', EnvironmentLoader::get('PG_HOST', 'localhost'));
 define('PG_PORT', (int)EnvironmentLoader::get('PG_PORT', 5432));
 define('PG_DB', EnvironmentLoader::get('PG_DB', 'wedding_rsvp'));
 define('PG_USER', EnvironmentLoader::get('PG_USER', 'postgres'));
 define('PG_PASS', EnvironmentLoader::get('PG_PASS', ''));
+
+// ──────────────────────────────────────────────────────────
+// Database Engine Selection
+// ──────────────────────────────────────────────────────────
+// Set to 'mysql' (default) or 'pgsql'
+define('DB_ENGINE', EnvironmentLoader::get('DB_ENGINE', 'mysql'));
 
 // Public site URL for QR codes and guest links (no trailing slash)
 define('PUBLIC_BASE_URL', rtrim(EnvironmentLoader::get('PUBLIC_BASE_URL', 'http://localhost:3000'), '/'));
@@ -62,17 +79,24 @@ if (in_array($origin, $allowed_origins, true)) {
 header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type, Authorization, X-CSRF-Token, X-Reception-Key');
 header('Access-Control-Allow-Credentials: true');
-header('Content-Type: application/json; charset=utf-8');
 header('X-Content-Type-Options: nosniff');
 header('X-Frame-Options: DENY');
 header('X-XSS-Protection: 1; mode=block');
 header('Referrer-Policy: strict-origin-when-cross-origin');
 header('Permissions-Policy: geolocation=(), microphone=(), camera=(), interest-cohort=()');
-header("Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https: http:; connect-src 'self'; font-src 'self'; frame-ancestors 'none'; object-src 'none'; base-uri 'self';");
+header("Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https: http:; connect-src 'self'; frame-ancestors 'none'; object-src 'none'; base-uri 'self';");
 
-// Enforce HTTPS in production
+// Only set JSON Content-Type for API requests (api.php sets its own via sendResponse).
+// This avoids breaking HTML pages that include config.php.
+$isApiRequest = (isset($_SERVER['SCRIPT_NAME']) && basename($_SERVER['SCRIPT_NAME']) === 'api.php');
+if (!$isApiRequest) {
+    header('Content-Type: text/html; charset=utf-8');
+}
+
+// Enforce HTTPS in production — respect X-Forwarded-Proto for reverse proxies.
 $environment = EnvironmentLoader::get('ENVIRONMENT', 'development');
-$isSecure = !empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off';
+$isSecure = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
+    || (isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https');
 
 if ($environment === 'production' && !$isSecure) {
     header('Location: https://' . $_SERVER['HTTP_HOST'] . $_SERVER['REQUEST_URI']);

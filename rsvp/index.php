@@ -1,3 +1,19 @@
+<?php
+/**
+ * Legacy guest RSVP page — redirects to the modern QR-based guest flow.
+ * 
+ * If an ?invite= parameter is present, it forwards it to the main index.html.
+ * Otherwise, it redirects to the wedding site landing page.
+ */
+
+require_once __DIR__ . '/config.php';
+
+$inviteParam = isset($_GET['invite']) ? '?invite=' . rawurlencode($_GET['invite']) : '';
+$redirectUrl = rtrim(PUBLIC_BASE_URL, '/') . '/index.html' . $inviteParam;
+
+header('Location: ' . $redirectUrl, true, 302);
+exit;
+?>
 <!DOCTYPE html>
 <html lang="en">
 <head>

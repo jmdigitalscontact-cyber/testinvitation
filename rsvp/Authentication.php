@@ -174,6 +174,15 @@ class Authentication {
      * @return array|false
      */
     public function adminLogin($username, $password) {
+        // Rate limit admin logins to prevent brute-force attacks.
+        $ip = $this->getClientIP();
+        $windowStart = time() - LOGIN_ATTEMPT_WINDOW;
+        $lockoutUntil = $this->getAdminLockoutExpiry($username, $ip);
+        if ($lockoutUntil !== null && $lockoutUntil > time()) {
+            $remaining = $lockoutUntil - time();
+            throw new Exception("Too many failed sign-in attempts. Try again in " . ceil($remaining / 60) . " minute(s).");
+        }
+
         $stmt = $this->mysqli->prepare("SELECT id, username, password_hash FROM admin_users WHERE username = ?");
         if (!$stmt) {
             return false;
@@ -184,6 +193,7 @@ class Authentication {
 
         if ($result->num_rows === 0) {
             $stmt->close();
+            $this->logAdminLoginAttempt($username, $ip, false);
             return false;
         }
 
@@ -191,9 +201,11 @@ class Authentication {
         $stmt->close();
 
         if (!password_verify($password, $admin['password_hash'])) {
+            $this->logAdminLoginAttempt($username, $ip, false);
             return false;
         }
 
+        $this->logAdminLoginAttempt($username, $ip, true);
         $this->updateAdminLastLogin($admin['id']);
         $token = $this->generateAdminToken($admin['id']);
 
@@ -202,6 +214,58 @@ class Authentication {
             'username' => $admin['username'],
             'token' => $token
         ];
+    }
+
+    /**
+     * Check whether an admin username+IP is currently locked out.
+     * @param string $username
+     * @param string $ip
+     * @return int|null Lockout expiry timestamp, or null if not locked out
+     */
+    private function getAdminLockoutExpiry($username, $ip) {
+        $windowStart = time() - LOGIN_ATTEMPT_WINDOW;
+        $stmt = $this->mysqli->prepare("
+            SELECT COUNT(*) as failed
+            FROM login_attempts
+            WHERE (invitation_id = ? OR ip_address = ?)
+            AND attempt_time > FROM_UNIXTIME(?)
+            AND success = FALSE
+            AND source = 'admin'
+        ");
+        if (!$stmt) {
+            return null;
+        }
+        $stmt->bind_param("ssi", $username, $ip, $windowStart);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $row = $result->fetch_assoc();
+        $stmt->close();
+
+        $failed = (int)($row['failed'] ?? 0);
+        if ($failed < MAX_LOGIN_ATTEMPTS) {
+            return null;
+        }
+        return time() + LOCKOUT_DURATION;
+    }
+
+    /**
+     * Log an admin login attempt into login_attempts (source='admin').
+     * @param string $username
+     * @param string $ip
+     * @param bool $success
+     */
+    private function logAdminLoginAttempt($username, $ip, $success) {
+        $stmt = $this->mysqli->prepare("
+            INSERT INTO login_attempts (invitation_id, ip_address, success, source)
+            VALUES (?, ?, ?, 'admin')
+        ");
+        if (!$stmt) {
+            return;
+        }
+        $success_int = $success ? 1 : 0;
+        $stmt->bind_param("ssi", $username, $ip, $success_int);
+        $stmt->execute();
+        $stmt->close();
     }
 
     /**

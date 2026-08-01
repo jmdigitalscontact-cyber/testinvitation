@@ -32,7 +32,9 @@ function receptionEnsurePhotosTable($mysqli) {
         return true;
     }
 
-    $sql = file_get_contents(__DIR__ . '/database-reception-photos.sql');
+    $engine = defined('DB_ENGINE') ? DB_ENGINE : 'mysql';
+    $schemaFile = ($engine === 'mysql') ? 'database-reception-photos-mysql.sql' : 'database-reception-photos.sql';
+    $sql = file_get_contents(__DIR__ . '/' . $schemaFile);
     if ($sql) {
         $statements = array_filter(array_map('trim', preg_split('/;\s*\n/', $sql)));
         foreach ($statements as $statement) {
@@ -385,7 +387,9 @@ function handleUploadReceptionPhoto() {
 
     $id = (int)$db->lastInsertId();
     if ($id < 1) {
-        $idResult = $mysqli->query('SELECT LASTVAL() AS id');
+        $engine = defined('DB_ENGINE') ? DB_ENGINE : 'mysql';
+        $lastValSql = ($engine === 'mysql') ? 'SELECT LAST_INSERT_ID() AS id' : 'SELECT LASTVAL() AS id';
+        $idResult = $mysqli->query($lastValSql);
         if ($idResult) {
             $idRow = $idResult->fetch_assoc();
             $id = (int)($idRow['id'] ?? 0);

@@ -702,10 +702,16 @@
     var prevBtn = lightbox.querySelector('.lightbox-prev');
     var nextBtn = lightbox.querySelector('.lightbox-next');
     var thumbsWrap = lightbox.querySelector('.lightbox-thumbs');
+    var lightboxCounter = lightbox.querySelector('.lightbox-counter');
+    if (lightboxCounter) lightboxCounter.hidden = true;
     var attireImages = Array.from(document.querySelectorAll('#attire .page-card-media img'));
     var galleryOpenBtn = document.getElementById('open-gallery-btn');
     var currentIndex = 0;
     var standaloneImageMode = false;
+    var entourageMode = false;
+    var entourageImages = Array.from(document.querySelectorAll('.photo-page .page-front img'))
+      .map(function (img) { return img.currentSrc || img.src || img.getAttribute('data-src') || ''; })
+      .filter(Boolean);
     var thumbBatchSize = 20;
     var thumbCursor = 0;
     var renderedAllThumbs = false;
@@ -714,6 +720,30 @@
     function setStandaloneImageMode(enabled) {
       standaloneImageMode = !!enabled;
       lightbox.classList.toggle('is-standalone', standaloneImageMode);
+    }
+
+    function setEntourageMode(enabled) {
+      entourageMode = !!enabled;
+      lightbox.classList.toggle('is-entourage', entourageMode);
+      if (lightboxCounter) {
+        lightboxCounter.hidden = !entourageMode;
+      }
+      if (enabled) setStandaloneImageMode(false);
+    }
+
+    function updateLightboxCounter() {
+      if (!lightboxCounter) return;
+      lightboxCounter.textContent = (currentIndex + 1) + ' / ' + entourageImages.length;
+    }
+
+    function openEntourageLightboxAt(index) {
+      if (!entourageImages.length) return;
+      currentIndex = (index + entourageImages.length) % entourageImages.length;
+      setEntourageMode(true);
+      showLightboxImage(entourageImages[currentIndex], 'Entourage photo ' + (currentIndex + 1));
+      updateLightboxCounter();
+      lightbox.classList.add('open');
+      document.body.style.overflow = 'hidden';
     }
 
     function renderThumbBatch() {
@@ -793,6 +823,7 @@
     }
 
     function openLightboxAt(index) {
+      setEntourageMode(false);
       setStandaloneImageMode(false);
       currentIndex = (index + trpList.length) % trpList.length;
       var src = 'images/' + trpList[currentIndex];
@@ -810,6 +841,7 @@
     // Fallback: open lightbox directly from a filename when trpList isn't available
     function openLightboxByName(name) {
       if (!name) return;
+      setEntourageMode(false);
       setStandaloneImageMode(false);
       var src = name.indexOf('/') === -1 ? ('images/' + name) : name;
       showLightboxImage(src, name || '');
@@ -827,6 +859,7 @@
 
     function openSingleLightboxImage(src, alt) {
       if (!src) return;
+      setEntourageMode(false);
       setStandaloneImageMode(true);
       showLightboxImage(src, alt || '');
       lightbox.classList.add('open');
@@ -836,6 +869,7 @@
     function closeLightbox() {
       lightbox.classList.remove('open');
       setStandaloneImageMode(false);
+      setEntourageMode(false);
       document.body.style.overflow = '';
       if (viewImg) {
         viewImg.src = '';
@@ -843,8 +877,14 @@
       }
     }
 
-    function showNext() { openLightboxAt(currentIndex + 1); }
-    function showPrev() { openLightboxAt(currentIndex - 1); }
+    function showNext() {
+      if (entourageMode) { openEntourageLightboxAt(currentIndex + 1); return; }
+      openLightboxAt(currentIndex + 1);
+    }
+    function showPrev() {
+      if (entourageMode) { openEntourageLightboxAt(currentIndex - 1); return; }
+      openLightboxAt(currentIndex - 1);
+    }
 
     function getFirstVisibleGalleryImageName() {
       var firstImg = document.querySelector('.gallery-marquee .gallery-item img');
@@ -866,22 +906,36 @@
     if (lightboxClose) lightboxClose.addEventListener('click', closeLightbox);
     if (prevBtn) prevBtn.addEventListener('click', showPrev);
     if (nextBtn) nextBtn.addEventListener('click', showNext);
-    attireImages.forEach(function (img) {
+    function makeImageZoomable(img) {
+      if (!img) return;
       img.classList.add('attire-zoomable');
       img.setAttribute('role', 'button');
       img.setAttribute('tabindex', '0');
-      img.setAttribute('aria-label', 'Open image zoom');
+      img.setAttribute('aria-label', 'Zoom image');
 
-      img.addEventListener('click', function () {
-        openSingleLightboxImage(img.currentSrc || img.src || img.getAttribute('data-src') || '', img.alt || '');
-      });
+      function zoom() {
+        var src = img.currentSrc || img.src || img.getAttribute('data-src') || '';
+        var entIndex = entourageImages.indexOf(src);
+        if (entIndex !== -1) {
+          openEntourageLightboxAt(entIndex);
+        } else {
+          openSingleLightboxImage(src, img.alt || '');
+        }
+      }
 
+      img.addEventListener('click', zoom);
       img.addEventListener('keydown', function (event) {
         if (event.key !== 'Enter' && event.key !== ' ') return;
         event.preventDefault();
-        openSingleLightboxImage(img.currentSrc || img.src || img.getAttribute('data-src') || '', img.alt || '');
+        zoom();
       });
-    });
+    }
+
+    attireImages.forEach(makeImageZoomable);
+
+    // Make entourage photos zoomable (book viewer pages)
+    var entouragePhotos = Array.from(document.querySelectorAll('.photo-page .page-front img'));
+    entouragePhotos.forEach(makeImageZoomable);
     if (thumbsWrap) thumbsWrap.addEventListener('scroll', maybeRenderMoreThumbs);
     lightbox.addEventListener('click', function (e) { if (e.target === lightbox) closeLightbox(); });
     document.addEventListener('keydown', function (e) {
@@ -1013,6 +1067,33 @@
       } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
         e.preventDefault();
         goToPrev();
+      }
+    });
+
+    // Click-to-flip: clicking current photo goes to next
+    photoPages.forEach(function (page) {
+      var front = page.querySelector('.page-front');
+      if (!front) return;
+
+      front.addEventListener('click', function (e) {
+        // If there's a next page, flip forward; if on last page, flip backward
+        if (currentIndex < photoTotal - 1) {
+          goToNext();
+        } else if (currentIndex > 0) {
+          goToPrev();
+        }
+      });
+
+      // Also make the back face clickable for prev navigation
+      var back = page.querySelector('.page-back');
+      if (back) {
+        back.addEventListener('click', function (e) {
+          if (currentIndex > 0) {
+            goToPrev();
+          } else if (currentIndex < photoTotal - 1) {
+            goToNext();
+          }
+        });
       }
     });
 

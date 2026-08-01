@@ -11,11 +11,10 @@ const AdminAuth = {
     if (this.isInitialized) return;
     this.onAuthenticated = typeof options.onAuthenticated === "function" ? options.onAuthenticated : null;
 
-    this.hideDashboard();
+this.hideDashboard();
+    // Tokens are kept in memory only — never persisted to localStorage.
     this.token = null;
     this.csrfToken = null;
-    localStorage.removeItem("admin_token");
-    localStorage.removeItem("admin_csrf_token");
 
     this.showLoginModal();
     this.isInitialized = true;
@@ -107,11 +106,9 @@ const AdminAuth = {
     })
       .then((response) => response.json())
       .then((data) => {
-        if (data.success && data.token) {
+if (data.success && data.token) {
           this.token = data.token;
           this.csrfToken = data.csrf_token;
-          localStorage.setItem("admin_token", this.token);
-          localStorage.setItem("admin_csrf_token", this.csrfToken);
           this.hideLoginModal();
           this.showDashboard();
           if (this.onAuthenticated) this.onAuthenticated();

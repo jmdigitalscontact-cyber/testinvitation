@@ -1,0 +1,13 @@
+# ── Wedding site root — Apache hardening ────────────────────────────
+Options -Indexes
+
+# Block direct web access to secrets / env / config files
+<FilesMatch "^(\.env|\.htaccess)$">
+    Require all denied
+</FilesMatch>
+
+# Block sensitive file types
+<FilesMatch "\.(log|sql|bak|key|pem|crt|ini)$">
+    Require all denied
+</FilesMatch>
+

@@ -1,2 +1,36 @@
+# Blackbox
 .blackbox/
+
+# Environment / secrets (never commit)
+.env
+.env.*
+!.env.example
+
+# Logs
+logs/
+
+# Generated QR codes (regenerated on demand)
+rsvp/qr_codes/*
+!rsvp/qr_codes/.gitkeep
+
+# Guest photo uploads
+reception/uploads/*
+!reception/uploads/.gitkeep
+
+# Google service-account / credential JSON
+**/credentials/*.json
+**/JSON/*.json
+**/google-sheets*.json
+**/wedding-rsvp-*.json
+
+# Local tooling / virtualenv
+.venv/
+__pycache__/
+*.pyc
+
+# Editor / OS
+.vscode/
+.idea/
+Thumbs.db
+.DS_Store
 

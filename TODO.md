@@ -1,19 +1,19 @@
-# Entourage Book Viewer Fix — ✅ COMPLETE
+# Live-Readiness Checklist — Wedding RSVP + Admin Dashboard
 
-## Issues Fixed
-- ✅ **Brown divider removed** — leftover `.program-entourage` block deleted from `#program`
-- ✅ **Single-page (1-pager) book** — each entourage photo is its own `.photo-page` with front/back faces, stacked via z-index
-- ✅ **Text truncation fixed** — removed `white-space: nowrap`, added `overflow-wrap: anywhere`, `word-break: break-word`, `min-width: 0` on all grid children
-- ✅ **Responsive scaling** — book uses `width: min(92vw, 620px)` + `aspect-ratio: 16/20`, media queries at 767px/480px
-- ✅ **3D page-turn animation** — `.photo-page` with `transform: rotateY(-180deg)`, `transform-origin: left center`, `preserve-3d`, `backface-visibility`
-- ✅ **Button navigation** — Prev/Next with disabled states, keyboard arrow keys
-- ✅ **Reduced motion** — prefers-reduced-motion skips all animation
+## Steps
 
-## Files Modified
-- `index.html` — Removed brown dividers from #program, restructured #entourage-photos
-- `css/styles.css` — Replaced old `.page-flip`/`.page-behind` CSS with `.photo-page`/`.page-face` system
-- `js/script.js` — Updated flip logic for `.photo-page` structure with goToNext/goToPrev
+- [x] 1. Harden `.gitignore` — ignore `.env`, logs, test uploads, QR PNGs, credentials
+- [x] 2. Add `.htaccess` protection (root, rsvp, uploads, qr_codes, logs)
+- [x] 3. Fix `admin.php` — add invitation/edit password fields, fix colspan
+- [x] 4. Fix `admin-dashboard.js` — null-guard password fields
+- [x] 5. Fix `api.php` — auto-generate invitation password, remove stale TODO
+- [x] 6. Gate `bulk-import.php` behind `ENABLE_BULK_IMPORT`
+- [x] 7. Gate `setup.php` behind `ENABLE_SETUP`
+- [x] 8. Add admin login rate limiting in `Authentication.php` + `api.php` + DB schema
+- [x] 9. Fix `config.php` — per-response content-type + `X-Forwarded-Proto` HTTPS
+- [x] 10. Fix `admin.html` broken link
+- [x] 11. Harden `admin-auth.js` — remove localStorage token persistence
+- [x] 12. Redirect legacy `rsvp/index.php` to modern guest flow
+- [x] 13. Final review + update deployment docs
 
-## To Verify
-Open `index.html` in a browser and scroll to the Entourage section.
 

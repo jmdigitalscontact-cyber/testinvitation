@@ -6,6 +6,7 @@ require_once 'Authentication.php';
 require_once 'RSVPHandler.php';
 require_once 'QRCodeGenerator.php';
 require_once 'GoogleSheetsExporter.php';
+require_once 'InvitationMailer.php';
 require_once 'ReceptionApi.php';
 
 // Get request method and action
@@ -157,6 +158,10 @@ try {
 
         case 'generate-qr':
             handleGenerateQR();
+            break;
+
+        case 'send-invitation':
+            handleSendInvitation();
             break;
 
         case 'get-invitations':
@@ -424,8 +429,12 @@ function handleAdminLogin() {
         ]);
     }
 
-    $auth = new Authentication();
-    $admin = $auth->adminLogin($username, $password);
+$auth = new Authentication();
+    try {
+        $admin = $auth->adminLogin($username, $password);
+    } catch (Exception $e) {
+        sendResponse(['success' => false, 'error' => $e->getMessage()], 429);
+    }
 
     if (!$admin) {
         sendResponse(['success' => false, 'error' => 'Invalid credentials'], 401);
@@ -448,14 +457,17 @@ function handleCreateInvitation() {
     $email = sanitize($input['email'] ?? '');
     $rawInvitedGuestNames = $input['invited_guest_names'] ?? [];
 
-    if (empty($guest_name) || empty($password)) {
+    if (empty($guest_name)) {
         sendResponse(['success' => false, 'error' => 'Missing required fields'], 400);
     }
 
-    // TODO: Validate admin authentication token
+    // Auto-generate a secure random invitation password when one is not provided.
+    if (empty($password)) {
+        $password = bin2hex(random_bytes(6)); // 12-character random password
+    }
 
     // Generate unique invitation ID
-    $invitation_id = 'INV-' . strtoupper(substr(md5(time() . $guest_name), 0, 12));
+    $invitation_id = 'INV-' . strtoupper(substr(md5(time() . $guest_name . random_bytes(8)), 0, 12));
     $password_hash = password_hash($password, PASSWORD_BCRYPT);
 
     $db = Database::getInstance();
@@ -611,6 +623,89 @@ function handleGenerateQR() {
     ]);
 }
 
+function handleSendInvitation() {
+    requireAdminAuth();
+    $input = getRequestInput();
+    $invitation_id = sanitize($input['invitation_id'] ?? '');
+
+    if (empty($invitation_id)) {
+        sendResponse(['success' => false, 'error' => 'Missing invitation ID'], 400);
+    }
+
+    $db = Database::getInstance();
+    $mysqli = $db->getConnection();
+
+    $stmt = $mysqli->prepare("SELECT invitation_id, guest_name, email FROM invitations WHERE invitation_id = ?");
+    if (!$stmt) {
+        sendResponse(['success' => false, 'error' => 'Database error'], 500);
+    }
+    $stmt->bind_param("s", $invitation_id);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $invitation = $result->fetch_assoc();
+    $stmt->close();
+
+    if (!$invitation) {
+        sendResponse(['success' => false, 'error' => 'Invitation not found'], 404);
+    }
+
+    $guestEmail = trim((string)($invitation['email'] ?? ''));
+    if (empty($guestEmail)) {
+        sendResponse([
+            'success' => false,
+            'error' => 'This invitation has no email address. Edit the invitation to add one before sending.'
+        ], 400);
+    }
+    if (!filter_var($guestEmail, FILTER_VALIDATE_EMAIL)) {
+        sendResponse([
+            'success' => false,
+            'error' => 'The email address on this invitation is not valid.'
+        ], 400);
+    }
+
+    // Build the personal invitation URL.
+    $inviteUrl = QRCodeGenerator::buildInvitationLandingUrl($invitation_id);
+
+    // Try to include the QR image (local path preferred, else hosted URL).
+    $qrImagePath = '';
+    $qr = (new QRCodeGenerator())->getQRCode($invitation_id);
+    if ($qr && !empty($qr['qr_image_path'])) {
+        $path = (string)$qr['qr_image_path'];
+        // Local relative path -> convert to absolute public URL for email clients.
+        if (strpos($path, 'http://') === 0 || strpos($path, 'https://') === 0) {
+            $qrImagePath = $path;
+        } else {
+            $base = defined('PUBLIC_BASE_URL') ? PUBLIC_BASE_URL : '';
+            $qrImagePath = rtrim($base, '/') . '/' . ltrim($path, '/');
+        }
+    }
+
+    $mailer = new InvitationMailer();
+    $result = $mailer->sendInvitation(
+        $guestEmail,
+        $invitation['guest_name'],
+        $invitation_id,
+        $inviteUrl,
+        $qrImagePath
+    );
+
+    if ($result['success']) {
+        sendResponse([
+            'success' => true,
+            'message' => $result['message'],
+            'data' => [
+                'invitation_id' => $invitation_id,
+                'to' => $guestEmail
+            ]
+        ]);
+    } else {
+        sendResponse([
+            'success' => false,
+            'error' => $result['message']
+        ], 500);
+    }
+}
+
 function handleUpdateInvitation() {
     requireAdminAuth();
     $input = getRequestInput();
@@ -752,8 +847,12 @@ function handleGetInvitations() {
     $mysqli = $db->getConnection();
     $hasInvitedGuestNamesColumn = ensureInvitedGuestNamesColumn($mysqli);
 
+    // Explicit column list (never SELECT i.*) so password_hash and other
+    // internal fields are never exposed through the admin API.
     $result = $mysqli->query("
-        SELECT i.*, 
+        SELECT i.id, i.invitation_id, i.guest_name, i.max_guests, i.status,
+               i.created_at, i.updated_at, i.email, i.phone, i.notes,
+               i.invited_guest_names,
                COALESCE(r.attending, 'pending') as rsvp_status,
                COALESCE(r.attendee_count, 0) as confirmed_count
         FROM invitations i
@@ -1116,8 +1215,8 @@ function handleGetTableAssignments() {
 }
 
 function handleAssignTable() {
-    requireAdminAuth();
     try {
+        $admin = requireAdminAuth();
         $input = getRequestInput();
         $invitation_id = sanitize($input['invitation_id'] ?? '');
         $table_number = (int)($input['table_number'] ?? 0);
@@ -1126,37 +1225,42 @@ function handleAssignTable() {
             sendResponse(['success' => false, 'error' => 'Missing or invalid required fields'], 400);
         }
 
+        $adminId = (int)($admin['id'] ?? 0);
+        if ($adminId < 1) {
+            sendResponse(['success' => false, 'error' => 'Unable to identify the signed-in admin'], 401);
+        }
+
         $db = Database::getInstance();
         $mysqli = $db->getConnection();
 
-        // Check if table exists, create if not
-        $result = $mysqli->query("SHOW TABLES LIKE 'table_assignments'");
-        if ($result->num_rows === 0) {
-            // Create the table
-            $createTableQuery = "
+            // Check if table exists, create if not
+            $result = $mysqli->query("SHOW TABLES LIKE 'table_assignments'");
+            if ($result->num_rows === 0) {
+                // Create the table (MySQL-compatible syntax)
+                $createTableQuery = "
                 CREATE TABLE IF NOT EXISTS table_assignments (
-                    id BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
+                    id BIGINT AUTO_INCREMENT PRIMARY KEY,
                     invitation_id VARCHAR(50) NOT NULL,
                     attendee_id BIGINT NULL,
-                    table_number INTEGER NOT NULL,
-                    seat_number INTEGER NULL,
+                    table_number INT NOT NULL,
+                    seat_number INT NULL,
                     assigned_by BIGINT NULL,
                     assigned_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
                     CONSTRAINT fk_table_assignments_invitation FOREIGN KEY (invitation_id) REFERENCES invitations(invitation_id) ON DELETE CASCADE,
                     CONSTRAINT fk_table_assignments_attendee FOREIGN KEY (attendee_id) REFERENCES attendees(id) ON DELETE CASCADE,
                     CONSTRAINT fk_table_assignments_admin FOREIGN KEY (assigned_by) REFERENCES admin_users(id) ON DELETE SET NULL,
                     CONSTRAINT unique_invitation_attendee UNIQUE (invitation_id, attendee_id)
                 )
-            ";
+                ";
 
-            if (!$mysqli->query($createTableQuery)) {
-                throw new Exception('Failed to create table_assignments table: ' . $mysqli->error);
+                if (!$mysqli->query($createTableQuery)) {
+                    throw new Exception('Failed to create table_assignments table: ' . $mysqli->error);
+                }
+                $mysqli->query("CREATE INDEX idx_table_assignments_invitation_id ON table_assignments(invitation_id)");
+                $mysqli->query("CREATE INDEX idx_table_assignments_attendee_id ON table_assignments(attendee_id)");
+                $mysqli->query("CREATE INDEX idx_table_assignments_table_number ON table_assignments(table_number)");
             }
-            $mysqli->query("CREATE INDEX IF NOT EXISTS idx_table_assignments_invitation_id ON table_assignments(invitation_id)");
-            $mysqli->query("CREATE INDEX IF NOT EXISTS idx_table_assignments_attendee_id ON table_assignments(attendee_id)");
-            $mysqli->query("CREATE INDEX IF NOT EXISTS idx_table_assignments_table_number ON table_assignments(table_number)");
-        }
 
         // First, delete any existing assignments for this invitation (without attendee_id)
         // This ensures when changing tables, the old assignment is removed
@@ -1175,17 +1279,17 @@ function handleAssignTable() {
             throw new Exception('Failed to delete old table assignment: ' . $deleteStmt->error);
         }
 
-        // Now insert the new assignment
+        // Now insert the new assignment using the authenticated admin's ID.
         $stmt = $mysqli->prepare("
             INSERT INTO table_assignments (invitation_id, table_number, assigned_by)
-            VALUES (?, ?, 1)
+            VALUES (?, ?, ?)
         ");
 
         if (!$stmt) {
             throw new Exception('Failed to prepare statement: ' . $mysqli->error);
         }
 
-        $stmt->bind_param('si', $invitation_id, $table_number);
+        $stmt->bind_param('sii', $invitation_id, $table_number, $adminId);
 
         if (!$stmt->execute()) {
             throw new Exception('Failed to save table assignment: ' . $stmt->error);

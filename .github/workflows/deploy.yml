@@ -1,0 +1,73 @@
+# ============================================================
+#  DEPLOY TO GODADDY VIA GITHUB ACTIONS
+# ============================================================
+#  Every time you push to the "main" branch, GitHub will
+#  automatically upload your files to GoDaddy via FTP/SFTP.
+#
+#  SETUP (one time, ~5 minutes):
+#  1. Push this project to GitHub (create a repo, push this code).
+#  2. In your GoDaddy cPanel, create a FTP account for deployment
+#     (or use your main FTP/cPanel credentials).
+#  3. On GitHub, go to your repo → Settings → Secrets and variables
+#     → Actions → New repository secret. Add these THREE secrets:
+#
+#        FTP_SERVER     = your GoDaddy FTP host
+#                         (e.g. ftp.yourdomain.com or your IP)
+#        FTP_USERNAME   = your GoDaddy FTP username
+#        FTP_PASSWORD   = your GoDaddy FTP password
+#
+#  4. That's it. Push to "main" and GitHub deploys for you.
+#
+#  NOTE:
+#  - The .env file is NOT deployed (it contains your DB password).
+#    You must upload rsvp/.env manually once via FileZilla.
+#  - The database is NOT created by this workflow. Import
+#    rsvp/database-full-mysql.sql once via phpMyAdmin.
+#  - Server-only files are PRESERVED (uploaded guest photos and
+#    generated QR codes are never deleted).
+# ============================================================
+
+name: Deploy to GoDaddy
+
+on:
+  push:
+    branches: [main, master]
+
+jobs:
+  deploy:
+    name: Upload files to GoDaddy
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+
+      - name: 🚀 Deploy via FTP/SFTP to GoDaddy
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          # These come from your GitHub repository secrets
+          server: ${{ secrets.FTP_SERVER }}
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+
+          # Deploy into the web root (adjust if your plan uses httpdocs/)
+          server-dir: /public_html/
+
+          # Preserve server-only files (uploads, generated QR codes,
+          # runtime files) — do NOT enable clean-slate delete.
+          dangerous-clean-slate: false
+
+          # Files/folders that should NEVER be uploaded
+          exclude: |
+            **/.git*
+            **/.git*/**
+            **/node_modules/**
+            **/.env
+            **/.env.*
+            **/logs/**
+            **/.blackbox/**
+            **/*.md
+            rsvp/database-*.sql
+            rsvp/qr_codes/**
+            reception/uploads/**
+

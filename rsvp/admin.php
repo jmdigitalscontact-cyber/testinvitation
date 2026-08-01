@@ -18,7 +18,7 @@
                 <p>RSVP administration</p>
         </div>
             <div class="admin-topbar-actions">
-                <a class="admin-btn admin-btn-secondary" href="../home.html">View site</a>
+                <a class="admin-btn admin-btn-secondary" href="../index.html">View site</a>
                 <button type="button" class="admin-btn admin-btn-secondary" onclick="AdminAuth.logout()">Sign out</button>
         </div>
         </header>
@@ -122,19 +122,24 @@
                                 <label for="max-guests">Maximum guests</label>
                             <input type="number" id="max-guests" min="1" max="10" value="1" required>
                         </div>
-                            <div class="admin-field">
-                            <label for="invite-password">Password</label>
-                                <input type="password" id="invite-password" required>
-                        </div>
-                            <div class="admin-field">
+                        <div class="admin-field">
                                 <label for="invite-email">Email (optional)</label>
                             <input type="email" id="invite-email" placeholder="guest@example.com">
+                        </div>
+                        <div class="admin-field">
+                                <label for="invite-password">Invitation password</label>
+                                <input type="text" id="invite-password" placeholder="Leave blank to auto-generate">
+                                <p style="font-size:0.78rem;color:var(--admin-muted);margin:0.25rem 0 0">Guests can still RSVP by scanning their QR code — the password is only needed if they use the legacy ID+password login.</p>
                         </div>
                     </div>
                         <div class="admin-field">
                             <label for="invited-guest-names">Invited guest names (one per line)</label>
                             <textarea id="invited-guest-names" rows="4" placeholder="Guest name"></textarea>
                     </div>
+                        <label class="admin-checkbox">
+                            <input type="checkbox" id="auto-send-invite">
+                            <span>Send invitation email right away (requires an email address)</span>
+                        </label>
                         <button type="submit" class="admin-btn admin-btn-primary">Create invitation</button>
                 </form>
             </div>
@@ -148,13 +153,14 @@
                                     <th>Guest</th>
                                     <th>ID</th>
                                     <th>Max</th>
-                                <th>Status</th>
+                            <th>Status</th>
                                     <th>QR</th>
+                                    <th>Send</th>
                                 <th>Actions</th>
                             </tr>
                         </thead>
                         <tbody id="invitations-tbody">
-                                <tr><td colspan="6" class="admin-empty">Loading…</td></tr>
+                                <tr><td colspan="7" class="admin-empty">Loading…</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -319,12 +325,12 @@
                     <div class="admin-field">
                         <label for="edit-email">Email</label>
                         <input type="email" id="edit-email">
-                </div>
-                    <div class="admin-field">
-                        <label for="edit-password">New password (optional)</label>
-                        <input type="password" id="edit-password" placeholder="Leave blank to keep current">
                     </div>
+                    <div class="admin-field">
+                        <label for="edit-password">Invitation password</label>
+                        <input type="text" id="edit-password" placeholder="Leave blank to keep current">
                 </div>
+</div>
                 <div class="admin-field">
                     <label for="edit-invited-names">Invited guest names (one per line)</label>
                     <textarea id="edit-invited-names" rows="4"></textarea>

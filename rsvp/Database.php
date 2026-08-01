@@ -1,23 +1,65 @@
 <?php
-// PostgreSQL connection handler (PDO with lightweight mysqli-compatible adapters)
+/**
+ * Database Connection Handler
+ * Supports MySQL (primary) and PostgreSQL (legacy) via PDO
+ * 
+ * All PHP code in this project uses MySQL-style queries (mysqli convention).
+ * For MySQL: Direct native MySQLi is used.
+ * For PostgreSQL: A PDO adapter handles query translation.
+ */
 
 class Database {
     private static $instance = null;
     private $connection;
+    private $engine;
 
     private function __construct() {
+        $this->engine = defined('DB_ENGINE') ? DB_ENGINE : 'mysql';
+
         try {
-            $dsn = sprintf('pgsql:host=%s;port=%d;dbname=%s', PG_HOST, PG_PORT, PG_DB);
-            $pdo = new PDO($dsn, PG_USER, PG_PASS, [
-                PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-                PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-                PDO::ATTR_EMULATE_PREPARES => false,
-            ]);
-            $this->connection = new DbConnectionAdapter($pdo);
+            if ($this->engine === 'mysql') {
+                $this->connectMySQL();
+            } else {
+                $this->connectPostgreSQL();
+            }
         } catch (Exception $e) {
             echo json_encode(['success' => false, 'error' => 'Database Connection Failed: ' . $e->getMessage()]);
             exit();
         }
+    }
+
+    /**
+     * Connect to MySQL/MariaDB using MySQLi
+     */
+    private function connectMySQL() {
+        $host = defined('DB_HOST') ? DB_HOST : 'localhost';
+        $port = defined('DB_PORT') ? DB_PORT : 3306;
+        $user = defined('DB_USER') ? DB_USER : 'root';
+        $pass = defined('DB_PASS') ? DB_PASS : '';
+        $name = defined('DB_NAME') ? DB_NAME : 'wedding_rsvp';
+
+        $mysqli = new mysqli($host, $user, $pass, $name, $port);
+
+        if ($mysqli->connect_error) {
+            throw new Exception('MySQL Connection Failed: ' . $mysqli->connect_error);
+        }
+
+        $mysqli->set_charset('utf8mb4');
+
+        $this->connection = new MySqlConnectionAdapter($mysqli);
+    }
+
+    /**
+     * Connect to PostgreSQL using PDO (legacy support)
+     */
+    private function connectPostgreSQL() {
+        $dsn = sprintf('pgsql:host=%s;port=%d;dbname=%s', PG_HOST, PG_PORT, PG_DB);
+        $pdo = new PDO($dsn, PG_USER, PG_PASS, [
+            PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+            PDO::ATTR_EMULATE_PREPARES => false,
+        ]);
+        $this->connection = new PgSqlConnectionAdapter($pdo);
     }
 
     public static function getInstance() {
@@ -50,9 +92,184 @@ class Database {
     public function closeConnection() {
         $this->connection->close();
     }
+
+    public function getEngine() {
+        return $this->engine;
+    }
 }
 
-class DbConnectionAdapter {
+// ============================================================
+// MySQL Connection Adapter
+// ============================================================
+
+class MySqlConnectionAdapter {
+    private $mysqli;
+    public $error = '';
+    public $affected_rows = 0;
+    public $insert_id = null;
+
+    public function __construct(mysqli $mysqli) {
+        $this->mysqli = $mysqli;
+    }
+
+    public function ping() {
+        return $this->mysqli->ping();
+    }
+
+    public function query($sql) {
+        $result = $this->mysqli->query($sql);
+        if ($result === false) {
+            $this->error = $this->mysqli->error;
+            return false;
+        }
+        $this->affected_rows = $this->mysqli->affected_rows;
+
+        if ($result === true) {
+            return true;
+        }
+
+        return new MySqlResultAdapter($result);
+    }
+
+    public function prepare($sql) {
+        $stmt = $this->mysqli->prepare($sql);
+        if ($stmt === false) {
+            $this->error = $this->mysqli->error;
+            return false;
+        }
+        return new MySqlStatementAdapter($this, $stmt);
+    }
+
+    public function execPrepared($sql, array $params) {
+        $stmt = $this->mysqli->prepare($sql);
+        if (!$stmt) {
+            throw new Exception('Prepare failed: ' . $this->mysqli->error);
+        }
+
+        if (!empty($params)) {
+            $types = '';
+            $bindParams = [];
+            foreach ($params as $param) {
+                if (is_int($param)) {
+                    $types .= 'i';
+                } elseif (is_float($param)) {
+                    $types .= 'd';
+                } elseif (is_null($param)) {
+                    $types .= 's';
+                } else {
+                    $types .= 's';
+                }
+                $bindParams[] = $param;
+            }
+            $stmt->bind_param($types, ...$bindParams);
+        }
+
+        $stmt->execute();
+        $this->affected_rows = $stmt->affected_rows;
+
+        // Get insert_id for INSERT statements
+        if (preg_match('/^\s*INSERT\s+/i', $sql)) {
+            $this->insert_id = $stmt->insert_id;
+        }
+
+        $result = $stmt->get_result();
+        $stmt->close();
+
+        return $result ? new MySqlResultAdapter($result) : true;
+    }
+
+    public function real_escape_string($value) {
+        return $this->mysqli->real_escape_string((string)$value);
+    }
+
+    public function close() {
+        $this->mysqli->close();
+    }
+}
+
+class MySqlStatementAdapter {
+    private $adapter;
+    private $stmt;
+    private $bound = [];
+    public $error = '';
+    private $result;
+
+    public function __construct(MySqlConnectionAdapter $adapter, mysqli_stmt $stmt) {
+        $this->adapter = $adapter;
+        $this->stmt = $stmt;
+    }
+
+    public function bind_param($types, &...$vars) {
+        $this->bound = $vars;
+        return true;
+    }
+
+    public function execute() {
+        try {
+            if (!empty($this->bound)) {
+                $this->stmt->bind_param(...$this->bound);
+            }
+            $this->stmt->execute();
+            $this->adapter->error = $this->stmt->error;
+            $this->adapter->affected_rows = $this->stmt->affected_rows;
+            $this->adapter->insert_id = $this->stmt->insert_id;
+
+            $meta = $this->stmt->result_metadata();
+            if ($meta) {
+                $result = $this->stmt->get_result();
+                $this->result = new MySqlResultAdapter($result);
+                $meta->free();
+            } else {
+                $this->result = new MySqlResultAdapter(null);
+            }
+
+            return true;
+        } catch (Exception $e) {
+            $this->error = $e->getMessage();
+            $this->adapter->error = $e->getMessage();
+            return false;
+        }
+    }
+
+    public function get_result() {
+        return $this->result ?: new MySqlResultAdapter(null);
+    }
+
+    public function close() {
+        $this->stmt->close();
+        $this->result = null;
+        return true;
+    }
+}
+
+class MySqlResultAdapter {
+    private $rows = [];
+    private $index = 0;
+    public $num_rows = 0;
+
+    public function __construct($result) {
+        if ($result instanceof mysqli_result) {
+            while ($row = $result->fetch_assoc()) {
+                $this->rows[] = $row;
+            }
+            $this->num_rows = count($this->rows);
+            $result->free();
+        }
+    }
+
+    public function fetch_assoc() {
+        if ($this->index >= $this->num_rows) {
+            return null;
+        }
+        return $this->rows[$this->index++];
+    }
+}
+
+// ============================================================
+// PostgreSQL Connection Adapter (Legacy — unchanged)
+// ============================================================
+
+class PgSqlConnectionAdapter {
     private $pdo;
     public $error = '';
     public $affected_rows = 0;
@@ -73,18 +290,18 @@ class DbConnectionAdapter {
         if (preg_match("/^SHOW TABLES LIKE '([^']+)'$/i", $sql, $matches)) {
             $stmt = $this->pdo->prepare("SELECT tablename FROM pg_catalog.pg_tables WHERE schemaname='public' AND tablename = ?");
             $stmt->execute([$matches[1]]);
-            return new DbResultAdapter($stmt);
+            return new PgSqlResultAdapter($stmt);
         }
 
         if (preg_match("/^SHOW COLUMNS FROM ([a-zA-Z0-9_]+) LIKE '([^']+)'$/i", $sql, $matches)) {
             $stmt = $this->pdo->prepare("SELECT column_name FROM information_schema.columns WHERE table_schema='public' AND table_name = ? AND column_name = ?");
             $stmt->execute([$matches[1], $matches[2]]);
-            return new DbResultAdapter($stmt);
+            return new PgSqlResultAdapter($stmt);
         }
 
         try {
             $stmt = $this->pdo->query($sql);
-            return new DbResultAdapter($stmt);
+            return new PgSqlResultAdapter($stmt);
         } catch (Exception $e) {
             $this->error = $e->getMessage();
             return false;
@@ -93,7 +310,7 @@ class DbConnectionAdapter {
 
     public function prepare($sql) {
         try {
-            return new DbStatementAdapter($this, $sql);
+            return new PgSqlStatementAdapter($this, $sql);
         } catch (Exception $e) {
             $this->error = $e->getMessage();
             return false;
@@ -137,14 +354,14 @@ class DbConnectionAdapter {
     }
 }
 
-class DbStatementAdapter {
+class PgSqlStatementAdapter {
     private $connection;
     private $sql;
     private $bound = [];
     public $error = '';
     private $result;
 
-    public function __construct(DbConnectionAdapter $connection, $sql) {
+    public function __construct(PgSqlConnectionAdapter $connection, $sql) {
         $this->connection = $connection;
         $this->sql = $sql;
     }
@@ -157,7 +374,7 @@ class DbStatementAdapter {
     public function execute() {
         try {
             $stmt = $this->connection->execPrepared($this->sql, $this->bound);
-            $this->result = new DbResultAdapter($stmt);
+            $this->result = new PgSqlResultAdapter($stmt);
             if (preg_match('/^\s*INSERT\s+/i', $this->sql)) {
                 try {
                     $idStmt = $this->connection->query('SELECT LASTVAL() AS id');
@@ -177,7 +394,7 @@ class DbStatementAdapter {
     }
 
     public function get_result() {
-        return $this->result ?: new DbResultAdapter(null);
+        return $this->result ?: new PgSqlResultAdapter(null);
     }
 
     public function close() {
@@ -186,7 +403,7 @@ class DbStatementAdapter {
     }
 }
 
-class DbResultAdapter {
+class PgSqlResultAdapter {
     private $rows = [];
     private $index = 0;
     public $num_rows = 0;
@@ -207,3 +424,4 @@ class DbResultAdapter {
 }
 
 ?>
+

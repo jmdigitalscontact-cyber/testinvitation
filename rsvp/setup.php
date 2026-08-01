@@ -2,22 +2,63 @@
 /**
  * Setup Wizard for Wedding RSVP System
  * This file helps verify installation and setup
+ *
+ * SECURITY: Disabled by default in production. Set ENABLE_SETUP=true in
+ * .env to run the wizard (development/initial deployment only).
  */
 
 require_once 'config.php';
 require_once 'Database.php';
 
+$setupEnabled = isTruthyEnvValue(EnvironmentLoader::get('ENABLE_SETUP', 'false'));
+$environment = EnvironmentLoader::get('ENVIRONMENT', 'development');
+if (!$setupEnabled) {
+    http_response_code(403);
+    die('Setup wizard is disabled. Set ENABLE_SETUP=true in .env to run it (development only).');
+}
+
 $status = [
     'database' => false,
     'config' => false,
     'directories' => false,
-    'files' => false
+    'files' => false,
+    'mail' => false,
+    'sheets' => false
 ];
 
 $messages = [];
 
+// Check mail configuration
+$mailFrom = defined('MAIL_FROM') ? MAIL_FROM : EnvironmentLoader::get('MAIL_FROM', '');
+if (!empty($mailFrom)) {
+    $status['mail'] = true;
+} else {
+    $messages[] = ['warning' => 'Mail not configured yet. Set MAIL_FROM in .env to enable invitation emails.'];
+}
+
+// Check Google Sheets configuration
+$sheetsId = defined('GOOGLE_SHEETS_ID') ? GOOGLE_SHEETS_ID : '';
+$sheetsCredPath = defined('GOOGLE_SHEETS_CREDENTIALS_PATH') ? GOOGLE_SHEETS_CREDENTIALS_PATH : '';
+if (!empty($sheetsId) && !empty($sheetsCredPath) && file_exists($sheetsCredPath)) {
+    $status['sheets'] = true;
+} else {
+    $messages[] = ['warning' => 'Google Sheets export not configured. Add GOOGLE_SHEETS_ID and GOOGLE_SHEETS_CREDENTIALS_PATH in .env (see MYSQL_SETUP.md).'];
+}
+
+
 // Check config
-if (defined('PG_HOST') && defined('PG_USER') && defined('PG_DB')) {
+$configCheck = false;
+$engine = defined('DB_ENGINE') ? DB_ENGINE : 'mysql';
+if ($engine === 'mysql') {
+    if (defined('DB_HOST') && defined('DB_USER') && defined('DB_NAME')) {
+        $configCheck = true;
+    }
+} else {
+    if (defined('PG_HOST') && defined('PG_USER') && defined('PG_DB')) {
+        $configCheck = true;
+    }
+}
+if ($configCheck) {
     $status['config'] = true;
 } else {
     $messages[] = ['error' => 'Config file not properly configured'];
@@ -341,6 +382,14 @@ if ($all_files_exist) {
                 <span><?php echo $status['files'] ? '✓' : '✗'; ?></span>
                 <strong>Files</strong>
             </div>
+            <div class="check-item <?php echo $status['mail'] ? 'pass' : 'fail'; ?>">
+                <span><?php echo $status['mail'] ? '✓' : '✗'; ?></span>
+                <strong>Email</strong>
+            </div>
+            <div class="check-item <?php echo $status['sheets'] ? 'pass' : 'fail'; ?>">
+                <span><?php echo $status['sheets'] ? '✓' : '✗'; ?></span>
+                <strong>Google Sheets</strong>
+            </div>
         </div>
 
         <?php if (!empty($messages)): ?>
@@ -359,9 +408,10 @@ if ($all_files_exist) {
             <h3>📋 Next Steps</h3>
             <ol>
                 <li><strong>Create Sample Invitation:</strong> Go to <a href="admin.php" target="_blank">Admin Panel</a> and create your first invitation</li>
+                <li><strong>Send Invitation:</strong> Add a guest email address, then use the <strong>Send</strong> button in the Invitations tab (or check "Send invitation email right away" when creating)</li>
                 <li><strong>Test RSVP:</strong> Scan the generated QR code or use the invitation ID and password</li>
                 <li><strong>View Dashboard:</strong> Check the admin dashboard for statistics</li>
-                <li><strong>Export Data:</strong> Export responses as CSV when ready</li>
+                <li><strong>Export Data:</strong> Export responses as CSV, or push to Google Sheets once configured in <code>.env</code></li>
             </ol>
         </div>
 
