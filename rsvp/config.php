@@ -64,7 +64,7 @@ define('QR_CODE_PATH', BASE_PATH . '/qr_codes/');
 // Google Sheets export (optional — set in .env)
 define('GOOGLE_SHEETS_ID', EnvironmentLoader::get(
     'GOOGLE_SHEETS_ID',
-    '1Y0447zO9KI2G7FKLTbH-qwTaghTVXTlB4ztapHr3mtY'
+    '1gSgXBMIpJAbCx5jcL6zQ8AkcMsEgkRmpQE5Rx0ms6a4'
 ));
 define('GOOGLE_SHEETS_CREDENTIALS_PATH', EnvironmentLoader::get('GOOGLE_SHEETS_CREDENTIALS_PATH', ''));
 
