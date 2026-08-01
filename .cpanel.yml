@@ -1,0 +1,37 @@
+# ============================================================
+#  cPanel Git Version Control — Deployment Configuration
+# ============================================================
+#  This file tells GoDaddy cPanel what to do every time you
+#  click "Update from Remote" (or push) in Git Version Control.
+#
+#  ⚠️  REPLACE "YOUR_CPANEL_USERNAME" below with your actual
+#      cPanel username (shown in the top-right corner of cPanel).
+#
+#  NOTE: This deploys CODE ONLY. The server's .env (secrets),
+#  qr_codes/, reception/uploads/, and logs/ are PRESERVED and
+#  never overwritten.
+# ============================================================
+
+---
+deployment:
+  tasks:
+    # ── Target folder on the server (document root) ──────────
+    - export DEPLOYPATH=/home/YOUR_CPANEL_USERNAME/public_html/
+
+    # ── Website root files ───────────────────────────────────
+    - /bin/cp index.html gallery.html player.html sw.js $DEPLOYPATH
+
+    # ── Static asset folders ─────────────────────────────────
+    - /bin/cp -R css js images audio $DEPLOYPATH
+
+    # ── App folders (RSVP backend + reception venue) ─────────
+    - /bin/cp -R rsvp reception $DEPLOYPATH
+
+    # ── Hidden security files (dotfiles don't match *) ───────
+    - /bin/cp .htaccess $DEPLOYPATH
+
+    # ── Set writable permissions for runtime folders ─────────
+    - /bin/chmod 755 $DEPLOYPATH/rsvp/qr_codes
+    - /bin/chmod 755 $DEPLOYPATH/reception/uploads
+    - /bin/chmod 755 $DEPLOYPATH/logs
+
