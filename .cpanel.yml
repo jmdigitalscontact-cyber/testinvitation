@@ -1,36 +1,27 @@
-# ============================================================
-#  cPanel Git Version Control — Deployment Configuration
-# ============================================================
-#  This file tells GoDaddy cPanel what to do every time you
-#  click "Update from Remote" (or push) in Git Version Control.
-#
-#  Deployment path: /home/adn391j6zhrq/public_html/
-#
-#  NOTE: This deploys CODE ONLY. The server's .env (secrets),
-#  qr_codes/, reception/uploads/, and logs/ are PRESERVED and
-#  never overwritten.
-# ============================================================
-
 ---
 deployment:
   tasks:
-    # ── Target folder on the server (document root) ──────────
     - export DEPLOYPATH=/home/adn391j6zhrq/public_html/
 
-    # ── Website root files ───────────────────────────────────
+    # Website root files
     - /bin/cp index.html gallery.html player.html sw.js $DEPLOYPATH
 
-    # ── Static asset folders ─────────────────────────────────
+    # Static asset folders
     - /bin/cp -R css js images audio $DEPLOYPATH
 
-    # ── App folders (RSVP backend + reception venue) ─────────
+    # App folders (RSVP backend + reception venue)
     - /bin/cp -R rsvp reception $DEPLOYPATH
 
-    # ── Hidden security files (dotfiles don't match *) ───────
+    # Hidden security files (dotfiles do not match wildcards)
     - /bin/cp .htaccess $DEPLOYPATH
 
-    # ── Set writable permissions for runtime folders ─────────
+    # Ensure runtime folders exist (they may not be in git)
+    - /bin/mkdir -p $DEPLOYPATH/logs
+    - /bin/mkdir -p $DEPLOYPATH/rsvp/qr_codes
+    - /bin/mkdir -p $DEPLOYPATH/reception/uploads
+
+    # Set writable permissions for runtime folders
+    - /bin/chmod 755 $DEPLOYPATH/logs
     - /bin/chmod 755 $DEPLOYPATH/rsvp/qr_codes
     - /bin/chmod 755 $DEPLOYPATH/reception/uploads
-    - /bin/chmod 755 $DEPLOYPATH/logs
 
