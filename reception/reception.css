@@ -99,6 +99,46 @@ body {
 }
 
 /* ═══════════════════════════════════════════
+   REAL PHOTO BACKGROUND
+   ═══════════════════════════════════════════ */
+.rec-bg {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  background: var(--rec-bg);
+}
+
+.rec-bg__img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center 30%;
+  animation: recKenBurns 40s ease-in-out infinite alternate;
+  will-change: transform;
+}
+
+@keyframes recKenBurns {
+  0%   { transform: scale(1) translate(0, 0); }
+  100% { transform: scale(1.08) translate(-1.2%, -1.5%); }
+}
+
+.rec-bg__scrim {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(180deg, rgba(9, 18, 14, 0.62) 0%, rgba(9, 18, 14, 0.48) 38%, rgba(9, 18, 14, 0.72) 100%);
+}
+
+/* Light theme scrim — brighter wash so the photo still shows but text stays readable */
+[data-theme="light"] .rec-bg__scrim {
+  background:
+    linear-gradient(180deg, rgba(240, 236, 228, 0.78) 0%, rgba(240, 236, 228, 0.55) 38%, rgba(240, 236, 228, 0.82) 100%);
+}
+
+/* ═══════════════════════════════════════════
    PARTICLE CANVAS
    ═══════════════════════════════════════════ */
 .particle-canvas {
@@ -127,7 +167,7 @@ body {
   align-items: center;
   justify-content: center;
   padding: 1.5rem;
-  background: var(--rec-bg);
+  background: transparent;
   transition: opacity 0.6s var(--rec-ease-out), backdrop-filter 0.6s var(--rec-ease-out);
 }
 
@@ -140,7 +180,9 @@ body {
 
 .rec-lock-card {
   position: relative;
-  background: linear-gradient(170deg, rgba(22, 40, 30, 0.95), rgba(29, 50, 38, 0.88));
+  background: rgba(22, 40, 30, 0.72);
+  backdrop-filter: blur(20px) saturate(1.1);
+  -webkit-backdrop-filter: blur(20px) saturate(1.1);
   border: 1px solid var(--rec-border-accent);
   border-radius: 28px;
   padding: 2.8rem 2rem 2rem;
@@ -153,7 +195,9 @@ body {
 }
 
 [data-theme="light"] .rec-lock-card {
-  background: linear-gradient(170deg, rgba(255,255,255,0.98), rgba(247,244,239,0.95));
+  background: rgba(255,255,255,0.82);
+  backdrop-filter: blur(20px) saturate(1.1);
+  -webkit-backdrop-filter: blur(20px) saturate(1.1);
 }
 
 .rec-lock-glow {
@@ -366,10 +410,14 @@ body {
 .reception-header__bg {
   position: absolute;
   inset: 0;
-  background: linear-gradient(to bottom, var(--rec-surface), transparent);
+  background: linear-gradient(to bottom, rgba(22, 40, 30, 0.66), transparent);
   opacity: 0.92;
   pointer-events: none;
   transition: background var(--rec-transition-duration) var(--rec-ease-out);
+}
+
+[data-theme="light"] .reception-header__bg {
+  background: linear-gradient(to bottom, rgba(240, 236, 228, 0.72), transparent);
 }
 
 .reception-header__eyebrow {
@@ -517,7 +565,9 @@ body {
 .reception-panel.is-active { visibility: visible; }
 
 .reception-panel__inner {
-  background: var(--rec-surface);
+  background: rgba(22, 40, 30, 0.78);
+  backdrop-filter: blur(16px) saturate(1.08);
+  -webkit-backdrop-filter: blur(16px) saturate(1.08);
   border: 1px solid var(--rec-border);
   border-radius: var(--rec-radius);
   box-shadow: var(--rec-shadow);
@@ -527,6 +577,12 @@ body {
   overflow: hidden;
   transition: background var(--rec-transition-duration) var(--rec-ease-out),
               border-color var(--rec-transition-duration) var(--rec-ease-out);
+}
+
+[data-theme="light"] .reception-panel__inner {
+  background: rgba(255, 255, 255, 0.82);
+  backdrop-filter: blur(16px) saturate(1.08);
+  -webkit-backdrop-filter: blur(16px) saturate(1.08);
 }
 
 .reception-panel__inner::before {
@@ -1463,12 +1519,20 @@ body.reception-lightbox-open { overflow: hidden; }
    GIFTS TAB
    ═══════════════════════════════════════════ */
 .rec-gifts-card {
-  background: var(--rec-surface-2);
+  background: rgba(29, 50, 38, 0.72);
+  backdrop-filter: blur(14px) saturate(1.06);
+  -webkit-backdrop-filter: blur(14px) saturate(1.06);
   border: 1px solid var(--rec-border);
   border-radius: var(--rec-radius);
   padding: 1.25rem 1rem 1.1rem;
   box-shadow: var(--rec-shadow-card);
   text-align: center;
+}
+
+[data-theme="light"] .rec-gifts-card {
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(14px) saturate(1.06);
+  -webkit-backdrop-filter: blur(14px) saturate(1.06);
 }
 
 /* Gift box */
@@ -1677,12 +1741,19 @@ body.reception-lightbox-open { overflow: hidden; }
   grid-template-columns: repeat(5, 1fr);
   gap: 0.25rem;
   padding: 0.4rem 0.45rem calc(0.4rem + env(safe-area-inset-bottom, 0px));
-  background: var(--rec-surface);
+  background: rgba(22, 40, 30, 0.72);
+  backdrop-filter: blur(18px) saturate(1.08);
+  -webkit-backdrop-filter: blur(18px) saturate(1.08);
   border-top: 1px solid var(--rec-border);
-  backdrop-filter: blur(18px);
   z-index: 50;
   position: relative;
   transition: background var(--rec-transition-duration) var(--rec-ease-out);
+}
+
+[data-theme="light"] .reception-tabs {
+  background: rgba(255, 255, 255, 0.78);
+  backdrop-filter: blur(18px) saturate(1.08);
+  -webkit-backdrop-filter: blur(18px) saturate(1.08);
 }
 
 .reception-tabs__indicator {
@@ -1809,6 +1880,7 @@ body.reception-lightbox-open { overflow: hidden; }
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
+  .rec-bg__img { animation: none; }
   .reception-panel {
     transition: opacity 100ms, transform 100ms;
   }
