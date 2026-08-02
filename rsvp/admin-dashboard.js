@@ -5,10 +5,13 @@
   "use strict";
 
   const TOTAL_CAPACITY = 200;
+  const INVITATIONS_PER_PAGE = 5;
   let globalInvitations = [];
   let globalResponses = [];
   let globalAssignments = [];
   let tableSelectBound = false;
+  let allInvitations = [];
+  let currentInvitationsPage = 1;
 
   function $(id) {
     return document.getElementById(id);
@@ -345,71 +348,127 @@
     AdminAuth.apiCall("api.php?action=get-invitations")
       .then((response) => response.json())
       .then((data) => {
-        const tbody = $("invitations-tbody");
-        tbody.innerHTML = "";
-
         if (!data.success) {
-          tbody.innerHTML = '<tr><td colspan="7" class="admin-empty">Failed to load invitations.</td></tr>';
+          $("invitations-tbody").innerHTML =
+            '<tr><td colspan="7" class="admin-empty">Failed to load invitations.</td></tr>';
           return;
         }
 
-        if (!data.data.length) {
-          tbody.innerHTML = '<tr><td colspan="7" class="admin-empty">No invitations yet.</td></tr>';
-          return;
-        }
-
-        data.data.forEach((inv) => {
-          const tr = document.createElement("tr");
-          tr.innerHTML = `
-            <td>${escapeHtml(inv.guest_name)}</td>
-            <td><code>${escapeHtml(inv.invitation_id)}</code></td>
-            <td>${escapeHtml(String(inv.max_guests))}</td>
-            <td>${statusBadge(inv.rsvp_status)}</td>
-            <td></td>
-            <td></td>
-            <td class="admin-actions"></td>
-          `;
-
-          const qrBtn = document.createElement("button");
-          qrBtn.type = "button";
-          qrBtn.className = "admin-btn admin-btn-secondary admin-btn-sm";
-          qrBtn.textContent = "View QR";
-          qrBtn.dataset.action = "qr";
-          qrBtn.dataset.id = inv.invitation_id;
-          tr.children[4].appendChild(qrBtn);
-
-          const sendBtn = document.createElement("button");
-          sendBtn.type = "button";
-          sendBtn.className = "admin-btn admin-btn-secondary admin-btn-sm";
-          sendBtn.textContent = "Send";
-          sendBtn.title = "Send invitation email to this guest";
-          sendBtn.dataset.action = "send";
-          sendBtn.dataset.id = inv.invitation_id;
-          sendBtn.dataset.email = inv.email || "";
-          tr.children[5].appendChild(sendBtn);
-
-          const editBtn = document.createElement("button");
-          editBtn.type = "button";
-          editBtn.className = "admin-btn admin-btn-secondary admin-btn-sm";
-          editBtn.textContent = "Edit";
-          editBtn.dataset.action = "edit";
-          editBtn.dataset.id = inv.invitation_id;
-
-          const deleteBtn = document.createElement("button");
-          deleteBtn.type = "button";
-          deleteBtn.className = "admin-btn admin-btn-danger admin-btn-sm";
-          deleteBtn.textContent = "Delete";
-          deleteBtn.dataset.action = "delete";
-          deleteBtn.dataset.id = inv.invitation_id;
-
-          tr.children[6].appendChild(editBtn);
-          tr.children[6].appendChild(deleteBtn);
-          tbody.appendChild(tr);
-        });
+        allInvitations = data.data || [];
+        currentInvitationsPage = 1;
+        renderInvitationsPage();
       })
       .catch(() => {
         $("invitations-tbody").innerHTML =
           '<tr><td colspan="7" class="admin-empty">Failed to load invitations.</td></tr>';
+      });
+  };
+
+  function renderInvitationsPage() {
+    const tbody = $("invitations-tbody");
+    tbody.innerHTML = "";
+
+    const totalPages = Math.max(1, Math.ceil(allInvitations.length / INVITATIONS_PER_PAGE));
+    if (currentInvitationsPage > totalPages) currentInvitationsPage = totalPages;
+
+    const startIndex = (currentInvitationsPage - 1) * INVITATIONS_PER_PAGE;
+    const pageInvitations = allInvitations.slice(startIndex, startIndex + INVITATIONS_PER_PAGE);
+
+    if (!pageInvitations.length) {
+      tbody.innerHTML = '<tr><td colspan="7" class="admin-empty">No invitations yet.</td></tr>';
+    } else {
+      pageInvitations.forEach((inv) => {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td>${escapeHtml(inv.guest_name)}</td>
+          <td><code>${escapeHtml(inv.invitation_id)}</code></td>
+          <td>${escapeHtml(String(inv.max_guests))}</td>
+          <td>${statusBadge(inv.rsvp_status)}</td>
+          <td></td>
+          <td></td>
+          <td class="admin-actions"></td>
+        `;
+
+        const qrBtn = document.createElement("button");
+        qrBtn.type = "button";
+        qrBtn.className = "admin-btn admin-btn-secondary admin-btn-sm";
+        qrBtn.textContent = "View QR";
+        qrBtn.dataset.action = "qr";
+        qrBtn.dataset.id = inv.invitation_id;
+        tr.children[4].appendChild(qrBtn);
+
+        const downloadBtn = document.createElement("button");
+        downloadBtn.type = "button";
+        downloadBtn.className = "admin-btn admin-btn-secondary admin-btn-sm";
+        downloadBtn.textContent = "Download";
+        downloadBtn.title = "Download this invitation's QR code";
+        downloadBtn.dataset.action = "download-qr";
+        downloadBtn.dataset.id = inv.invitation_id;
+        tr.children[5].appendChild(downloadBtn);
+
+        const editBtn = document.createElement("button");
+        editBtn.type = "button";
+        editBtn.className = "admin-btn admin-btn-secondary admin-btn-sm";
+        editBtn.textContent = "Edit";
+        editBtn.dataset.action = "edit";
+        editBtn.dataset.id = inv.invitation_id;
+
+        const deleteBtn = document.createElement("button");
+        deleteBtn.type = "button";
+        deleteBtn.className = "admin-btn admin-btn-danger admin-btn-sm";
+        deleteBtn.textContent = "Delete";
+        deleteBtn.dataset.action = "delete";
+        deleteBtn.dataset.id = inv.invitation_id;
+
+        tr.children[6].appendChild(editBtn);
+        tr.children[6].appendChild(deleteBtn);
+        tbody.appendChild(tr);
+      });
+    }
+
+    const pageInfo = $("invitations-page-info");
+    if (pageInfo) pageInfo.textContent = `Page ${currentInvitationsPage} of ${totalPages}`;
+
+    const prevBtn = $("invitations-prev");
+    const nextBtn = $("invitations-next");
+    if (prevBtn) prevBtn.disabled = currentInvitationsPage <= 1;
+    if (nextBtn) nextBtn.disabled = currentInvitationsPage >= totalPages;
+  }
+
+  window.invitationsPrevPage = function invitationsPrevPage() {
+    if (currentInvitationsPage > 1) {
+      currentInvitationsPage -= 1;
+      renderInvitationsPage();
+    }
+  };
+
+  window.invitationsNextPage = function invitationsNextPage() {
+    const totalPages = Math.max(1, Math.ceil(allInvitations.length / INVITATIONS_PER_PAGE));
+    if (currentInvitationsPage < totalPages) {
+      currentInvitationsPage += 1;
+      renderInvitationsPage();
+    }
+  };
+
+  window.downloadQRCode = function downloadQRCode(invitationId) {
+    AdminAuth.apiCall(`api.php?action=generate-qr&invitation_id=${encodeURIComponent(invitationId)}`)
+      .then((response) => response.json())
+      .then((data) => {
+        if (data.success && data.data.qr_image_path) {
+          const imageUrl = data.data.qr_image_path;
+          const a = document.createElement("a");
+          a.href = imageUrl;
+          a.download = `QR-${invitationId}.png`;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          showFlash("invitations-message", `QR code for ${invitationId} downloaded.`, "success");
+        } else {
+          showFlash("invitations-message", data.error || "QR code not available.", "error");
+        }
+      })
+      .catch((error) => {
+        showFlash("invitations-message", error.message || "Failed to download QR code.", "error");
       });
   };
 
@@ -1141,27 +1200,18 @@
       const id = btn.dataset.id;
       const action = btn.dataset.action;
       if (action === "qr") showQRCode(id);
-      else if (action === "send") {
-        if (!btn.dataset.email) {
-          showFlash(
-            "invitations-message",
-            "This invitation has no email address. Edit the invitation to add one before sending.",
-            "error"
-          );
-          return;
-        }
-        if (!confirm(`Send the invitation email to ${btn.dataset.email}?`)) return;
-        const originalText = btn.textContent;
-        btn.textContent = "Sending…";
-        btn.disabled = true;
-        sendInvitation(id)
-          .finally(() => {
-            btn.textContent = originalText;
-            btn.disabled = false;
-          });
-      } else if (action === "edit") openEditInvitation(id);
+      else if (action === "download-qr") downloadQRCode(id);
+      else if (action === "edit") openEditInvitation(id);
       else if (action === "delete") deleteInvitation(id);
     });
+
+    const qrModalDownload = document.getElementById("qr-modal-download");
+    if (qrModalDownload) {
+      qrModalDownload.addEventListener("click", () => {
+        const invitationId = $("qr-modal-id")?.textContent || "";
+        if (invitationId) downloadQRCode(invitationId);
+      });
+    }
 
     $("responses-tbody").addEventListener("click", (event) => {
       const btn = event.target.closest('[data-action="details"]');

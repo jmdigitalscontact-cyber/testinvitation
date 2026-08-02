@@ -363,6 +363,22 @@ body.admin-app {
   font-size: 0.78rem;
 }
 
+.admin-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  margin: 0.25rem 0 0.85rem;
+}
+
+.admin-pagination-info {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--admin-muted);
+  min-width: 90px;
+  text-align: center;
+}
+
 .admin-table-wrap {
   overflow-x: auto;
   margin-bottom: 0.85rem;

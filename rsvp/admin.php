@@ -155,7 +155,7 @@
                                     <th>Max</th>
                             <th>Status</th>
                                     <th>QR</th>
-                                    <th>Send</th>
+                                    <th>Download</th>
                                 <th>Actions</th>
                             </tr>
                         </thead>
@@ -163,6 +163,11 @@
                                 <tr><td colspan="7" class="admin-empty">Loading…</td></tr>
                         </tbody>
                     </table>
+                </div>
+                <div class="admin-pagination">
+                    <button type="button" class="admin-btn admin-btn-secondary admin-btn-sm" id="invitations-prev" onclick="invitationsPrevPage()" disabled aria-label="Previous page">← Prev</button>
+                    <span id="invitations-page-info" class="admin-pagination-info">Page 1 of 1</span>
+                    <button type="button" class="admin-btn admin-btn-secondary admin-btn-sm" id="invitations-next" onclick="invitationsNextPage()" aria-label="Next page">Next →</button>
                 </div>
                     <button type="button" class="admin-btn admin-btn-secondary" onclick="loadInvitations()">Refresh</button>
             </div>
@@ -289,7 +294,10 @@
             </div>
             <p style="text-align:center;color:var(--admin-muted);margin-bottom:0.5rem"><strong id="qr-modal-id"></strong></p>
             <div class="admin-qr-preview"><img id="qr-modal-image" src="" alt="Invitation QR code"></div>
-            <p style="text-align:center;font-size:0.82rem;color:var(--admin-muted)">Right-click to save or print.</p>
+            <p style="text-align:center;font-size:0.82rem;color:var(--admin-muted)">Use the Download button in the list to save a copy.</p>
+            <div class="admin-actions" style="justify-content:center;margin-top:0.75rem">
+                <button type="button" class="admin-btn admin-btn-primary admin-btn-sm" id="qr-modal-download">Download QR</button>
+            </div>
         </div>
     </div>
 
