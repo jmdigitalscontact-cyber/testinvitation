@@ -309,7 +309,6 @@
       checkbox.type = 'checkbox';
       checkbox.className = 'invite-party-toggle';
       checkbox.name = 'attendee-going';
-      checkbox.checked = true;
 
       person.appendChild(personName);
       person.appendChild(personNote);
@@ -319,7 +318,6 @@
       checkbox.addEventListener('change', function () {
         row.classList.toggle('is-checked', checkbox.checked);
       });
-      row.classList.add('is-checked');
       list.appendChild(row);
     });
 
