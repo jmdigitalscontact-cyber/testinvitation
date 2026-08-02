@@ -278,8 +278,16 @@ class Authentication {
         $expiry = time() + 3600; // 1 hour
 
         $stmt = $this->mysqli->prepare("INSERT INTO admin_sessions (admin_id, token, expiry_time) VALUES (?, ?, FROM_UNIXTIME(?)) ON DUPLICATE KEY UPDATE token = VALUES(token), expiry_time = VALUES(expiry_time)");
+        if (!$stmt) {
+            // Session table missing or DB error — do NOT crash the login.
+            // Token will still be returned so the admin can sign in.
+            error_log('[generateAdminToken] prepare failed: ' . $this->mysqli->error);
+            return $token;
+        }
         $stmt->bind_param("isi", $admin_id, $token, $expiry);
-        $stmt->execute();
+        if (!$stmt->execute()) {
+            error_log('[generateAdminToken] execute failed: ' . $stmt->error);
+        }
         $stmt->close();
 
         return $token;

@@ -190,6 +190,7 @@ class MySqlConnectionAdapter {
 class MySqlStatementAdapter {
     private $adapter;
     private $stmt;
+    private $types = '';
     private $bound = [];
     public $error = '';
     private $result;
@@ -200,6 +201,7 @@ class MySqlStatementAdapter {
     }
 
     public function bind_param($types, &...$vars) {
+        $this->types = $types;
         $this->bound = $vars;
         return true;
     }
@@ -207,7 +209,7 @@ class MySqlStatementAdapter {
     public function execute() {
         try {
             if (!empty($this->bound)) {
-                $this->stmt->bind_param(...$this->bound);
+                $this->stmt->bind_param($this->types, ...$this->bound);
             }
             $this->stmt->execute();
             $this->adapter->error = $this->stmt->error;
@@ -224,7 +226,7 @@ class MySqlStatementAdapter {
             }
 
             return true;
-        } catch (Exception $e) {
+        } catch (Throwable $e) {
             $this->error = $e->getMessage();
             $this->adapter->error = $e->getMessage();
             return false;
