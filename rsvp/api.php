@@ -200,6 +200,16 @@ try {
             handleAssignTable();
             break;
 
+        // ==================== RECEPTION ACCESS ====================
+
+        case 'verify-reception-key':
+            handleVerifyReceptionKey();
+            break;
+
+        case 'generate-reception-qr':
+            handleGenerateReceptionQR();
+            break;
+
         // ==================== RECEPTION VENUE (PUBLIC) ====================
 
         case 'get-reception-guests':

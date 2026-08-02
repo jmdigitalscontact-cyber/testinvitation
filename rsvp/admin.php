@@ -30,6 +30,7 @@
                 <button type="button" class="admin-nav-btn" data-tab="responses">Responses</button>
                 <button type="button" class="admin-nav-btn" data-tab="export">Export</button>
                 <button type="button" class="admin-nav-btn" data-tab="tables">Seating</button>
+                <button type="button" class="admin-nav-btn" data-tab="reception">Reception</button>
             </nav>
 
             <!-- Dashboard -->
@@ -290,6 +291,26 @@
                 </div>
                     <div id="table-overview"></div>
                     <p id="table-overview-search-result" style="margin-top:0.5rem;color:var(--admin-muted);font-size:0.84rem"></p>
+                </div>
+            </section>
+
+            <!-- Reception access -->
+            <section id="reception" class="admin-panel" aria-label="Reception">
+                <div id="reception-message" class="admin-flash" role="status"></div>
+
+                <div class="admin-card">
+                    <h2>Reception access QR</h2>
+                    <p class="admin-card-lead">Guests scan this QR code to unlock the reception app (seating, menu, gallery, gifts). The code embeds your <code>RECEPTION_API_KEY</code> from <code>.env</code>, so the main content stays hidden until the correct key is scanned.</p>
+
+                    <div class="admin-actions">
+                        <button type="button" class="admin-btn admin-btn-primary" id="generate-reception-qr-btn" onclick="generateReceptionQR(this)">Generate reception QR</button>
+                        <button type="button" class="admin-btn admin-btn-secondary" id="download-reception-qr-btn" onclick="downloadReceptionQR()" disabled>Download QR</button>
+                    </div>
+
+                    <div class="admin-qr-preview" id="reception-qr-preview" hidden>
+                        <img id="reception-qr-image" src="" alt="Reception access QR code">
+                        <p style="text-align:center;font-size:0.82rem;color:var(--admin-muted)">Reception access link is embedded in this QR. Anyone who scans it can unlock the reception app.</p>
+                    </div>
                 </div>
             </section>
         </main>

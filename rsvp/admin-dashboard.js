@@ -558,6 +558,55 @@
       });
   };
 
+  /* ───────────────────────────────────────────
+     RECEPTION ACCESS QR (admin)
+     ─────────────────────────────────────────── */
+  window.generateReceptionQR = function generateReceptionQR(btn) {
+    const originalText = btn ? btn.textContent : "";
+    if (btn) { btn.textContent = "Generating…"; btn.disabled = true; }
+    hideFlash("reception-message");
+
+    AdminAuth.apiCall("api.php?action=generate-reception-qr")
+      .then((response) => response.json())
+      .then((data) => {
+        if (btn) { btn.textContent = originalText; btn.disabled = false; }
+        if (!data.success) {
+          showFlash("reception-message", data.error || "Failed to generate reception QR.", "error");
+          return;
+        }
+
+        const img = $("reception-qr-image");
+        if (img) img.src = data.data.qr_image_path;
+        const preview = $("reception-qr-preview");
+        if (preview) preview.hidden = false;
+
+        const downloadBtn = $("download-reception-qr-btn");
+        if (downloadBtn) downloadBtn.disabled = false;
+
+        showFlash("reception-message", "Reception QR code generated. Guests scan it to unlock the reception app.", "success");
+      })
+      .catch((error) => {
+        if (btn) { btn.textContent = originalText; btn.disabled = false; }
+        showFlash("reception-message", error.message || "Failed to generate reception QR.", "error");
+      });
+  };
+
+  window.downloadReceptionQR = function downloadReceptionQR() {
+    const img = $("reception-qr-image");
+    if (!img || !img.src) {
+      showFlash("reception-message", "Generate the reception QR first.", "info");
+      return;
+    }
+
+    const a = document.createElement("a");
+    a.href = img.src;
+    a.download = "reception-access.png";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    showFlash("reception-message", "Reception QR downloaded. Print or share it with guests.", "success");
+  };
+
   window.loadResponses = function loadResponses() {
     AdminAuth.apiCall("api.php?action=get-rsvp-summary")
       .then((response) => response.json())

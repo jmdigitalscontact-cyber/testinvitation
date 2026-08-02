@@ -54,6 +54,65 @@ function receptionNormalizeName($name) {
     return trim(html_entity_decode((string)$name, ENT_QUOTES, 'UTF-8'));
 }
 
+/**
+ * Public endpoint used by the reception lock screen to verify an access key
+ * before revealing the main content. Uses a timing-safe comparison so the
+ * key is not leaked through timing side-channels.
+ */
+function handleVerifyReceptionKey() {
+    $expected = trim((string)EnvironmentLoader::get('RECEPTION_API_KEY', ''));
+    $provided = trim((string)($_GET['key'] ?? $_POST['key'] ?? ''));
+
+    if ($expected === '') {
+        sendResponse([
+            'success' => false,
+            'error' => 'Reception access is not configured. Please set RECEPTION_API_KEY in .env.'
+        ], 503);
+    }
+
+    if ($provided === '' || !hash_equals($expected, $provided)) {
+        // Return the same body regardless so attackers can't enumerate keys.
+        sendResponse(['success' => false, 'error' => 'Invalid reception key'], 401);
+    }
+
+    sendResponse(['success' => true, 'message' => 'Reception key valid']);
+}
+
+/**
+ * Admin-only: generate (or regenerate) the reception access QR code.
+ * The QR embeds PUBLIC_BASE_URL/reception/?key=<RECEPTION_API_KEY>.
+ */
+function handleGenerateReceptionQR() {
+    requireAdminAuth();
+
+    $key = trim((string)EnvironmentLoader::get('RECEPTION_API_KEY', ''));
+    if ($key === '') {
+        sendResponse([
+            'success' => false,
+            'error' => 'RECEPTION_API_KEY is not set in .env. Add it and re-deploy, then regenerate the QR.'
+        ], 503);
+    }
+
+    $qr_gen = new QRCodeGenerator();
+    $result = $qr_gen->generateReceptionQRCode($key);
+
+    if (!$result || empty($result['qr_image_path'])) {
+        sendResponse([
+            'success' => false,
+            'error' => 'Reception QR could not be generated. Check write permissions for rsvp/qr_codes.'
+        ], 500);
+    }
+
+    sendResponse([
+        'success' => true,
+        'data' => [
+            'qr_image_path' => $result['qr_image_path'],
+            'qr_url' => $result['qr_url'],
+            'file_name' => $result['file_name'],
+        ],
+    ]);
+}
+
 function handleGetReceptionGuests() {
     receptionRequireApiKey();
 

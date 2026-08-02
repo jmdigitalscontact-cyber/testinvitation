@@ -287,19 +287,49 @@
   }
 
   /* ───────────────────────────────────────────
-     LOCK SCREEN
+     LOCK SCREEN — server-verified access
      ─────────────────────────────────────────── */
   function hasReceptionAccessKey() {
     return RECEPTION_KEY.trim().length > 0;
   }
 
+  async function verifyReceptionKey(key) {
+    try {
+      const url = `${API_BASE}?action=verify-reception-key&key=${encodeURIComponent(key)}`;
+      const res = await fetch(url, { headers: { "X-Reception-Key": key } });
+      const data = await res.json().catch(() => null);
+      return !!(data && data.success);
+    } catch (err) {
+      return false;
+    }
+  }
+
+  function showLockScreen(message) {
+    if (els.lockOverlay) els.lockOverlay.hidden = false;
+    if (els.app) els.app.hidden = true;
+    if (els.lockError) {
+      els.lockError.textContent = message || "";
+      els.lockError.hidden = !message;
+    }
+  }
+
   function applyAccessLock() {
     if (!hasReceptionAccessKey()) {
-      if (els.lockOverlay) els.lockOverlay.hidden = false;
-      if (els.app) els.app.hidden = true;
+      showLockScreen();
       return;
     }
-    unlockApp();
+
+    // Keep the lock visible while we verify the key against the server.
+    showLockScreen("Verifying access…");
+    verifyReceptionKey(RECEPTION_KEY).then((valid) => {
+      if (valid) {
+        unlockApp();
+        return;
+      }
+      // Invalid or stale key — clear it and require a fresh scan.
+      localStorage.removeItem(RECEPTION_KEY_STORAGE);
+      showLockScreen("This access link is not valid. Please scan the QR code on your invitation.");
+    });
   }
 
   function unlockApp() {
@@ -326,8 +356,21 @@
       }
       return;
     }
-    localStorage.setItem(RECEPTION_KEY_STORAGE, inputKey);
-    window.location.reload();
+
+    if (els.lockEnterBtn) els.lockEnterBtn.disabled = true;
+    verifyReceptionKey(inputKey).then((valid) => {
+      if (els.lockEnterBtn) els.lockEnterBtn.disabled = false;
+      if (!valid) {
+        if (els.lockError) {
+          els.lockError.textContent = "Invalid access key. Please scan the QR code on your invitation.";
+          els.lockError.hidden = false;
+        }
+        return;
+      }
+      localStorage.setItem(RECEPTION_KEY_STORAGE, inputKey);
+      // Reload so the app initialises with the now-valid stored key.
+      window.location.reload();
+    });
   }
 
   /* ───────────────────────────────────────────

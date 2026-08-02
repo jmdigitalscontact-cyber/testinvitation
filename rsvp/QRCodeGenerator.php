@@ -34,6 +34,43 @@ class QRCodeGenerator {
     }
 
     /**
+     * Public URL used to open the reception app with a valid access key.
+     * Scanning the QR code opens this link and unlocks the reception app.
+     */
+    public static function buildReceptionAccessUrl($key) {
+        $base = defined('PUBLIC_BASE_URL') ? PUBLIC_BASE_URL : 'http://localhost:3000';
+        return $base . '/reception/?key=' . rawurlencode((string)$key);
+    }
+
+    /**
+     * Generate a QR code for the reception access link.
+     * The key is embedded in the URL, so only people with the QR can unlock.
+     *
+     * @param string $key Reception API key (from .env RECEPTION_API_KEY)
+     * @return array|false
+     */
+    public function generateReceptionQRCode($key) {
+        $qr_url = self::buildReceptionAccessUrl($key);
+
+        $qr_filename = 'reception-access.png';
+        $qr_filepath = $this->qr_path . $qr_filename;
+
+        $qr_image_url = 'https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=' . urlencode($qr_url);
+
+        $storedImagePath = 'qr_codes/' . $qr_filename;
+        if (!$this->downloadQRCode($qr_image_url, $qr_filepath)) {
+            $storedImagePath = $qr_image_url;
+        }
+
+        return [
+            'success' => true,
+            'qr_image_path' => $storedImagePath,
+            'qr_url' => $qr_url,
+            'file_name' => $qr_filename,
+        ];
+    }
+
+    /**
      * True when stored QR link is missing or points at a legacy/wrong host.
      */
     public static function qrCodeNeedsRegeneration($qr) {
