@@ -84,6 +84,11 @@
                         </tbody>
                     </table>
                 </div>
+                <div class="admin-pagination">
+                    <button type="button" class="admin-btn admin-btn-secondary admin-btn-sm" id="unused-prev" onclick="unusedPrevPage()" disabled aria-label="Previous page">← Prev</button>
+                    <span id="unused-page-info" class="admin-pagination-info">Page 1 of 1</span>
+                    <button type="button" class="admin-btn admin-btn-secondary admin-btn-sm" id="unused-next" onclick="unusedNextPage()" aria-label="Next page">Next →</button>
+                </div>
             </div>
 
                 <div class="admin-card">
@@ -102,6 +107,11 @@
                                 <tr><td colspan="3" class="admin-empty">Loading…</td></tr>
                         </tbody>
                     </table>
+                </div>
+                <div class="admin-pagination">
+                    <button type="button" class="admin-btn admin-btn-secondary admin-btn-sm" id="qrlist-prev" onclick="qrGuestPrevPage()" disabled aria-label="Previous page">← Prev</button>
+                    <span id="qrlist-page-info" class="admin-pagination-info">Page 1 of 1</span>
+                    <button type="button" class="admin-btn admin-btn-secondary admin-btn-sm" id="qrlist-next" onclick="qrGuestNextPage()" aria-label="Next page">Next →</button>
                 </div>
             </div>
             </section>

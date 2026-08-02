@@ -31,6 +31,17 @@
 - [x] 6. `rsvp/admin-dashboard.js` — add pagination state + `renderInvitationsPage()`, `invitationsPrevPage()`, `invitationsNextPage()` (5 per page)
 - [x] 7. `rsvp/admin-dashboard.js` — update delegated click handler: `download-qr` → `downloadQRCode()`; wire QR modal download button
 - [x] 8. `rsvp/admin.css` — add `.admin-pagination` + `.admin-pagination-info` styles
-- [ ] 9. Commit and push to GitHub (`origin/main`)
+- [x] 9. Commit and push to GitHub (`origin/main`)
+
+---
+
+# Admin Dashboard: Pagination for dashboard tables (5/page)
+
+- [x] 1. `rsvp/admin.php` — add pagination controls under "Unused guest slots" table
+- [x] 2. `rsvp/admin.php` — add pagination controls under "Guest list by invitation" table
+- [x] 3. `rsvp/admin-dashboard.js` — add `paginateRows()` + `updatePaginationControls()` helpers
+- [x] 4. `rsvp/admin-dashboard.js` — paginate "Unused guest slots" (`unusedSlotsRows`, `renderUnusedSlotsPage`, `unusedPrevPage`/`unusedNextPage`)
+- [x] 5. `rsvp/admin-dashboard.js` — paginate "Guest list by invitation" (`qrGuestListRows`, `renderQrGuestListPage`, `qrGuestPrevPage`/`qrGuestNextPage`)
+- [ ] 6. Commit and push to GitHub (`origin/main`)
 
 

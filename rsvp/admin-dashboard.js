@@ -12,6 +12,11 @@
   let tableSelectBound = false;
   let allInvitations = [];
   let currentInvitationsPage = 1;
+  const DASHBOARD_PER_PAGE = 5;
+  let unusedSlotsRows = [];
+  let qrGuestListRows = [];
+  let currentUnusedPage = 1;
+  let currentQrGuestPage = 1;
 
   function $(id) {
     return document.getElementById(id);
@@ -35,6 +40,26 @@
     if (!el) return;
     el.className = "admin-flash";
     el.textContent = "";
+  }
+
+  function paginateRows(rows, page, perPage) {
+    const totalPages = Math.max(1, Math.ceil(rows.length / perPage));
+    const safePage = Math.min(Math.max(1, page), totalPages);
+    const start = (safePage - 1) * perPage;
+    return {
+      rows: rows.slice(start, start + perPage),
+      totalPages,
+      currentPage: safePage,
+    };
+  }
+
+  function updatePaginationControls(containerId, pageInfoId, prevId, nextId, currentPage, totalPages) {
+    const info = $(pageInfoId);
+    if (info) info.textContent = `Page ${currentPage} of ${totalPages}`;
+    const prevBtn = $(prevId);
+    const nextBtn = $(nextId);
+    if (prevBtn) prevBtn.disabled = currentPage <= 1;
+    if (nextBtn) nextBtn.disabled = currentPage >= totalPages;
   }
 
   function openModal(id) {
@@ -162,9 +187,6 @@
   };
 
   function populateUnusedSlotsTable(invitations, responses) {
-    const tbody = $("unused-slots-tbody");
-    tbody.innerHTML = "";
-
     const confirmationMap = {};
     responses.forEach((r) => {
       if (!confirmationMap[r.invitation_id]) confirmationMap[r.invitation_id] = 0;
@@ -178,31 +200,61 @@
       return confirmed < parseInt(inv.max_guests, 10);
     });
 
-    if (unusedInvitations.length === 0) {
-      tbody.innerHTML =
-        '<tr><td colspan="4" class="admin-empty">All invitations have confirmed their guest count.</td></tr>';
-      return;
-    }
-
-    unusedInvitations.forEach((inv) => {
+    unusedSlotsRows = unusedInvitations.map((inv) => {
       const confirmed = confirmationMap[inv.invitation_id] || 0;
       const maxGuests = parseInt(inv.max_guests, 10);
       const unusedSlots = maxGuests - confirmed;
+      return { inv, confirmed, maxGuests, unusedSlots };
+    });
+
+    currentUnusedPage = 1;
+    renderUnusedSlotsPage();
+  }
+
+  function renderUnusedSlotsPage() {
+    const tbody = $("unused-slots-tbody");
+    tbody.innerHTML = "";
+
+    if (!unusedSlotsRows.length) {
+      tbody.innerHTML =
+        '<tr><td colspan="4" class="admin-empty">All invitations have confirmed their guest count.</td></tr>';
+      updatePaginationControls("unused-slots-tbody", "unused-page-info", "unused-prev", "unused-next", 1, 1);
+      return;
+    }
+
+    const { rows, totalPages, currentPage } = paginateRows(unusedSlotsRows, currentUnusedPage, DASHBOARD_PER_PAGE);
+    currentUnusedPage = currentPage;
+
+    rows.forEach((row) => {
       const tr = document.createElement("tr");
       tr.innerHTML = `
-        <td>${escapeHtml(inv.guest_name)}</td>
-        <td style="text-align:center">${maxGuests}</td>
-        <td style="text-align:center">${confirmed}</td>
-        <td style="text-align:center"><span class="admin-badge admin-badge-pending">${unusedSlots} open</span></td>
+        <td>${escapeHtml(row.inv.guest_name)}</td>
+        <td style="text-align:center">${row.maxGuests}</td>
+        <td style="text-align:center">${row.confirmed}</td>
+        <td style="text-align:center"><span class="admin-badge admin-badge-pending">${row.unusedSlots} open</span></td>
       `;
       tbody.appendChild(tr);
     });
+
+    updatePaginationControls("unused-slots-tbody", "unused-page-info", "unused-prev", "unused-next", currentPage, totalPages);
   }
 
-  function populateQrGuestListTable(invitations, responses) {
-    const tbody = $("qr-guest-list-tbody");
-    tbody.innerHTML = "";
+  window.unusedPrevPage = function unusedPrevPage() {
+    if (currentUnusedPage > 1) {
+      currentUnusedPage -= 1;
+      renderUnusedSlotsPage();
+    }
+  };
 
+  window.unusedNextPage = function unusedNextPage() {
+    const { totalPages } = paginateRows(unusedSlotsRows, currentUnusedPage, DASHBOARD_PER_PAGE);
+    if (currentUnusedPage < totalPages) {
+      currentUnusedPage += 1;
+      renderUnusedSlotsPage();
+    }
+  };
+
+  function populateQrGuestListTable(invitations, responses) {
     const responseMap = {};
     responses.forEach((response) => {
       if (!response || !response.invitation_id) return;
@@ -216,13 +268,30 @@
       if (candidateTime >= currentTime) responseMap[response.invitation_id] = response;
     });
 
-    if (!invitations.length) {
+    qrGuestListRows = invitations.map((inv) => ({
+      inv,
+      response: responseMap[inv.invitation_id],
+    }));
+
+    currentQrGuestPage = 1;
+    renderQrGuestListPage();
+  }
+
+  function renderQrGuestListPage() {
+    const tbody = $("qr-guest-list-tbody");
+    tbody.innerHTML = "";
+
+    if (!qrGuestListRows.length) {
       tbody.innerHTML = '<tr><td colspan="3" class="admin-empty">No invitations yet.</td></tr>';
+      updatePaginationControls("qr-guest-list-tbody", "qrlist-page-info", "qrlist-prev", "qrlist-next", 1, 1);
       return;
     }
 
-    invitations.forEach((inv) => {
-      const response = responseMap[inv.invitation_id];
+    const { rows, totalPages, currentPage } = paginateRows(qrGuestListRows, currentQrGuestPage, DASHBOARD_PER_PAGE);
+    currentQrGuestPage = currentPage;
+
+    rows.forEach((row) => {
+      const { inv, response } = row;
       const guestNames = extractGuestNamesFromResponse(response);
       const listedGuestsHtml = guestNames.length
         ? guestNames.map((name) => `<div>${escapeHtml(name)}</div>`).join("")
@@ -236,7 +305,24 @@
       `;
       tbody.appendChild(tr);
     });
+
+    updatePaginationControls("qr-guest-list-tbody", "qrlist-page-info", "qrlist-prev", "qrlist-next", currentPage, totalPages);
   }
+
+  window.qrGuestPrevPage = function qrGuestPrevPage() {
+    if (currentQrGuestPage > 1) {
+      currentQrGuestPage -= 1;
+      renderQrGuestListPage();
+    }
+  };
+
+  window.qrGuestNextPage = function qrGuestNextPage() {
+    const { totalPages } = paginateRows(qrGuestListRows, currentQrGuestPage, DASHBOARD_PER_PAGE);
+    if (currentQrGuestPage < totalPages) {
+      currentQrGuestPage += 1;
+      renderQrGuestListPage();
+    }
+  };
 
   window.createInvitation = function createInvitation(event) {
     event.preventDefault();
