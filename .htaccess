@@ -11,3 +11,17 @@ Options -Indexes
     Require all denied
 </FilesMatch>
 
+
+RewriteEngine On
+
+# Redirect /file.php to /file
+RewriteCond %{THE_REQUEST} ^[A-Z]{3,}\s([^.]+)\.(php|html)\sHTTP [NC]
+RewriteRule ^ %1 [R=301,L]
+
+# Internal rewrite to .php or .html
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteCond %{REQUEST_FILENAME}.php -f
+RewriteRule ^(.*)$ $1.php [NC,L]
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteCond %{REQUEST_FILENAME}.html -f
+RewriteRule ^(.*)$ $1.html [NC,L]
