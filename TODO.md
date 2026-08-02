@@ -1,19 +1,21 @@
-# Live-Readiness Checklist — Wedding RSVP + Admin Dashboard
+# Fix: HTML entities displayed instead of actual characters
+
+**Problem:** Guest names like `I'm John` display as `I&#39;m John` because `sanitize()` in `rsvp/api.php` runs `htmlspecialchars(..., ENT_QUOTES)` on input BEFORE storing in the DB, then the frontend `escapeHtml()` re-encodes on output → double-encoded text.
 
 ## Steps
 
-- [x] 1. Harden `.gitignore` — ignore `.env`, logs, test uploads, QR PNGs, credentials
-- [x] 2. Add `.htaccess` protection (root, rsvp, uploads, qr_codes, logs)
-- [x] 3. Fix `admin.php` — add invitation/edit password fields, fix colspan
-- [x] 4. Fix `admin-dashboard.js` — null-guard password fields
-- [x] 5. Fix `api.php` — auto-generate invitation password, remove stale TODO
-- [x] 6. Gate `bulk-import.php` behind `ENABLE_BULK_IMPORT`
-- [x] 7. Gate `setup.php` behind `ENABLE_SETUP`
-- [x] 8. Add admin login rate limiting in `Authentication.php` + `api.php` + DB schema
-- [x] 9. Fix `config.php` — per-response content-type + `X-Forwarded-Proto` HTTPS
-- [x] 10. Fix `admin.html` broken link
-- [x] 11. Harden `admin-auth.js` — remove localStorage token persistence
-- [x] 12. Redirect legacy `rsvp/index.php` to modern guest flow
-- [x] 13. Final review + update deployment docs
-
+- [ ] 1. `rsvp/api.php` — change `sanitize()` to trim-only (no `htmlspecialchars`)
+- [ ] 2. `rsvp/api.php` — add recursive `htmlDecode()` helper
+- [ ] 3. `rsvp/api.php` — decode existing DB data on read paths:
+  - `handleVerifyInvitationQR`
+  - `handleGetInvitationDetails`
+  - `handleGetRSVPStatus`
+  - `handleCheckRSVPSubmitted`
+  - `handleGetInvitations`
+  - `handleGetRSVPSummary`
+  - `handleGetTableAssignments`
+- [x] 4. `rsvp/api.php` — decode attendee names in `extractGuestNamesFromExportRow()` (CSV/Sheets export)
+- [x] 4b. `rsvp/Authentication.php` — decode `guest_name` + `invited_guest_names` in `verifyInvitationByQRCode()` and `getInvitationDetails()`
+- [x] 5. Run `php -l` lint on modified files
+- [x] 6. Commit and push to GitHub (`origin/main`)
 

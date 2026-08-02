@@ -291,10 +291,10 @@ function handleVerifyInvitationQR() {
         'message' => 'QR authentication successful',
         'data' => [
             'token' => $result['token'],
-            'guest_name' => $result['guest_name'],
+            'guest_name' => htmlDecode($result['guest_name']),
             'max_guests' => $result['max_guests'],
             'invitation_id' => $result['invitation_id'],
-            'invited_guest_names' => $result['invited_guest_names'] ?? []
+            'invited_guest_names' => htmlDecode($result['invited_guest_names'] ?? [])
         ]
     ]);
 }
@@ -315,7 +315,7 @@ function handleGetInvitationDetails() {
 
     sendResponse([
         'success' => true,
-        'data' => $invitation
+        'data' => htmlDecode($invitation)
     ]);
 }
 
@@ -379,7 +379,7 @@ function handleGetRSVPStatus() {
 
     sendResponse([
         'success' => true,
-        'data' => $rsvp_response ?? null
+        'data' => $rsvp_response !== null ? htmlDecode($rsvp_response) : null
     ]);
 }
 
@@ -396,7 +396,7 @@ function handleCheckRSVPSubmitted() {
     sendResponse([
         'success' => true,
         'submitted' => !empty($rsvp_response),
-        'data' => $rsvp_response ?? null
+        'data' => $rsvp_response !== null ? htmlDecode($rsvp_response) : null
     ]);
 }
 
@@ -865,7 +865,7 @@ function handleGetInvitations() {
         $row['invited_guest_names'] = ($hasInvitedGuestNamesColumn && !empty($row['invited_guest_names']))
             ? (json_decode($row['invited_guest_names'], true) ?: [])
             : decodeInvitedGuestNamesFromNotes($row['notes'] ?? '');
-        $invitations[] = $row;
+        $invitations[] = htmlDecode($row);
     }
 
     sendResponse([
@@ -893,7 +893,7 @@ function handleGetRSVPSummary() {
     $data = [];
     while ($row = $result->fetch_assoc()) {
         $row['attendees'] = !empty($row['attendees']) ? json_decode($row['attendees'], true) : [];
-        $data[] = $row;
+        $data[] = htmlDecode($row);
     }
 
     sendResponse([
@@ -922,7 +922,7 @@ function extractGuestNamesFromExportRow($row) {
         }
         $name = trim((string)($att['attendee_name'] ?? $att['name'] ?? ''));
         if ($name !== '') {
-            $names[] = $name;
+            $names[] = htmlDecode($name);
         }
     }
 
@@ -935,7 +935,7 @@ function extractGuestNamesFromExportRow($row) {
         foreach ($lines as $line) {
             $line = trim($line);
             if ($line !== '') {
-                $names[] = $line;
+                $names[] = htmlDecode($line);
             }
         }
     }
@@ -1205,7 +1205,7 @@ function handleGetTableAssignments() {
                 }
             }
 
-            $assignments[] = $row;
+            $assignments[] = htmlDecode($row);
         }
 
         sendResponse(['success' => true, 'data' => $assignments]);
@@ -1310,7 +1310,23 @@ function sanitize($input) {
     if (is_array($input)) {
         return array_map('sanitize', $input);
     }
-    return htmlspecialchars(trim($input), ENT_QUOTES, 'UTF-8');
+    return trim((string)$input);
+}
+
+/**
+ * Recursively decode HTML entities in text that was previously
+ * double-encoded by the old sanitize() (htmlspecialchars). This is a
+ * read-path safety net for existing DB rows. Values are re-escaped by
+ * the frontend escapeHtml() before injection into innerHTML.
+ */
+function htmlDecode($value) {
+    if (is_array($value)) {
+        return array_map('htmlDecode', $value);
+    }
+    if ($value === null) {
+        return null;
+    }
+    return html_entity_decode((string)$value, ENT_QUOTES, 'UTF-8');
 }
 
 ?>

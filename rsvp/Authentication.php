@@ -160,6 +160,11 @@ class Authentication {
         $invitation['invited_guest_names'] = $this->hasInvitedGuestNamesColumn()
             ? $this->decodeInvitedGuestNames($invitation['invited_guest_names'] ?? '')
             : $this->decodeInvitedGuestNamesFromNotes($invitation['notes'] ?? '');
+        $invitation['guest_name'] = html_entity_decode((string)($invitation['guest_name'] ?? ''), ENT_QUOTES, 'UTF-8');
+        $invitation['invited_guest_names'] = array_map(
+            fn($n) => html_entity_decode((string)$n, ENT_QUOTES, 'UTF-8'),
+            $invitation['invited_guest_names']
+        );
         $stmt->close();
 
         $this->logLoginAttempt($invitation_id, true);
@@ -481,6 +486,11 @@ class Authentication {
         $data['invited_guest_names'] = $this->hasInvitedGuestNamesColumn()
             ? $this->decodeInvitedGuestNames($data['invited_guest_names'] ?? '')
             : $this->decodeInvitedGuestNamesFromNotes($data['notes'] ?? '');
+        $data['guest_name'] = html_entity_decode((string)($data['guest_name'] ?? ''), ENT_QUOTES, 'UTF-8');
+        $data['invited_guest_names'] = array_map(
+            fn($n) => html_entity_decode((string)$n, ENT_QUOTES, 'UTF-8'),
+            $data['invited_guest_names']
+        );
         $stmt->close();
         return $data;
     }
