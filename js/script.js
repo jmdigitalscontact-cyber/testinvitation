@@ -911,7 +911,11 @@
       img.setAttribute('tabindex', '0');
       img.setAttribute('aria-label', 'Zoom image');
 
-      function zoom() {
+      function zoom(event) {
+        if (event) {
+          event.preventDefault();
+          event.stopPropagation();
+        }
         var src = img.currentSrc || img.src || img.getAttribute('data-src') || '';
         var entIndex = entourageImages.indexOf(src);
         if (entIndex !== -1) {
@@ -1032,13 +1036,13 @@
     var prev = photoPages[currentIndex - 1];
 
     resetAllPages();
-    prev.classList.add('visible', 'above', 'flipped');
-    cur.classList.add('visible');
+    cur.classList.add('visible', 'above');
+    prev.classList.add('visible');
 
-    void prev.offsetWidth;
-    prev.classList.remove('flipped');
+    void cur.offsetWidth;
+    cur.classList.add('flipped');
 
-    waitForFlipEnd(prev, function () {
+    waitForFlipEnd(cur, function () {
       resetAllPages();
       prev.classList.add('visible', 'above');
       currentIndex--;
@@ -1051,8 +1055,10 @@
     bookPrev.addEventListener('click', goToPrev);
     bookNext.addEventListener('click', goToNext);
 
-    // Keyboard support
+// Keyboard support
     document.addEventListener('keydown', function (e) {
+      // Don't flip the book while the zoom lightbox is open
+      if (lightbox && lightbox.classList.contains('open')) return;
       var section = document.getElementById('entourage-photos');
       if (!section) return;
       var rect = section.getBoundingClientRect();
