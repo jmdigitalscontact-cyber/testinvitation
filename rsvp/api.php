@@ -296,6 +296,13 @@ function handleVerifyInvitationQR() {
         sendResponse(['success' => false, 'error' => 'Too many attempts. Please try again later.'], 429);
     }
 
+    // Determine whether this invitation has already submitted an RSVP so the
+    // guest sees a "done" state instead of the tick form on a repeat scan.
+    $rsvp = new RSVPHandler();
+    $existing = $rsvp->getRSVPResponse($result['invitation_id']);
+    $rsvp_submitted = !empty($existing);
+    $rsvp_status = $existing ? ($existing['attending'] ?? '') : 'pending';
+
     sendResponse([
         'success' => true,
         'message' => 'QR authentication successful',
@@ -304,7 +311,9 @@ function handleVerifyInvitationQR() {
             'guest_name' => htmlDecode($result['guest_name']),
             'max_guests' => $result['max_guests'],
             'invitation_id' => $result['invitation_id'],
-            'invited_guest_names' => htmlDecode($result['invited_guest_names'] ?? [])
+            'invited_guest_names' => htmlDecode($result['invited_guest_names'] ?? []),
+            'rsvp_submitted' => $rsvp_submitted,
+            'rsvp_status' => $rsvp_status
         ]
     ]);
 }
@@ -321,6 +330,15 @@ function handleGetInvitationDetails() {
 
     if (!$invitation) {
         sendResponse(['success' => false, 'error' => 'Invalid or expired token'], 401);
+    }
+
+    // Include the "already submitted" flag so the frontend can show the done
+    // state (instead of the tick form) when a guest re-opens their invitation.
+    $rsvp = new RSVPHandler();
+    $existing = $rsvp->getRSVPResponse($invitation['invitation_id']);
+    $invitation['rsvp_submitted'] = !empty($existing);
+    if (empty($invitation['rsvp_status']) || $invitation['rsvp_status'] === 'pending') {
+        $invitation['rsvp_status'] = $existing ? ($existing['attending'] ?? 'pending') : 'pending';
     }
 
     sendResponse([

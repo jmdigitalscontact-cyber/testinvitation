@@ -1718,6 +1718,33 @@ audio#wedding-audio { display: none; }
 .feedback.success { background: rgba(154,182,157,0.15); color: var(--accent-dark); }
 .feedback.error { background: rgba(232,180,196,0.2); color: #b3476a; }
 
+/* ===== RSVP Done State (already submitted) ===== */
+.rsvp-done-card {
+  margin: 1rem 0 0.5rem;
+  padding: 1.5rem 1.25rem;
+  border: 1px solid rgba(154,182,157,0.25);
+  border-radius: 14px;
+  background: linear-gradient(180deg, rgba(154,182,157,0.1), #fff);
+  text-align: center;
+}
+.rsvp-done-card .rsvp-done-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 58px;
+  height: 58px;
+  margin-bottom: 0.9rem;
+  border-radius: 50%;
+  background: rgba(154,182,157,0.18);
+  color: var(--accent-dark);
+}
+.rsvp-done-card h3 {
+  margin-bottom: 0.4rem;
+}
+.rsvp-done-card .rsvp-sub {
+  margin-bottom: 0.6rem;
+}
+
 /* ===== Scroll Reveal ===== */
 .reveal {
   opacity: 0;

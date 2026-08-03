@@ -1,4 +1,4 @@
-const CACHE_NAME = 'the-berbers-v1';
+const CACHE_NAME = 'the-berbers-v2';
 const CORE_ASSETS = ['/', '/index.html', '/css/styles.css', '/js/script.js', '/audio/ambient.mp3'];
 
 self.addEventListener('install', function (event) {

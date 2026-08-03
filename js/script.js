@@ -287,6 +287,27 @@
     if (invitationInput) invitationInput.value = invitation.invitation_id || '';
     if (tokenInput) tokenInput.value = invitation.token || invitation.invitation_id || '';
 
+    // If this invitation has already submitted an RSVP, hide the tick form
+    // and show the "already done" state instead — no duplicate submission.
+    if (invitation.rsvp_submitted) {
+      setInviteLoading(false);
+      var formEl = document.getElementById('rsvp-form');
+      if (formEl) formEl.hidden = true;
+      var doneState = document.getElementById('rsvp-done-state');
+      if (doneState) doneState.hidden = false;
+      if (list) list.innerHTML = '';
+      var doneTitle = document.getElementById('rsvp-done-title');
+      if (doneTitle) {
+        doneTitle.textContent = (invitation.rsvp_status === 'yes' || invitation.rsvp_status === 'no')
+          ? "You're all set!"
+          : 'RSVP received';
+      }
+      if (meta) {
+        meta.textContent = 'We already have your RSVP on record. Thank you for responding!';
+      }
+      return;
+    }
+
     if (!list) return;
     list.innerHTML = '';
 
