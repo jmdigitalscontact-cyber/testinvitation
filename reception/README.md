@@ -40,6 +40,20 @@ Ensure `reception/uploads/` exists and is writable by PHP.
 
 If the key is missing or invalid, guest search and uploads are blocked.
 
+## Server-side access gate
+
+The reception entry point (`reception/index.php`) **validates the `key` on the
+server** before serving any app content. This prevents the page from being
+viewed without a valid QR-scanned key:
+
+- `reception/index.php` — the gated entry point (checks `?key=` against `RECEPTION_API_KEY`).
+  - Valid key → serves `reception/app.html`
+  - Missing / invalid key → **403 Access Denied** (no app content is sent)
+- `reception/app.html` — the actual SPA content (served only through the gate).
+
+Do not link directly to `app.html`; guests must always go through `/reception/?key=...`.
+The QR code URL already points at `/reception/?key=...`, which is validated by the gate.
+
 ## Photo upload performance
 
 - All uploaded photos are converted server-side to `.webp` before saving.

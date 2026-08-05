@@ -468,7 +468,6 @@
         updateGuestWall();
         showSearchIdleStatus();
         clearSearchResults();
-        renderSuggestionPills();
         return;
       }
       throw new Error(result.error || "Could not load guests");
@@ -481,24 +480,6 @@
       }
       showToast(err?.message || "Guest list unavailable");
     }
-  }
-
-  function renderSuggestionPills() {
-    if (!els.suggestionPills) return;
-    const names = state.guests.slice(0, 6);
-    if (!names.length) return;
-    els.suggestionPills.innerHTML = names.map(g =>
-      `<button type="button" class="rec-suggestion-pill" data-name="${escapeHtml(g.name)}">${escapeHtml(g.name.split(" ")[0])}</button>`
-    ).join("");
-
-    els.suggestionPills.querySelectorAll(".rec-suggestion-pill").forEach(btn => {
-      btn.addEventListener("click", () => {
-        if (els.searchInput) {
-          els.searchInput.value = btn.dataset.name;
-          els.searchInput.dispatchEvent(new Event("input"));
-        }
-      });
-    });
   }
 
   function showSearchIdleStatus() {
@@ -539,7 +520,6 @@
     if (!query.length) {
       showSearchIdleStatus();
       clearSearchResults();
-      renderSuggestionPills();
       return;
     }
 

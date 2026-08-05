@@ -8,6 +8,8 @@
 
 # Logs
 logs/
+server_log.txt
+server_err.txt
 
 # Generated QR codes (regenerated on demand)
 rsvp/qr_codes/*
