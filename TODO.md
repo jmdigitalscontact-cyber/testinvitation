@@ -5,4 +5,4 @@
 - [x] Approve plan with user
 - [x] Remove `guest-wall-pill` block from `reception/app.html`
 - [x] Remove guest wall JS refs/state/function from `reception/reception.js`
-- [ ] Commit and push changes to GitHub
+- [x] Commit and push changes to GitHub
