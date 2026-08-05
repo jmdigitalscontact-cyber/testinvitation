@@ -371,6 +371,146 @@ body {
 }
 
 /* ═══════════════════════════════════════════
+   WELCOME SCREEN — Celebratory Entry
+   ═══════════════════════════════════════════ */
+.rec-welcome-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9997;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  background: rgba(9, 18, 14, 0.55);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  transition: opacity 0.5s var(--rec-ease-out);
+}
+
+.rec-welcome-overlay[hidden] {
+  display: flex !important;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.rec-welcome-card {
+  position: relative;
+  background: rgba(22, 40, 30, 0.82);
+  backdrop-filter: blur(20px) saturate(1.1);
+  -webkit-backdrop-filter: blur(20px) saturate(1.1);
+  border: 1px solid var(--rec-border-accent);
+  border-radius: 28px;
+  padding: 2.6rem 2rem 2rem;
+  max-width: 440px;
+  width: 100%;
+  text-align: center;
+  box-shadow: var(--rec-shadow-card), var(--rec-shadow-glow);
+  animation: recWelcomeIn 0.7s var(--rec-ease-spring) both;
+  overflow: hidden;
+}
+
+[data-theme="light"] .rec-welcome-card {
+  background: rgba(255, 255, 255, 0.88);
+  backdrop-filter: blur(20px) saturate(1.1);
+  -webkit-backdrop-filter: blur(20px) saturate(1.1);
+}
+
+.rec-welcome-glow {
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: radial-gradient(circle at 30% 20%, rgba(212, 175, 71, 0.1), transparent 50%),
+              radial-gradient(circle at 70% 80%, rgba(107, 140, 120, 0.08), transparent 50%);
+  pointer-events: none;
+  animation: recGlowShift 8s ease-in-out infinite;
+}
+
+.rec-welcome-eyebrow {
+  margin: 0 0 0.35rem;
+  font-family: var(--rec-font-accent);
+  font-size: 0.9rem;
+  color: var(--rec-accent-light);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.rec-welcome-heading {
+  margin: 0 0 0.9rem;
+  font-family: var(--rec-font-display);
+  font-size: clamp(1.6rem, 5.4vw, 2.05rem);
+  font-weight: 700;
+  line-height: 1.2;
+  color: var(--rec-text);
+  background: linear-gradient(135deg, var(--rec-text), var(--rec-gold-soft));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.rec-welcome-ornament {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  width: min(150px, 50vw);
+  margin: 0 auto 1rem;
+}
+
+.rec-welcome-line {
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--rec-gold-soft), transparent);
+  opacity: 0.6;
+}
+
+.rec-welcome-gem {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: var(--rec-gold);
+  box-shadow: 0 0 0 3px rgba(212, 175, 71, 0.15);
+}
+
+.rec-welcome-text {
+  margin: 0 0 0.75rem;
+  font-size: 0.92rem;
+  color: var(--rec-text-secondary);
+  line-height: 1.6;
+}
+
+.rec-welcome-text:last-of-type { margin-bottom: 1.4rem; }
+
+.rec-welcome-cta {
+  width: 100%;
+  padding: 0.8rem 1.2rem;
+  font-size: 0.92rem;
+}
+
+.rec-welcome-hint {
+  margin: 1rem 0 0;
+  font-family: var(--rec-font-accent);
+  font-size: 0.82rem;
+  font-style: italic;
+  color: var(--rec-muted);
+  line-height: 1.5;
+}
+
+.rec-welcome-overlay.is-exiting .rec-welcome-card {
+  animation: recWelcomeOut 0.5s var(--rec-ease-in-out) both;
+}
+
+@keyframes recWelcomeIn {
+  from { opacity: 0; transform: translateY(30px) scale(0.95); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes recWelcomeOut {
+  from { opacity: 1; transform: translateY(0) scale(1); }
+  to { opacity: 0; transform: translateY(-30px) scale(0.95) rotate(-1deg); }
+}
+
+/* ═══════════════════════════════════════════
    MAIN APP
    ═══════════════════════════════════════════ */
 .reception-app {
@@ -1855,6 +1995,7 @@ body.reception-lightbox-open { overflow: hidden; }
 @media (max-width: 600px) {
   .rec-lock-card { padding: 2rem 1.25rem 1.5rem; border-radius: 22px; }
   .rec-lock-heading { font-size: 1.4rem; }
+  .rec-welcome-card { padding: 2.1rem 1.25rem 1.6rem; border-radius: 22px; }
   .rec-lock-key-wrap { flex-direction: column; }
   .rec-lock-enter-btn { width: 100%; justify-content: center; }
   .rec-gifts-cols { grid-template-columns: 1fr; gap: 1.2rem; }
@@ -1886,5 +2027,7 @@ body.reception-lightbox-open { overflow: hidden; }
   }
   .rec-lock-card { animation: none; }
   .rec-lock-overlay.is-exiting .rec-lock-card { animation: none; }
+  .rec-welcome-card { animation: none; }
+  .rec-welcome-overlay.is-exiting .rec-welcome-card { animation: none; }
 }
 

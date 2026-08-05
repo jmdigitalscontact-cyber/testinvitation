@@ -1,8 +1,9 @@
-# Task: Remove guest wall pill from reception page
+# TODO — Welcome Screen After QR Scan
 
 ## Steps
-- [x] Analyze reception page to locate guest wall pill rendering
-- [x] Approve plan with user
-- [x] Remove `guest-wall-pill` block from `reception/app.html`
-- [x] Remove guest wall JS refs/state/function from `reception/reception.js`
-- [x] Commit and push changes to GitHub
+- [x] 1. Review reception files (app.html, reception.js, reception.css)
+- [x] 2. Plan approved by user
+- [x] 3. Add welcome overlay markup to `reception/app.html`
+- [x] 4. Add welcome styles + animations to `reception/reception.css`
+- [x] 5. Add welcome logic to `reception/reception.js`
+- [x] 6. Verify flow (welcome shows after unlock, tabs still work)

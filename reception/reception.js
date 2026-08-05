@@ -11,6 +11,7 @@
   const RECEPTION_KEY = RECEPTION_KEY_PARAM || localStorage.getItem(RECEPTION_KEY_STORAGE) || "";
   const MIN_SEARCH_CHARS = 2;
   const THEME_STORAGE = "reception_theme";
+  const WELCOME_SESSION_FLAG = "reception_welcome_seen";
 
   if (RECEPTION_KEY_PARAM) {
     localStorage.setItem(RECEPTION_KEY_STORAGE, RECEPTION_KEY_PARAM);
@@ -83,6 +84,8 @@
     els.lockError = document.getElementById("rec-lock-error");
     els.app = document.getElementById("reception-app");
     els.receptionMain = document.getElementById("reception-main");
+    els.welcomeOverlay = document.getElementById("rec-welcome-overlay");
+    els.welcomeCta = document.getElementById("rec-welcome-cta");
   }
 
   let photoLightboxIndex = 0;
@@ -342,6 +345,42 @@
       setTimeout(() => els.app.classList.remove("is-entering"), 600);
     }
     document.title = "Reception | Jason & Rhona Mae";
+    maybeShowWelcome();
+  }
+
+  /* ───────────────────────────────────────────
+     WELCOME SCREEN — shown after a fresh QR scan
+     ─────────────────────────────────────────── */
+  function maybeShowWelcome() {
+    // Only show when the guest arrived via a fresh QR scan (key in the URL),
+    // and only once per browser session.
+    if (!RECEPTION_KEY_PARAM) return;
+    if (sessionStorage.getItem(WELCOME_SESSION_FLAG)) return;
+    if (!els.welcomeOverlay) return;
+
+    sessionStorage.setItem(WELCOME_SESSION_FLAG, "1");
+    els.welcomeOverlay.hidden = false;
+
+    // Give the app entrance animation a moment to settle before the welcome glides in.
+    setTimeout(() => {
+      els.welcomeCta?.focus({ preventScroll: true });
+    }, 700);
+  }
+
+  function dismissWelcome() {
+    if (!els.welcomeOverlay) return;
+    els.welcomeOverlay.classList.add("is-exiting");
+    els.welcomeCta?.blur();
+    fireConfetti();
+    setTimeout(() => {
+      els.welcomeOverlay.hidden = true;
+      els.welcomeOverlay.classList.remove("is-exiting");
+      els.searchInput?.focus({ preventScroll: true });
+    }, 450);
+  }
+
+  function initWelcome() {
+    els.welcomeCta?.addEventListener("click", dismissWelcome);
   }
 
   function handleLockEnter() {
@@ -1174,6 +1213,7 @@
     initPhotoGallery();
     initPhotoUpload();
     initGiftBox();
+    initWelcome();
     loadGuests();
     loadMenu();
 

@@ -57,6 +57,36 @@
       </div>
     </div>
 
+    <!-- ===== WELCOME SCREEN (shown after QR unlock) ===== -->
+    <div class="rec-welcome-overlay" id="rec-welcome-overlay" hidden role="dialog" aria-modal="true" aria-label="Welcome">
+      <div class="rec-welcome-card" id="rec-welcome-card">
+        <div class="rec-welcome-glow" aria-hidden="true"></div>
+        <div class="rec-lock-icon-wrap">
+          <span class="rec-lock-icon" aria-hidden="true">💍</span>
+          <span class="rec-lock-ring" aria-hidden="true"></span>
+        </div>
+        <p class="rec-welcome-eyebrow">Jason &amp; Rhona Mae</p>
+        <h2 class="rec-welcome-heading">Welcome to Our Wedding Reception</h2>
+        <div class="rec-welcome-ornament" aria-hidden="true">
+          <span class="rec-welcome-line"></span>
+          <span class="rec-welcome-gem"></span>
+          <span class="rec-welcome-line"></span>
+        </div>
+        <p class="rec-welcome-text">We're so happy you're here to celebrate this special day with us.</p>
+        <p class="rec-welcome-text">
+          Please tap the button below to find your assigned table and seat. We hope you have a wonderful
+          time celebrating, dining, and making unforgettable memories with us.
+        </p>
+        <button type="button" class="reception-btn reception-btn--primary rec-welcome-cta" id="rec-welcome-cta">
+          <span>Find My Seat</span>
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M5 12h14M13 5l7 7-7 7"/>
+          </svg>
+        </button>
+        <p class="rec-welcome-hint">Celebrating, dining &amp; making memories together</p>
+      </div>
+    </div>
+
     <!-- ===== MAIN APP ===== -->
     <div class="reception-app" id="reception-app" hidden>
       <header class="reception-header" id="reception-header">
