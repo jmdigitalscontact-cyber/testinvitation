@@ -1,0 +1,36 @@
+# ── Reception venue — enforce server-side access gate ────────────
+# The reception entry point is index.php, which validates the ?key=
+# against RECEPTION_API_KEY before serving app.html.
+#
+# 1. Force the directory index to be index.php (the gate), NOT app.html
+#    or any leftover index.html.
+# 2. Block direct web access to app.html so the app content can only be
+#    served through the gate.
+
+Options -Indexes
+
+# Always use the gate as the directory index (overrides server default,
+# which may otherwise list app.html/index.html first).
+DirectoryIndex index.php
+
+# Never list the directory contents.
+Options -MultiViews
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+
+    # Force the directory itself (/reception/) through the gate.
+    # Apache DirectoryIndex can serve app.html before index.php on some
+    # hosts, so intercept the directory request and send it to index.php.
+    RewriteRule ^$ index.php [L]
+
+    # Block / redirect any direct access to the underlying app content.
+    RewriteRule ^app\.html$ /reception/ [R=302,L]
+    RewriteRule ^index\.html$ /reception/ [R=302,L]
+</IfModule>
+
+# Hard block direct access to the app content even if the rules above
+# are bypassed (e.g. via MultiViews or a misconfigured DirectoryIndex).
+<FilesMatch "^(app\.html|index\.html)$">
+    Require all denied
+</FilesMatch>
