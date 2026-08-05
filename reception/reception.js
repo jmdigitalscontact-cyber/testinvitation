@@ -26,7 +26,6 @@
     activeTab: "search",
     floorTransform: { scale: 1, x: 0, y: 0 },
     theme: localStorage.getItem(THEME_STORAGE) || "dark",
-    guestWallCount: 0,
     likedPhotos: new Set(),
     giftBoxOpened: false,
   };
@@ -73,8 +72,6 @@
     els.confettiCanvas = document.getElementById("confetti-canvas");
     els.themeToggle = document.getElementById("theme-toggle");
     els.themeToggleIcon = document.querySelector(".reception-theme-toggle__icon");
-    els.guestWallPill = document.getElementById("guest-wall-pill");
-    els.guestWallCount = document.getElementById("guest-wall-count");
     els.giftBox = document.getElementById("gift-box");
     els.giftBoxLid = document.getElementById("gift-box-lid");
     els.giftBoxCta = document.querySelector(".rec-gift-box__cta");
@@ -464,8 +461,6 @@
       if (result.success && Array.isArray(result.data)) {
         state.guests = result.data;
         state.guestsLoaded = true;
-        state.guestWallCount = state.guests.length;
-        updateGuestWall();
         showSearchIdleStatus();
         clearSearchResults();
         return;
@@ -587,15 +582,6 @@
         setTimeout(() => highlightTable(tableNum), 100);
       });
     });
-  }
-
-  /* ───────────────────────────────────────────
-     GUEST WALL
-     ─────────────────────────────────────────── */
-  function updateGuestWall() {
-    if (!els.guestWallPill || !els.guestWallCount) return;
-    els.guestWallCount.textContent = state.guestWallCount;
-    els.guestWallPill.hidden = false;
   }
 
   /* ───────────────────────────────────────────
@@ -1208,4 +1194,3 @@
     init();
   }
 })();
-
