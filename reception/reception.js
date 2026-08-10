@@ -11,7 +11,6 @@
   const RECEPTION_KEY = RECEPTION_KEY_PARAM || localStorage.getItem(RECEPTION_KEY_STORAGE) || "";
   const MIN_SEARCH_CHARS = 2;
   const THEME_STORAGE = "reception_theme";
-  const WELCOME_SESSION_FLAG = "reception_welcome_seen";
 
   if (RECEPTION_KEY_PARAM) {
     localStorage.setItem(RECEPTION_KEY_STORAGE, RECEPTION_KEY_PARAM);
@@ -349,16 +348,11 @@
   }
 
   /* ───────────────────────────────────────────
-     WELCOME SCREEN — shown after a fresh QR scan
+     WELCOME SCREEN — the consistent first view after access is verified
      ─────────────────────────────────────────── */
   function maybeShowWelcome() {
-    // Only show when the guest arrived via a fresh QR scan (key in the URL),
-    // and only once per browser session.
-    if (!RECEPTION_KEY_PARAM) return;
-    if (sessionStorage.getItem(WELCOME_SESSION_FLAG)) return;
     if (!els.welcomeOverlay) return;
 
-    sessionStorage.setItem(WELCOME_SESSION_FLAG, "1");
     els.welcomeOverlay.hidden = false;
 
     // Give the app entrance animation a moment to settle before the welcome glides in.
@@ -369,6 +363,11 @@
 
   function dismissWelcome() {
     if (!els.welcomeOverlay) return;
+    // The welcome CTA always begins the guest journey at seat search, rather
+    // than exposing a stale hash-selected tab from a previous visit.
+    switchTab("search");
+    const searchPanel = document.getElementById("panel-search");
+    if (searchPanel) searchPanel.scrollTop = 0;
     els.welcomeOverlay.classList.add("is-exiting");
     els.welcomeCta?.blur();
     fireConfetti();

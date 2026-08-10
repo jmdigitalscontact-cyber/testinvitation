@@ -405,8 +405,12 @@ body {
   width: 100%;
   text-align: center;
   box-shadow: var(--rec-shadow-card), var(--rec-shadow-glow);
-  animation: recWelcomeIn 0.7s var(--rec-ease-spring) both;
+  animation: none;
   overflow: hidden;
+}
+
+.rec-welcome-overlay:not([hidden]) .rec-welcome-card {
+  animation: recWelcomeIn 0.7s var(--rec-ease-spring) both;
 }
 
 [data-theme="light"] .rec-welcome-card {
@@ -2030,4 +2034,3 @@ body.reception-lightbox-open { overflow: hidden; }
   .rec-welcome-card { animation: none; }
   .rec-welcome-overlay.is-exiting .rec-welcome-card { animation: none; }
 }
-
