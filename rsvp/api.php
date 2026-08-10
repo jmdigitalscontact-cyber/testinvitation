@@ -210,6 +210,10 @@ try {
             handleGenerateReceptionQR();
             break;
 
+        case 'serve-reception-photo':
+            handleServeReceptionPhoto();
+            break;
+
         // ==================== RECEPTION VENUE (PUBLIC) ====================
 
         case 'get-reception-guests':

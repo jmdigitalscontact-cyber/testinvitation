@@ -68,6 +68,11 @@ define('GOOGLE_SHEETS_ID', EnvironmentLoader::get(
 ));
 define('GOOGLE_SHEETS_CREDENTIALS_PATH', EnvironmentLoader::get('GOOGLE_SHEETS_CREDENTIALS_PATH', ''));
 
+define('GOOGLE_PHOTOS_CLIENT_ID', EnvironmentLoader::get('GOOGLE_PHOTOS_CLIENT_ID', ''));
+define('GOOGLE_PHOTOS_CLIENT_SECRET', EnvironmentLoader::get('GOOGLE_PHOTOS_CLIENT_SECRET', ''));
+define('GOOGLE_PHOTOS_REFRESH_TOKEN', EnvironmentLoader::get('GOOGLE_PHOTOS_REFRESH_TOKEN', ''));
+define('GOOGLE_PHOTOS_ALBUM_ID', EnvironmentLoader::get('GOOGLE_PHOTOS_ALBUM_ID', ''));
+
 // Security headers
 $allowed_origins_env = EnvironmentLoader::get('ALLOWED_ORIGINS', 'http://localhost,http://127.0.0.1,https://yourdomain.com');
 $allowed_origins = array_map('trim', explode(',', $allowed_origins_env));

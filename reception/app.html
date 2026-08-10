@@ -226,23 +226,39 @@
                 </svg>
               </div>
               <p class="reception-upload-zone__text">Drop photos here or tap to upload</p>
-              <p class="reception-upload-zone__hint">JPEG, PNG, or WebP · max 5MB each</p>
+              <p class="reception-upload-zone__hint">JPEG, PNG, WebP, HEIC/HEIF · max 10MB each</p>
               <input
                 type="file"
-                id="photo-upload-input"
+                id="photo-upload-camera-input"
                 class="reception-upload__input visually-hidden"
-                accept="image/jpeg,image/png,image/webp,image/*"
+                accept="image/*"
                 capture="environment"
+              />
+              <input
+                type="file"
+                id="photo-upload-gallery-input"
+                class="reception-upload__input visually-hidden"
+                accept="image/jpeg,image/png,image/webp,image/heic,image/heif,image/*"
                 multiple
               />
-              <button type="button" class="reception-btn reception-btn--primary" id="photo-upload-btn">
-                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                  <polyline points="17 8 12 3 7 8"/>
-                  <line x1="12" y1="3" x2="12" y2="15"/>
-                </svg>
-                Select photos
-              </button>
+              <div class="reception-upload-actions">
+                <button type="button" class="reception-btn reception-btn--primary" id="photo-upload-camera-btn">
+                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                    <polyline points="17 8 12 3 7 8"/>
+                    <line x1="12" y1="3" x2="12" y2="15"/>
+                  </svg>
+                  Take photo
+                </button>
+                <button type="button" class="reception-btn reception-btn--secondary" id="photo-upload-gallery-btn">
+                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                    <circle cx="8.5" cy="8.5" r="1.5"/>
+                    <polyline points="21 15 16 10 5 21"/>
+                  </svg>
+                  Choose from gallery
+                </button>
+              </div>
             </div>
 
             <p class="reception-status" id="photo-gallery-status" role="status" aria-live="polite"></p>

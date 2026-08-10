@@ -19,10 +19,15 @@ function receptionRequireApiKey() {
 }
 
 function receptionUploadsDir() {
-    $dir = dirname(__DIR__) . '/reception/uploads';
+    // Allow overriding the uploads path via environment (recommended: outside web root)
+    $default = dirname(dirname(__DIR__)) . '/uploads/reception';
+    $envPath = trim((string)EnvironmentLoader::get('RECEPTION_UPLOADS_PATH', ''));
+    $dir = $envPath !== '' ? $envPath : $default;
+
     if (!is_dir($dir)) {
-        mkdir($dir, 0755, true);
+        @mkdir($dir, 0755, true);
     }
+
     return $dir;
 }
 
@@ -305,7 +310,7 @@ function receptionUploadErrorMessage($code) {
     switch ((int)$code) {
         case UPLOAD_ERR_INI_SIZE:
         case UPLOAD_ERR_FORM_SIZE:
-            return 'File is too large for the server (max 5MB).';
+            return 'File is too large for the server (max 10MB).';
         case UPLOAD_ERR_PARTIAL:
             return 'Upload was interrupted. Please try again.';
         case UPLOAD_ERR_NO_FILE:
@@ -316,16 +321,284 @@ function receptionUploadErrorMessage($code) {
 }
 
 function receptionPhotoPublicUrl($storagePath) {
-    $path = '/' . ltrim(str_replace('\\', '/', (string)$storagePath), '/');
+    // Return a secure URL that streams the photo via the API (requires RECEPTION_API_KEY)
+    $file = basename((string)$storagePath);
     $base = defined('PUBLIC_BASE_URL') ? rtrim(PUBLIC_BASE_URL, '/') : '';
-    return $base !== '' ? $base . $path : $path;
+    $url = '/rsvp/api.php?action=serve-reception-photo&file=' . rawurlencode($file);
+    return $base !== '' ? $base . $url : $url;
+}
+
+function handleServeReceptionPhoto() {
+    // Securely serve stored reception photos. Requires reception API key.
+    receptionRequireApiKey();
+
+    $file = isset($_GET['file']) ? basename($_GET['file']) : '';
+    if ($file === '') {
+        http_response_code(400);
+        echo 'Missing file parameter';
+        exit;
+    }
+
+    $uploadsDir = receptionUploadsDir();
+    $filePath = $uploadsDir . DIRECTORY_SEPARATOR . $file;
+
+    if (is_file($filePath) && is_readable($filePath)) {
+        $finfo = finfo_open(FILEINFO_MIME_TYPE);
+        $mime = $finfo ? finfo_file($finfo, $filePath) : 'application/octet-stream';
+        if ($finfo) finfo_close($finfo);
+
+        header('Content-Type: ' . $mime);
+        header('Content-Length: ' . (string)filesize($filePath));
+        header('Cache-Control: public, max-age=86400');
+        $fp = fopen($filePath, 'rb');
+        if ($fp) {
+            while (!feof($fp)) {
+                echo fread($fp, 8192);
+                flush();
+            }
+            fclose($fp);
+        }
+        exit;
+    }
+
+    if (receptionGooglePhotosEnabled()) {
+        $remote = receptionFetchGooglePhotoBytes($file);
+        if ($remote && !empty($remote['body'])) {
+            header('Content-Type: ' . ($remote['mimeType'] ?? 'application/octet-stream'));
+            header('Content-Length: ' . (string)strlen($remote['body']));
+            header('Cache-Control: public, max-age=86400');
+            echo $remote['body'];
+            exit;
+        }
+    }
+
+    http_response_code(404);
+    echo 'Not found';
+    exit;
 }
 
 function receptionCanConvertToWebp() {
-    return function_exists('imagewebp')
+    return (
+        function_exists('imagewebp')
         && function_exists('imagecreatefromjpeg')
         && function_exists('imagecreatefrompng')
-        && function_exists('imagecreatefromwebp');
+    ) || class_exists('Imagick') || receptionFindExternalMagickCommand() !== '';
+}
+
+function receptionFindExternalMagickCommand() {
+    if (!function_exists('exec')) {
+        return '';
+    }
+
+    $tests = ['magick', 'convert'];
+    foreach ($tests as $command) {
+        exec((PHP_SHLIB_SUFFIX === 'dll' ? 'where ' : 'command -v ') . escapeshellarg($command) . ' 2>&1', $output, $code);
+        if ($code === 0) {
+            return $command;
+        }
+    }
+
+    return '';
+}
+
+function receptionGooglePhotosEnabled() {
+    return GOOGLE_PHOTOS_CLIENT_ID !== ''
+        && GOOGLE_PHOTOS_CLIENT_SECRET !== ''
+        && GOOGLE_PHOTOS_REFRESH_TOKEN !== '';
+}
+
+function receptionGooglePhotosAccessToken() {
+    static $token = null;
+    static $expires = 0;
+
+    if ($token !== null && $expires > time() + 30) {
+        return $token;
+    }
+
+    if (!function_exists('curl_init')) {
+        return false;
+    }
+
+    $ch = curl_init('https://oauth2.googleapis.com/token');
+    $payload = http_build_query([
+        'client_id' => GOOGLE_PHOTOS_CLIENT_ID,
+        'client_secret' => GOOGLE_PHOTOS_CLIENT_SECRET,
+        'refresh_token' => GOOGLE_PHOTOS_REFRESH_TOKEN,
+        'grant_type' => 'refresh_token',
+    ]);
+
+    curl_setopt_array($ch, [
+        CURLOPT_POST => true,
+        CURLOPT_POSTFIELDS => $payload,
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_HTTPHEADER => ['Content-Type: application/x-www-form-urlencoded'],
+        CURLOPT_SSL_VERIFYPEER => false,
+    ]);
+
+    $response = curl_exec($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+
+    if ($httpCode !== 200 || !$response) {
+        return false;
+    }
+
+    $data = json_decode($response, true);
+    if (empty($data['access_token'])) {
+        return false;
+    }
+
+    $token = $data['access_token'];
+    $expires = time() + (int)($data['expires_in'] ?? 3600);
+    return $token;
+}
+
+function receptionUploadToGooglePhotos($tmpPath, $mime, $fileName) {
+    $accessToken = receptionGooglePhotosAccessToken();
+    if (!$accessToken) {
+        return false;
+    }
+
+    if (!function_exists('curl_init')) {
+        return false;
+    }
+
+    $fileContents = file_get_contents($tmpPath);
+    if ($fileContents === false) {
+        return false;
+    }
+
+    $uploadHeaders = [
+        'Authorization: Bearer ' . $accessToken,
+        'Content-Type: application/octet-stream',
+        'X-Goog-Upload-Protocol: raw',
+        'X-Goog-Upload-File-Name: ' . $fileName,
+    ];
+
+    $ch = curl_init('https://photoslibrary.googleapis.com/v1/uploads');
+    curl_setopt_array($ch, [
+        CURLOPT_POST => true,
+        CURLOPT_POSTFIELDS => $fileContents,
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_HTTPHEADER => $uploadHeaders,
+        CURLOPT_SSL_VERIFYPEER => false,
+    ]);
+
+    $uploadToken = curl_exec($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+
+    if ($httpCode !== 200 || !$uploadToken) {
+        return false;
+    }
+
+    return receptionCreateGooglePhotosMediaItem($uploadToken, $fileName, $accessToken);
+}
+
+function receptionCreateGooglePhotosMediaItem($uploadToken, $fileName, $accessToken) {
+    $payload = [
+        'newMediaItems' => [
+            [
+                'description' => 'Reception photo upload',
+                'simpleMediaItem' => [
+                    'uploadToken' => $uploadToken,
+                    'fileName' => $fileName,
+                ],
+            ],
+        ],
+    ];
+
+    if (GOOGLE_PHOTOS_ALBUM_ID !== '') {
+        $payload['albumId'] = GOOGLE_PHOTOS_ALBUM_ID;
+    }
+
+    $ch = curl_init('https://photoslibrary.googleapis.com/v1/mediaItems:batchCreate');
+    curl_setopt_array($ch, [
+        CURLOPT_POST => true,
+        CURLOPT_POSTFIELDS => json_encode($payload),
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_HTTPHEADER => [
+            'Authorization: Bearer ' . $accessToken,
+            'Content-Type: application/json',
+        ],
+        CURLOPT_SSL_VERIFYPEER => false,
+    ]);
+
+    $response = curl_exec($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+
+    if ($httpCode !== 200 || !$response) {
+        return false;
+    }
+
+    $data = json_decode($response, true);
+    if (empty($data['newMediaItemResults'][0]['mediaItem'])) {
+        return false;
+    }
+
+    return $data['newMediaItemResults'][0]['mediaItem'];
+}
+
+function receptionGetGooglePhotosMediaItem($mediaItemId) {
+    $accessToken = receptionGooglePhotosAccessToken();
+    if (!$accessToken) {
+        return false;
+    }
+
+    $url = 'https://photoslibrary.googleapis.com/v1/mediaItems/' . rawurlencode($mediaItemId);
+    $ch = curl_init($url);
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_HTTPHEADER => ['Authorization: Bearer ' . $accessToken],
+        CURLOPT_SSL_VERIFYPEER => false,
+    ]);
+
+    $response = curl_exec($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+
+    if ($httpCode !== 200 || !$response) {
+        return false;
+    }
+
+    $data = json_decode($response, true);
+    return is_array($data) ? $data : false;
+}
+
+function receptionFetchGooglePhotoBytes($mediaItemId) {
+    $item = receptionGetGooglePhotosMediaItem($mediaItemId);
+    if (!$item || empty($item['baseUrl'])) {
+        return false;
+    }
+
+    $accessToken = receptionGooglePhotosAccessToken();
+    if (!$accessToken) {
+        return false;
+    }
+
+    $downloadUrl = $item['baseUrl'] . '=d';
+    $ch = curl_init($downloadUrl);
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_HTTPHEADER => ['Authorization: Bearer ' . $accessToken],
+        CURLOPT_FOLLOWLOCATION => true,
+        CURLOPT_SSL_VERIFYPEER => false,
+    ]);
+
+    $body = curl_exec($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $contentType = curl_getinfo($ch, CURLINFO_CONTENT_TYPE) ?: ($item['mimeType'] ?? 'application/octet-stream');
+    curl_close($ch);
+
+    if ($httpCode < 200 || $httpCode >= 300 || $body === false) {
+        return false;
+    }
+
+    return [
+        'body' => $body,
+        'mimeType' => $contentType,
+    ];
 }
 
 function receptionCreateImageResource($tmpPath, $mime) {
@@ -345,35 +618,154 @@ function receptionCreateImageResource($tmpPath, $mime) {
 }
 
 function receptionConvertToWebp($tmpPath, $mime, $destPath) {
-    $image = receptionCreateImageResource($tmpPath, $mime);
-    if (!$image) {
+    if (in_array($mime, ['image/heic', 'image/heif'], true)) {
+        return receptionConvertHeicToWebp($tmpPath, $destPath);
+    }
+
+    if (function_exists('imagewebp') && function_exists('imagecreatefromjpeg') && function_exists('imagecreatefrompng')) {
+        $info = @getimagesize($tmpPath);
+        if ($info && !empty($info[0]) && !empty($info[1])) {
+            $srcImage = receptionCreateImageResource($tmpPath, $mime);
+            if ($srcImage) {
+                $srcWidth = (int)$info[0];
+                $srcHeight = (int)$info[1];
+                $maxDimension = (int)EnvironmentLoader::get('RECEPTION_UPLOAD_MAX_DIMENSION', 2400);
+                if ($maxDimension < 800) {
+                    $maxDimension = 800;
+                }
+
+                $image = $srcImage;
+                if (max($srcWidth, $srcHeight) > $maxDimension) {
+                    $scale = $maxDimension / max($srcWidth, $srcHeight);
+                    $destWidth = max(1, (int)floor($srcWidth * $scale));
+                    $destHeight = max(1, (int)floor($srcHeight * $scale));
+
+                    $resized = @imagecreatetruecolor($destWidth, $destHeight);
+                    if ($resized) {
+                        if (in_array($mime, ['image/png', 'image/webp', 'image/x-webp'], true)) {
+                            @imagealphablending($resized, false);
+                            @imagesavealpha($resized, true);
+                        }
+                        @imagecopyresampled($resized, $srcImage, 0, 0, 0, 0, $destWidth, $destHeight, $srcWidth, $srcHeight);
+                        imagedestroy($srcImage);
+                        $image = $resized;
+                    }
+                }
+
+                if (function_exists('imagepalettetotruecolor')) {
+                    @imagepalettetotruecolor($image);
+                }
+                @imagealphablending($image, true);
+                @imagesavealpha($image, true);
+
+                $quality = (int)EnvironmentLoader::get('RECEPTION_WEBP_QUALITY', 82);
+                if ($quality < 50) $quality = 50;
+                if ($quality > 100) $quality = 100;
+
+                $ok = @imagewebp($image, $destPath, $quality);
+                imagedestroy($image);
+
+                if ($ok && is_file($destPath) && filesize($destPath) > 0) {
+                    return true;
+                }
+            }
+        }
+    }
+
+    if (class_exists('Imagick')) {
+        return receptionConvertGenericImageWithImagick($tmpPath, $destPath);
+    }
+
+    return receptionConvertWithExternalMagick($tmpPath, $destPath);
+}
+
+function receptionConvertGenericImageWithImagick($tmpPath, $destPath) {
+    try {
+        $imagick = new Imagick($tmpPath);
+        $imagick->setImageFormat('webp');
+        $quality = (int)EnvironmentLoader::get('RECEPTION_WEBP_QUALITY', 82);
+        if ($quality < 50) $quality = 50;
+        if ($quality > 100) $quality = 100;
+        $imagick->setImageCompressionQuality($quality);
+        $imagick->stripImage();
+        $result = $imagick->writeImage($destPath);
+        $imagick->clear();
+        $imagick->destroy();
+        return $result && is_file($destPath) && filesize($destPath) > 0;
+    } catch (Exception $e) {
+        return false;
+    }
+}
+
+function receptionConvertWithExternalMagick($tmpPath, $destPath) {
+    $command = receptionFindExternalMagickCommand();
+    if ($command === '') {
         return false;
     }
 
-    if (function_exists('imagepalettetotruecolor')) {
-        @imagepalettetotruecolor($image);
+    if (!function_exists('exec')) {
+        return false;
     }
-    @imagealphablending($image, true);
-    @imagesavealpha($image, true);
 
     $quality = (int)EnvironmentLoader::get('RECEPTION_WEBP_QUALITY', 82);
     if ($quality < 50) $quality = 50;
     if ($quality > 100) $quality = 100;
 
-    $ok = @imagewebp($image, $destPath, $quality);
-    imagedestroy($image);
+    if ($command === 'magick') {
+        $cmd = escapeshellcmd($command) . ' ' . escapeshellarg($tmpPath) . ' -quality ' . escapeshellarg((string)$quality) . ' ' . escapeshellarg($destPath) . ' 2>&1';
+    } else {
+        $cmd = escapeshellcmd($command) . ' ' . escapeshellarg($tmpPath) . ' -quality ' . escapeshellarg((string)$quality) . ' ' . escapeshellarg($destPath) . ' 2>&1';
+    }
 
-    return $ok && is_file($destPath) && filesize($destPath) > 0;
+    exec($cmd, $output, $resultCode);
+    return $resultCode === 0 && is_file($destPath) && filesize($destPath) > 0;
+}
+
+function receptionConvertHeicToWebp($tmpPath, $destPath) {
+    if (class_exists('Imagick')) {
+        try {
+            $imagick = new Imagick($tmpPath);
+            $imagick->setImageFormat('webp');
+            $quality = (int)EnvironmentLoader::get('RECEPTION_WEBP_QUALITY', 82);
+            if ($quality < 50) $quality = 50;
+            if ($quality > 100) $quality = 100;
+            $imagick->setImageCompressionQuality($quality);
+            $imagick->stripImage();
+            $result = $imagick->writeImage($destPath);
+            $imagick->clear();
+            $imagick->destroy();
+            return $result && is_file($destPath) && filesize($destPath) > 0;
+        } catch (Exception $e) {
+            return false;
+        }
+    }
+
+    if (!function_exists('exec')) {
+        return false;
+    }
+
+    $command = 'magick';
+    exec((PHP_SHLIB_SUFFIX === 'dll' ? 'where ' : 'command -v ') . escapeshellarg($command) . ' 2>&1', $found, $code);
+    if ($code !== 0) {
+        return false;
+    }
+
+    $cmd = escapeshellcmd($command) . ' ' . escapeshellarg($tmpPath) . ' -quality ' . escapeshellarg((string)EnvironmentLoader::get('RECEPTION_WEBP_QUALITY', 82)) . ' ' . escapeshellarg($destPath) . ' 2>&1';
+    exec($cmd, $output, $resultCode);
+    return $resultCode === 0 && is_file($destPath) && filesize($destPath) > 0;
 }
 
 function handleUploadReceptionPhoto() {
+    @ini_set('memory_limit', '512M');
     receptionRequireApiKey();
     [$rateIp, $rateData] = receptionAssertUploadRateLimit();
 
-    if (!receptionCanConvertToWebp()) {
+    $useGooglePhotos = receptionGooglePhotosEnabled();
+
+    if (!$useGooglePhotos && !receptionCanConvertToWebp()) {
         sendResponse([
             'success' => false,
-            'error' => 'Server image conversion is not available. Please enable PHP GD with WebP support.'
+            'error' => 'Server image conversion is not available. Please enable PHP GD with WebP support or configure Google Photos.'
         ], 500);
     }
 
@@ -390,9 +782,9 @@ function handleUploadReceptionPhoto() {
         sendResponse(['success' => false, 'error' => receptionUploadErrorMessage($file['error'])], 400);
     }
 
-    $maxBytes = (int)EnvironmentLoader::get('RECEPTION_UPLOAD_MAX_BYTES', 5242880);
+    $maxBytes = (int)EnvironmentLoader::get('RECEPTION_UPLOAD_MAX_BYTES', 10485760);
     if ($file['size'] > $maxBytes) {
-        sendResponse(['success' => false, 'error' => 'File is too large (max 5MB)'], 400);
+        sendResponse(['success' => false, 'error' => 'File is too large (max 10MB)'], 400);
     }
 
     $finfo = finfo_open(FILEINFO_MIME_TYPE);
@@ -406,28 +798,72 @@ function handleUploadReceptionPhoto() {
         'image/png' => 'png',
         'image/webp' => 'webp',
         'image/x-webp' => 'webp',
+        'image/heic' => 'heic',
+        'image/heif' => 'heif',
     ];
 
     if (!isset($allowed[$mime])) {
         $ext = strtolower(pathinfo((string)($file['name'] ?? ''), PATHINFO_EXTENSION));
-        $extMap = ['jpg' => 'jpg', 'jpeg' => 'jpg', 'png' => 'png', 'webp' => 'webp'];
+        $extMap = ['jpg' => 'jpg', 'jpeg' => 'jpg', 'png' => 'png', 'webp' => 'webp', 'heic' => 'heic', 'heif' => 'heif'];
         if (isset($extMap[$ext])) {
             $mime = $ext === 'jpg' || $ext === 'jpeg' ? 'image/jpeg' : 'image/' . $extMap[$ext];
         } else {
-            sendResponse(['success' => false, 'error' => 'Only JPEG, PNG, or WebP images are allowed'], 400);
+            sendResponse(['success' => false, 'error' => 'Only JPEG, PNG, WebP, HEIC, or HEIF images are allowed'], 400);
         }
     }
 
     $uploadsDir = receptionUploadsDir();
-    $safeName = 'reception-' . date('Ymd-His') . '-' . bin2hex(random_bytes(4)) . '.webp';
-    $destPath = $uploadsDir . DIRECTORY_SEPARATOR . $safeName;
+    $storagePath = '';
+    $storedMime = $mime;
 
-    if (!receptionConvertToWebp($file['tmp_name'], $mime, $destPath)) {
-        sendResponse(['success' => false, 'error' => 'Could not convert image to WebP'], 500);
+    if ($useGooglePhotos) {
+        $originalName = basename((string)($file['name'] ?? 'photo'));
+        $googleResult = receptionUploadToGooglePhotos($file['tmp_name'], $mime, $originalName);
+        if (!$googleResult || empty($googleResult['id'])) {
+            sendResponse(['success' => false, 'error' => 'Google Photos upload failed'], 500);
+        }
+
+        $storagePath = $googleResult['id'];
+        $storedMime = $googleResult['mimeType'] ?? $mime;
+
+        // Record a successful upload security entry (best-effort)
+        $secLog = dirname(__DIR__) . '/logs/reception-upload-security.log';
+        @file_put_contents($secLog, date('c') . " - upload_ok - " . json_encode(['google_item_id' => $storagePath]) . PHP_EOL, FILE_APPEND | LOCK_EX);
+    } else {
+        $safeName = 'reception-' . date('Ymd-His') . '-' . bin2hex(random_bytes(4)) . '.webp';
+        $destPath = $uploadsDir . DIRECTORY_SEPARATOR . $safeName;
+
+        if (!receptionConvertToWebp($file['tmp_name'], $mime, $destPath)) {
+            sendResponse(['success' => false, 'error' => 'Could not convert image to WebP'], 500);
+        }
+
+        // Ensure the generated file is not executable and has restrictive permissions
+        @chmod($destPath, 0644);
+
+        // Optional antivirus scan (ClamAV compatible). Enable by setting CLAMAV_SCAN_CMD in .env.
+        $clamCmd = trim((string)EnvironmentLoader::get('CLAMAV_SCAN_CMD', ''));
+        if ($clamCmd !== '' && function_exists('exec')) {
+            $scanCmd = escapeshellcmd($clamCmd) . ' --no-summary ' . escapeshellarg($destPath) . ' 2>&1';
+            exec($scanCmd, $scanOut, $scanCode);
+            if ($scanCode !== 0) {
+                @unlink($destPath);
+                // Log the security event (best-effort)
+                $secLog = dirname(__DIR__) . '/logs/reception-upload-security.log';
+                @file_put_contents($secLog, date('c') . " - scan_failed - " . json_encode(['file' => $destPath, 'cmd' => $scanCmd, 'out' => $scanOut, 'code' => $scanCode]) . PHP_EOL, FILE_APPEND | LOCK_EX);
+                sendResponse(['success' => false, 'error' => 'Uploaded file failed malware scan'], 400);
+            }
+        }
+
+        // Record a successful upload security entry (best-effort)
+        $secLog = dirname(__DIR__) . '/logs/reception-upload-security.log';
+        @file_put_contents($secLog, date('c') . " - upload_ok - " . json_encode(['file' => $destPath]) . PHP_EOL, FILE_APPEND | LOCK_EX);
+
+        if ($storagePath === '') {
+            $storagePath = $safeName;
+            $storedMime = 'image/webp';
+        }
     }
 
-    $storagePath = 'reception/uploads/' . $safeName;
-    $storedMime = 'image/webp';
     $db = Database::getInstance();
     $mysqli = $db->getConnection();
     receptionEnsurePhotosTable($mysqli);

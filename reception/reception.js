@@ -58,8 +58,10 @@
     els.photoGalleryWrap = document.getElementById("photo-gallery-wrap");
     els.photoGallery = document.getElementById("photo-gallery");
     els.photoStatus = document.getElementById("photo-gallery-status");
-    els.photoUploadBtn = document.getElementById("photo-upload-btn");
-    els.photoUploadInput = document.getElementById("photo-upload-input");
+    els.photoUploadCameraBtn = document.getElementById("photo-upload-camera-btn");
+    els.photoUploadGalleryBtn = document.getElementById("photo-upload-gallery-btn");
+    els.photoUploadCameraInput = document.getElementById("photo-upload-camera-input");
+    els.photoUploadGalleryInput = document.getElementById("photo-upload-gallery-input");
     els.uploadZone = document.getElementById("upload-zone");
     els.photoLightbox = document.getElementById("photo-lightbox");
     els.photoLightboxImg = document.querySelector(".reception-photo-lightbox__img");
@@ -1100,106 +1102,153 @@
      ─────────────────────────────────────────── */
   async function uploadPhoto(file) {
     const form = new FormData();
-    form.append("action", "upload-reception-photo");
-    form.append("photo", file, file.name || "photo.jpg");
+    form.append('action', 'upload-reception-photo');
+    form.append('photo', file, file.name || 'photo.jpg');
 
     const headers = {};
-    if (RECEPTION_KEY) headers["X-Reception-Key"] = RECEPTION_KEY;
+    if (RECEPTION_KEY) headers['X-Reception-Key'] = RECEPTION_KEY;
 
     const res = await fetch(API_BASE, {
-      method: "POST",
+      method: 'POST',
       headers,
       body: form,
     });
 
     const raw = await res.text();
-    let result;
-    try { result = raw ? JSON.parse(raw) : null; } catch { throw new Error(res.ok ? "Invalid server response" : `Upload failed (${res.status})`); }
+    let result = null;
 
-    if (!result || typeof result !== "object") throw new Error(`Upload failed (${res.status})`);
-    if (!res.ok || result.success === false) throw new Error(result.error || `Upload failed (${res.status})`);
+    try {
+      result = raw ? JSON.parse(raw) : null;
+    } catch {
+      throw new Error(res.ok ? 'Invalid server response' : `Upload failed (${res.status})`);
+    }
+
+    if (!result || typeof result !== 'object') {
+      throw new Error(`Upload failed (${res.status})`);
+    }
+
+    if (!res.ok || result.success === false) {
+      throw new Error(result.error || `Upload failed (${res.status})`);
+    }
+
     return result;
   }
 
   function isAllowedPhotoFile(file) {
-    const maxBytes = 5 * 1024 * 1024;
-    const allowedTypes = ["image/jpeg", "image/jpg", "image/pjpeg", "image/png", "image/webp"];
-    const ext = (file.name || "").split(".").pop()?.toLowerCase() || "";
-    const allowedExt = ["jpg", "jpeg", "png", "webp"];
+    const maxBytes = 10 * 1024 * 1024;
+    const allowedTypes = [
+      'image/jpeg',
+      'image/jpg',
+      'image/pjpeg',
+      'image/png',
+      'image/webp',
+      'image/heic',
+      'image/heif',
+    ];
+    const allowedExt = ['jpg', 'jpeg', 'png', 'webp', 'heic', 'heif'];
+    const ext = (file.name || '').split('.').pop().toLowerCase();
     const typeOk = !file.type || allowedTypes.includes(file.type);
     const extOk = allowedExt.includes(ext);
-    if (!typeOk && !extOk) return { ok: false, error: `${file.name}: use JPEG, PNG, or WebP` };
-    if (file.size > maxBytes) return { ok: false, error: `${file.name}: must be under 5MB` };
+
+    if (!typeOk && !extOk) {
+      return { ok: false, error: `${file.name}: use JPEG, PNG, WebP, or HEIC/HEIF` };
+    }
+
+    if (file.size > maxBytes) {
+      return { ok: false, error: `${file.name}: must be under 10MB` };
+    }
+
     return { ok: true };
   }
 
   function initPhotoUpload() {
-    els.photoUploadBtn?.addEventListener("click", () => els.photoUploadInput?.click());
+    const openGalleryInput = () => els.photoUploadGalleryInput?.click();
 
-    els.photoUploadInput?.addEventListener("change", async () => {
-      const files = [...(els.photoUploadInput.files || [])];
-      if (!files.length) return;
-      await processUploads(files);
-      els.photoUploadInput.value = "";
+    els.photoUploadCameraBtn?.addEventListener('click', () => {
+      els.photoUploadCameraInput?.click();
     });
 
-    // Drag & drop
+    els.photoUploadGalleryBtn?.addEventListener('click', openGalleryInput);
+    els.uploadZone?.addEventListener('click', openGalleryInput);
+
+    els.photoUploadCameraInput?.addEventListener('change', async () => {
+      const files = [...(els.photoUploadCameraInput.files || [])];
+      if (!files.length) return;
+      await processUploads(files);
+      els.photoUploadCameraInput.value = '';
+    });
+
+    els.photoUploadGalleryInput?.addEventListener('change', async () => {
+      const files = [...(els.photoUploadGalleryInput.files || [])];
+      if (!files.length) return;
+      await processUploads(files);
+      els.photoUploadGalleryInput.value = '';
+    });
+
     const zone = els.uploadZone;
     if (!zone) return;
 
-    zone.addEventListener("dragover", e => {
-      e.preventDefault();
-      zone.classList.add("is-dragover");
+    zone.addEventListener('dragover', (event) => {
+      event.preventDefault();
+      zone.classList.add('is-dragover');
     });
 
-    zone.addEventListener("dragleave", e => {
-      e.preventDefault();
-      zone.classList.remove("is-dragover");
+    zone.addEventListener('dragleave', (event) => {
+      event.preventDefault();
+      zone.classList.remove('is-dragover');
     });
 
-    zone.addEventListener("drop", async e => {
-      e.preventDefault();
-      zone.classList.remove("is-dragover");
-      const files = [...(e.dataTransfer?.files || [])].filter(f => f.type.startsWith("image/"));
-      if (files.length) await processUploads(files);
+    zone.addEventListener('drop', async (event) => {
+      event.preventDefault();
+      zone.classList.remove('is-dragover');
+      const files = [...(event.dataTransfer?.files || [])].filter((file) => file.type.startsWith('image/'));
+      if (!files.length) return;
+      await processUploads(files);
     });
   }
 
   async function processUploads(files) {
     const valid = [];
     const errors = [];
-    files.forEach(file => {
+
+    files.forEach((file) => {
       const check = isAllowedPhotoFile(file);
-      if (check.ok) valid.push(file);
-      else errors.push(check.error);
+      if (check.ok) {
+        valid.push(file);
+      } else {
+        errors.push(check.error);
+      }
     });
 
-    if (errors.length) showToast(errors[0]);
+    if (errors.length) {
+      showToast(errors[0]);
+    }
+
     if (!valid.length) return;
 
-    if (els.photoUploadBtn) els.photoUploadBtn.disabled = true;
+    const total = valid.length;
     let uploaded = 0;
     let failed = 0;
 
-    for (let i = 0; i < valid.length; i++) {
+    for (let index = 0; index < total; index += 1) {
       if (els.photoStatus) {
-        els.photoStatus.textContent = valid.length > 1 ? `Uploading ${i + 1} of ${valid.length}…` : "Uploading…";
+        els.photoStatus.textContent = total > 1 ? `Uploading ${index + 1} of ${total}…` : 'Uploading…';
       }
+
       try {
-        const result = await uploadPhoto(valid[i]);
-        if (result.success && result.data) {
+        const result = await uploadPhoto(valid[index]);
+        if (result?.success && result.data) {
           state.photos.unshift(result.data);
-          uploaded++;
+          uploaded += 1;
         } else {
-          failed++;
-          if (i === 0) throw new Error(result.error || "Upload failed");
+          failed += 1;
+          throw new Error(result?.error || 'Upload failed');
         }
-      } catch (err) {
-        failed++;
-        if (uploaded === 0 && i === 0) {
-          showToast(err.message || "Upload failed");
-          if (els.photoStatus) els.photoStatus.textContent = "Upload failed — try again";
-          if (els.photoUploadBtn) els.photoUploadBtn.disabled = false;
+      } catch (error) {
+        failed += 1;
+        if (uploaded === 0 && index === 0) {
+          showToast(error?.message || 'Upload failed');
+          if (els.photoStatus) els.photoStatus.textContent = 'Upload failed — try again';
           return;
         }
       }
@@ -1208,10 +1257,12 @@
     if (uploaded > 0) {
       renderPhotos();
       if (els.photoStatus) els.photoStatus.textContent = `${state.photos.length} photo(s)`;
-      showToast(uploaded === 1 ? "Photo shared! 🎉" : `${uploaded} photos shared! 🎉`);
+      showToast(uploaded === 1 ? 'Photo shared! 🎉' : `${uploaded} photos shared! 🎉`);
     }
-    if (failed > 0 && uploaded > 0) showToast(`${failed} photo(s) could not be uploaded`);
-    if (els.photoUploadBtn) els.photoUploadBtn.disabled = false;
+
+    if (failed > 0 && uploaded > 0) {
+      showToast(`${failed} photo(s) could not be uploaded`);
+    }
   }
 
   /* ───────────────────────────────────────────

@@ -26,7 +26,7 @@ Ensure `reception/uploads/` exists and is writable by PHP.
 ## Configuration (.env)
 
 - `RECEPTION_API_KEY` — required for QR-only access. The app and API now require this key.
-- `RECEPTION_UPLOAD_MAX_BYTES` — default 5242880 (5MB)
+- `RECEPTION_UPLOAD_MAX_BYTES` — default 10485760 (10MB)
 - `RECEPTION_UPLOAD_MAX_PER_HOUR` — default 10 per IP
 - `RECEPTION_WEBP_QUALITY` — optional WebP conversion quality (50-100, default 82)
 
