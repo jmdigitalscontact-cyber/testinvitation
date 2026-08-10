@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="reception-boot">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
@@ -7,6 +7,18 @@
     <meta name="description" content="Jason & Rhona Mae — reception seating, menu, and photo gallery." />
     <meta name="robots" content="noindex,nofollow" />
     <title>Reception | Jason & Rhona Mae</title>
+    <style>
+      /* Critical first-paint guard: welcome must win before external CSS/JS load. */
+      html.reception-boot,
+      html.reception-boot body { background: #0b1811; }
+      html.reception-boot #reception-app { display: none !important; visibility: hidden !important; }
+      html.reception-boot #rec-lock-overlay { visibility: hidden; }
+      html.reception-boot #rec-welcome-overlay {
+        position: fixed; inset: 0; z-index: 10000; display: flex;
+        align-items: center; justify-content: center;
+        background: #0b1811; opacity: 1;
+      }
+    </style>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -26,7 +38,7 @@
     <canvas id="particle-canvas" class="particle-canvas" aria-hidden="true"></canvas>
 
     <!-- ===== LOCK SCREEN ===== -->
-    <div class="rec-lock-overlay" id="rec-lock-overlay">
+    <div class="rec-lock-overlay is-verifying" id="rec-lock-overlay">
       <div class="rec-lock-card" id="rec-lock-card">
         <div class="rec-lock-glow" aria-hidden="true"></div>
         <div class="rec-lock-icon-wrap">
@@ -58,7 +70,7 @@
     </div>
 
     <!-- ===== WELCOME SCREEN (shown after QR unlock) ===== -->
-    <div class="rec-welcome-overlay" id="rec-welcome-overlay" hidden role="dialog" aria-modal="true" aria-label="Welcome">
+    <div class="rec-welcome-overlay" id="rec-welcome-overlay" role="dialog" aria-modal="true" aria-label="Welcome">
       <div class="rec-welcome-card" id="rec-welcome-card">
         <div class="rec-welcome-glow" aria-hidden="true"></div>
         <div class="rec-lock-icon-wrap">
@@ -88,7 +100,7 @@
     </div>
 
     <!-- ===== MAIN APP ===== -->
-    <div class="reception-app" id="reception-app" hidden>
+    <div class="reception-app" id="reception-app" hidden aria-hidden="true">
       <header class="reception-header" id="reception-header">
         <div class="reception-header__bg" aria-hidden="true"></div>
         <button type="button" class="reception-theme-toggle" id="theme-toggle" aria-label="Toggle theme">

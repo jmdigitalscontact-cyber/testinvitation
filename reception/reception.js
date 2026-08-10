@@ -304,7 +304,11 @@
   }
 
   function showLockScreen(message) {
-    if (els.lockOverlay) els.lockOverlay.hidden = false;
+    document.documentElement.classList.remove("reception-boot");
+    if (els.lockOverlay) {
+      els.lockOverlay.hidden = false;
+      els.lockOverlay.classList.remove("is-verifying");
+    }
     if (els.app) els.app.hidden = true;
     if (els.lockError) {
       els.lockError.textContent = message || "";
@@ -318,8 +322,13 @@
       return;
     }
 
-    // Keep the lock visible while we verify the key against the server.
-    showLockScreen("Verifying access…");
+    // A QR visitor should meet the welcome introduction first, not a flash of
+    // lock-screen copy while the key is verified in the background.
+    if (els.lockOverlay) {
+      els.lockOverlay.hidden = false;
+      els.lockOverlay.classList.add("is-verifying");
+    }
+    if (els.app) els.app.hidden = true;
     verifyReceptionKey(RECEPTION_KEY).then((valid) => {
       if (valid) {
         unlockApp();
@@ -333,32 +342,46 @@
 
   function unlockApp() {
     if (els.lockOverlay) {
-      els.lockOverlay.classList.add("is-exiting");
-      setTimeout(() => {
+      const wasVerifying = els.lockOverlay.classList.contains("is-verifying");
+      els.lockOverlay.classList.remove("is-verifying");
+      if (wasVerifying) {
+        // Avoid revealing the lock card for even a frame before the welcome.
         els.lockOverlay.hidden = true;
-      }, 500);
-    }
-    if (els.app) {
-      els.app.hidden = false;
-      els.app.classList.add("is-entering");
-      setTimeout(() => els.app.classList.remove("is-entering"), 600);
+      } else {
+        els.lockOverlay.classList.add("is-exiting");
+        setTimeout(() => {
+          els.lockOverlay.hidden = true;
+        }, 500);
+      }
     }
     document.title = "Reception | Jason & Rhona Mae";
-    maybeShowWelcome();
+    // Keep the app completely hidden until the guest leaves the introduction.
+    // This prevents the Search panel from showing through the welcome overlay.
+    if (!maybeShowWelcome()) revealApp();
+  }
+
+  function revealApp() {
+    if (!els.app || !els.app.hidden) return;
+    document.documentElement.classList.remove("reception-boot");
+    els.app.hidden = false;
+    els.app.removeAttribute("aria-hidden");
+    els.app.classList.add("is-ready", "is-entering");
+    setTimeout(() => els.app?.classList.remove("is-entering"), 600);
   }
 
   /* ───────────────────────────────────────────
      WELCOME SCREEN — the consistent first view after access is verified
      ─────────────────────────────────────────── */
   function maybeShowWelcome() {
-    if (!els.welcomeOverlay) return;
+    if (!els.welcomeOverlay) return false;
 
     els.welcomeOverlay.hidden = false;
 
-    // Give the app entrance animation a moment to settle before the welcome glides in.
+    // Move focus to the welcome action after its entrance motion settles.
     setTimeout(() => {
       els.welcomeCta?.focus({ preventScroll: true });
     }, 700);
+    return true;
   }
 
   function dismissWelcome() {
@@ -368,6 +391,7 @@
     switchTab("search");
     const searchPanel = document.getElementById("panel-search");
     if (searchPanel) searchPanel.scrollTop = 0;
+    revealApp();
     els.welcomeOverlay.classList.add("is-exiting");
     els.welcomeCta?.blur();
     fireConfetti();
@@ -380,6 +404,21 @@
 
   function initWelcome() {
     els.welcomeCta?.addEventListener("click", dismissWelcome);
+
+    // Browsers may restore this page from the back/forward cache with the
+    // previously open Search tab already painted. Reset it before the page is
+    // frozen, so every restored QR visit starts at the introduction too.
+    window.addEventListener("pagehide", () => {
+      if (els.app) {
+        els.app.hidden = true;
+        els.app.setAttribute("aria-hidden", "true");
+        els.app.classList.remove("is-ready", "is-entering");
+      }
+      if (els.welcomeOverlay) {
+        els.welcomeOverlay.classList.remove("is-exiting");
+        els.welcomeOverlay.hidden = false;
+      }
+    });
   }
 
   function handleLockEnter() {
