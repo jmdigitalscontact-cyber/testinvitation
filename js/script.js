@@ -1006,7 +1006,8 @@
 
   function waitForFlipEnd(el, cb) {
     var done = false;
-    function finish() {
+    function finish(event) {
+      if (event && (event.target !== el || event.propertyName !== 'transform')) return;
       if (done) return;
       done = true;
       el.removeEventListener('transitionend', finish);
@@ -1017,12 +1018,16 @@
       return;
     }
     el.addEventListener('transitionend', finish);
-    setTimeout(finish, 950);
+    setTimeout(finish, 1320);
   }
 
-  function resetAllPages() {
-    photoPages.forEach(function (p) {
-      p.classList.remove('visible', 'flipped', 'above');
+  function renderBook() {
+    photoPages.forEach(function (p, index) {
+      p.classList.add('visible');
+      p.classList.toggle('flipped', index < currentIndex);
+      p.classList.toggle('above', index === currentIndex);
+      p.classList.remove('turning');
+      p.style.zIndex = index < currentIndex ? String(index + 1) : String(photoTotal - index);
     });
   }
 
@@ -1031,19 +1036,13 @@
     isFlipping = true;
 
     var cur = photoPages[currentIndex];
-    var nxt = photoPages[currentIndex + 1];
-
-    resetAllPages();
-    cur.classList.add('visible', 'above');
-    nxt.classList.add('visible');
-
+    cur.classList.add('turning');
     void cur.offsetWidth;
     cur.classList.add('flipped');
 
     waitForFlipEnd(cur, function () {
-      resetAllPages();
-      nxt.classList.add('visible', 'above');
       currentIndex++;
+      renderBook();
       setBookLabel();
       isFlipping = false;
     });
@@ -1053,20 +1052,15 @@
     if (isFlipping || currentIndex <= 0) return;
     isFlipping = true;
 
-    var cur = photoPages[currentIndex];
     var prev = photoPages[currentIndex - 1];
 
-    resetAllPages();
-    cur.classList.add('visible', 'above');
-    prev.classList.add('visible');
+    prev.classList.add('turning');
+    void prev.offsetWidth;
+    prev.classList.remove('flipped');
 
-    void cur.offsetWidth;
-    cur.classList.add('flipped');
-
-    waitForFlipEnd(cur, function () {
-      resetAllPages();
-      prev.classList.add('visible', 'above');
+    waitForFlipEnd(prev, function () {
       currentIndex--;
+      renderBook();
       setBookLabel();
       isFlipping = false;
     });
@@ -1095,36 +1089,23 @@
       }
     });
 
-    // Click-to-flip: clicking current photo goes to next
-    photoPages.forEach(function (page) {
-      var front = page.querySelector('.page-front');
-      if (!front) return;
-
-      front.addEventListener('click', function (e) {
-        // If there's a next page, flip forward; if on last page, flip backward
-        if (currentIndex < photoTotal - 1) {
-          goToNext();
-        } else if (currentIndex > 0) {
-          goToPrev();
-        }
-      });
-
-      // Also make the back face clickable for prev navigation
-      var back = page.querySelector('.page-back');
-      if (back) {
-        back.addEventListener('click', function (e) {
-          if (currentIndex > 0) {
-            goToPrev();
-          } else if (currentIndex < photoTotal - 1) {
-            goToNext();
-          }
-        });
-      }
+    var swipeStartX = 0;
+    var swipeStartY = 0;
+    book.addEventListener('pointerdown', function (e) {
+      if (e.pointerType === 'mouse' && e.button !== 0) return;
+      swipeStartX = e.clientX;
+      swipeStartY = e.clientY;
+    });
+    book.addEventListener('pointerup', function (e) {
+      var deltaX = e.clientX - swipeStartX;
+      var deltaY = e.clientY - swipeStartY;
+      if (Math.abs(deltaX) < 44 || Math.abs(deltaX) < Math.abs(deltaY)) return;
+      if (deltaX < 0) goToNext();
+      else goToPrev();
     });
 
     // Show the first photo on load
-    resetAllPages();
-    photoPages[0].classList.add('visible', 'above');
+    renderBook();
     setBookLabel();
   }
 
