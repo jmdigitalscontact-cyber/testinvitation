@@ -321,10 +321,16 @@ function receptionUploadErrorMessage($code) {
 }
 
 function receptionPhotoPublicUrl($storagePath) {
-    // Return a secure URL that streams the photo via the API (requires RECEPTION_API_KEY)
+    // Return a secure URL that streams the photo via the API.
     $file = basename((string)$storagePath);
     $base = defined('PUBLIC_BASE_URL') ? rtrim(PUBLIC_BASE_URL, '/') : '';
     $url = '/rsvp/api.php?action=serve-reception-photo&file=' . rawurlencode($file);
+
+    $expectedKey = trim((string)EnvironmentLoader::get('RECEPTION_API_KEY', ''));
+    if ($expectedKey !== '') {
+        $url .= '&key=' . rawurlencode($expectedKey);
+    }
+
     return $base !== '' ? $base . $url : $url;
 }
 
@@ -762,18 +768,22 @@ function handleUploadReceptionPhoto() {
 
     $useGooglePhotos = receptionGooglePhotosEnabled();
 
-    if (!$useGooglePhotos && !receptionCanConvertToWebp()) {
-        sendResponse([
-            'success' => false,
-            'error' => 'Server image conversion is not available. Please enable PHP GD with WebP support or configure Google Photos.'
-        ], 500);
-    }
-
     if (!isset($_FILES['photo']) || !is_array($_FILES['photo'])) {
         sendResponse(['success' => false, 'error' => 'No photo uploaded'], 400);
     }
 
     $file = $_FILES['photo'];
+    if (isset($file['tmp_name']) && is_array($file['tmp_name'])) {
+        // PHP may provide multiple file upload arrays even if only one file is selected.
+        $file = [
+            'name' => $file['name'][0] ?? '',
+            'type' => $file['type'][0] ?? '',
+            'tmp_name' => $file['tmp_name'][0] ?? '',
+            'error' => $file['error'][0] ?? UPLOAD_ERR_NO_FILE,
+            'size' => $file['size'][0] ?? 0,
+        ];
+    }
+
     if (!isset($file['tmp_name']) || !is_uploaded_file($file['tmp_name'])) {
         sendResponse(['success' => false, 'error' => 'No photo uploaded'], 400);
     }
@@ -815,53 +825,81 @@ function handleUploadReceptionPhoto() {
     $uploadsDir = receptionUploadsDir();
     $storagePath = '';
     $storedMime = $mime;
+    $usedGooglePhotos = false;
+
+    $directSaveMimes = [
+        'image/jpeg',
+        'image/jpg',
+        'image/pjpeg',
+        'image/png',
+        'image/webp',
+        'image/x-webp',
+        'image/heic',
+        'image/heif',
+    ];
+
+    $canDirectSave = in_array($mime, $directSaveMimes, true);
+    $canConvert = receptionCanConvertToWebp();
 
     if ($useGooglePhotos) {
         $originalName = basename((string)($file['name'] ?? 'photo'));
         $googleResult = receptionUploadToGooglePhotos($file['tmp_name'], $mime, $originalName);
-        if (!$googleResult || empty($googleResult['id'])) {
-            sendResponse(['success' => false, 'error' => 'Google Photos upload failed'], 500);
+
+        if ($googleResult && !empty($googleResult['id'])) {
+            $storagePath = $googleResult['id'];
+            $storedMime = $googleResult['mimeType'] ?? $mime;
+            $usedGooglePhotos = true;
+
+            $secLog = dirname(__DIR__) . '/logs/reception-upload-security.log';
+            @file_put_contents($secLog, date('c') . " - upload_ok - " . json_encode(['google_item_id' => $storagePath]) . PHP_EOL, FILE_APPEND | LOCK_EX);
+        } else {
+            $secLog = dirname(__DIR__) . '/logs/reception-upload-security.log';
+            @file_put_contents($secLog, date('c') . " - google_upload_failed - " . json_encode(['file' => basename((string)$file['name']), 'mime' => $mime]) . PHP_EOL, FILE_APPEND | LOCK_EX);
+
+            if (!$canDirectSave && !$canConvert) {
+                sendResponse(['success' => false, 'error' => 'Google Photos upload failed and local storage is unavailable'], 500);
+            }
         }
+    }
 
-        $storagePath = $googleResult['id'];
-        $storedMime = $googleResult['mimeType'] ?? $mime;
-
-        // Record a successful upload security entry (best-effort)
-        $secLog = dirname(__DIR__) . '/logs/reception-upload-security.log';
-        @file_put_contents($secLog, date('c') . " - upload_ok - " . json_encode(['google_item_id' => $storagePath]) . PHP_EOL, FILE_APPEND | LOCK_EX);
-    } else {
-        $safeName = 'reception-' . date('Ymd-His') . '-' . bin2hex(random_bytes(4)) . '.webp';
+    if (!$usedGooglePhotos) {
+        $extension = $allowed[$mime] ?? 'webp';
+        $safeName = 'reception-' . date('Ymd-His') . '-' . bin2hex(random_bytes(4)) . '.' . $extension;
         $destPath = $uploadsDir . DIRECTORY_SEPARATOR . $safeName;
 
-        if (!receptionConvertToWebp($file['tmp_name'], $mime, $destPath)) {
-            sendResponse(['success' => false, 'error' => 'Could not convert image to WebP'], 500);
+        if ($canDirectSave) {
+            if (!move_uploaded_file($file['tmp_name'], $destPath)) {
+                if ($canConvert && receptionConvertToWebp($file['tmp_name'], $mime, $destPath)) {
+                    $storedMime = 'image/webp';
+                } else {
+                    sendResponse(['success' => false, 'error' => 'Failed to save uploaded image locally'], 500);
+                }
+            }
+        } else {
+            if (!receptionConvertToWebp($file['tmp_name'], $mime, $destPath)) {
+                sendResponse(['success' => false, 'error' => 'Could not convert image to WebP'], 500);
+            }
+            $storedMime = 'image/webp';
         }
 
-        // Ensure the generated file is not executable and has restrictive permissions
         @chmod($destPath, 0644);
 
-        // Optional antivirus scan (ClamAV compatible). Enable by setting CLAMAV_SCAN_CMD in .env.
         $clamCmd = trim((string)EnvironmentLoader::get('CLAMAV_SCAN_CMD', ''));
         if ($clamCmd !== '' && function_exists('exec')) {
             $scanCmd = escapeshellcmd($clamCmd) . ' --no-summary ' . escapeshellarg($destPath) . ' 2>&1';
             exec($scanCmd, $scanOut, $scanCode);
             if ($scanCode !== 0) {
                 @unlink($destPath);
-                // Log the security event (best-effort)
                 $secLog = dirname(__DIR__) . '/logs/reception-upload-security.log';
                 @file_put_contents($secLog, date('c') . " - scan_failed - " . json_encode(['file' => $destPath, 'cmd' => $scanCmd, 'out' => $scanOut, 'code' => $scanCode]) . PHP_EOL, FILE_APPEND | LOCK_EX);
                 sendResponse(['success' => false, 'error' => 'Uploaded file failed malware scan'], 400);
             }
         }
 
-        // Record a successful upload security entry (best-effort)
         $secLog = dirname(__DIR__) . '/logs/reception-upload-security.log';
         @file_put_contents($secLog, date('c') . " - upload_ok - " . json_encode(['file' => $destPath]) . PHP_EOL, FILE_APPEND | LOCK_EX);
 
-        if ($storagePath === '') {
-            $storagePath = $safeName;
-            $storedMime = 'image/webp';
-        }
+        $storagePath = $safeName;
     }
 
     $db = Database::getInstance();
@@ -902,6 +940,7 @@ function handleUploadReceptionPhoto() {
             'url' => receptionPhotoPublicUrl($storagePath),
             'mimeType' => $storedMime,
             'uploadedAt' => date('c'),
+            'useGooglePhotos' => $usedGooglePhotos,
         ],
     ]);
 }

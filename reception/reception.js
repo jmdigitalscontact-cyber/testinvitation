@@ -4,7 +4,7 @@
   /* ───────────────────────────────────────────
      CONFIG
      ─────────────────────────────────────────── */
-  const API_BASE = "../rsvp/api.php";
+  const API_BASE = new URL('../rsvp/api.php', window.location.href).toString();
   const params = new URLSearchParams(window.location.search);
   const RECEPTION_KEY_STORAGE = "reception_access_key";
   const RECEPTION_KEY_PARAM = params.get("key") || "";
@@ -60,8 +60,7 @@
     els.photoStatus = document.getElementById("photo-gallery-status");
     els.photoUploadCameraBtn = document.getElementById("photo-upload-camera-btn");
     els.photoUploadGalleryBtn = document.getElementById("photo-upload-gallery-btn");
-    els.photoUploadCameraInput = document.getElementById("photo-upload-camera-input");
-    els.photoUploadGalleryInput = document.getElementById("photo-upload-gallery-input");
+    els.photoUploadInput = document.getElementById("photo-upload-input");
     els.uploadZone = document.getElementById("upload-zone");
     els.photoLightbox = document.getElementById("photo-lightbox");
     els.photoLightboxImg = document.querySelector(".reception-photo-lightbox__img");
@@ -1162,27 +1161,42 @@
   }
 
   function initPhotoUpload() {
-    const openGalleryInput = () => els.photoUploadGalleryInput?.click();
+    const openCameraInput = () => {
+      if (!els.photoUploadInput) return;
+      els.photoUploadInput.removeAttribute('multiple');
+      els.photoUploadInput.setAttribute('capture', 'environment');
+      els.photoUploadInput.click();
+    };
 
-    els.photoUploadCameraBtn?.addEventListener('click', () => {
-      els.photoUploadCameraInput?.click();
-    });
+    const openGalleryInput = () => {
+      if (!els.photoUploadInput) return;
+      els.photoUploadInput.removeAttribute('capture');
+      els.photoUploadInput.setAttribute('multiple', '');
+      els.photoUploadInput.click();
+    };
 
+    const handleSelectedFiles = async (files) => {
+      if (!files.length) return;
+      await processUploads(files);
+      if (els.photoUploadInput) {
+        els.photoUploadInput.value = '';
+        els.photoUploadInput.removeAttribute('capture');
+      }
+    };
+
+    els.photoUploadCameraBtn?.addEventListener('click', openCameraInput);
     els.photoUploadGalleryBtn?.addEventListener('click', openGalleryInput);
     els.uploadZone?.addEventListener('click', openGalleryInput);
 
-    els.photoUploadCameraInput?.addEventListener('change', async () => {
-      const files = [...(els.photoUploadCameraInput.files || [])];
-      if (!files.length) return;
-      await processUploads(files);
-      els.photoUploadCameraInput.value = '';
+    els.photoUploadInput?.addEventListener('click', () => {
+      if (els.photoUploadInput) {
+        els.photoUploadInput.value = '';
+      }
     });
 
-    els.photoUploadGalleryInput?.addEventListener('change', async () => {
-      const files = [...(els.photoUploadGalleryInput.files || [])];
-      if (!files.length) return;
-      await processUploads(files);
-      els.photoUploadGalleryInput.value = '';
+    els.photoUploadInput?.addEventListener('change', async () => {
+      const files = [...(els.photoUploadInput.files || [])];
+      await handleSelectedFiles(files);
     });
 
     const zone = els.uploadZone;
@@ -1203,7 +1217,7 @@
       zone.classList.remove('is-dragover');
       const files = [...(event.dataTransfer?.files || [])].filter((file) => file.type.startsWith('image/'));
       if (!files.length) return;
-      await processUploads(files);
+      await handleSelectedFiles(files);
     });
   }
 
