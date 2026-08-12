@@ -157,6 +157,12 @@ header.scrolled {
     background-position: center center;
     background-size: cover;
   }
+  .scroll-ring {
+    bottom: 16px;
+    width: min(220px, 32vw);
+    height: min(180px, 30vw);
+  }
+  .scroll-ring text { font-size: clamp(10px, 2vw, 14px); letter-spacing: 0.1em; }
 }
 
 @media (max-width: 600px) {
@@ -164,6 +170,12 @@ header.scrolled {
     background-position: center center;
     background-size: cover;
   }
+  .scroll-ring {
+    bottom: 12px;
+    width: min(180px, 40vw);
+    height: min(150px, 38vw);
+  }
+  .scroll-ring text { font-size: clamp(10px, 2.4vw, 13px); }
 }
 
 @media (max-width: 480px) {
@@ -227,6 +239,18 @@ header.scrolled {
     0 0 14px rgba(255,255,255,0.95),
     0 0 30px rgba(255,255,255,0.75);
 }
+@media (min-width: 992px) {
+  .banner {
+    justify-content: flex-start;
+    padding-left: min(200px, 16vw);
+  }
+  .hero-content {
+    width: min(40vw, 550px);
+    text-align: left;
+    padding-top: 5vh;
+    margin-left: 9vw;
+  }
+}
 
 .share {
   position: absolute;
@@ -257,28 +281,40 @@ header.scrolled {
 
 .scroll-ring {
   position: absolute;
-  bottom: 0;
+  bottom: 2vmin;
   left: 50%;
   transform: translateX(-50%);
   z-index: 1000;
-  width: 300px;
-  height: 200px;
+  width: min(280px, 28vw);
+  height: min(220px, 22vw);
   display: flex;
   justify-content: center;
   align-items: center;
   pointer-events: none;
+  background: rgba(255, 255, 255, 0.55);
+  border-radius: 50%;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.55), 0 24px 48px rgba(0, 0, 0, 0.16);
 }
 .scroll-ring svg {
   position: absolute;
   z-index: 1100;
   font-family: 'Great Vibes', cursive;
-  width: 66%;
+  width: 100%;
   height: auto;
-  max-width: 20vmin;
+  max-width: 100%;
+  max-height: 100%;
   transform-origin: center;
   animation: spin 10s linear infinite;
+  filter: drop-shadow(0 0 12px rgba(0, 0, 0, 0.18));
 }
-.scroll-ring text { fill: var(--muted); font-size: 14px; letter-spacing: 2px; }
+.scroll-ring text {
+  fill: rgba(20, 34, 28, 0.98);
+  font-size: clamp(12px, 1.1vw, 16px);
+  letter-spacing: 0.12em;
+  stroke: rgba(255, 255, 255, 0.8);
+  stroke-width: 0.7;
+  paint-order: stroke;
+}
 @keyframes spin {
   from { transform: rotateZ(0); }
   to { transform: rotateZ(360deg); }
@@ -1966,8 +2002,9 @@ footer .footer-names {
   .photo-card { max-width: 100%; min-height: 340px; }
   .photo-card .card-img { height: auto; aspect-ratio: 4 / 3; }
   .event-card-media { min-height: 180px; }
-  .scroll-ring { width: 140px; height: 130px; bottom: 10px; }
-  .scroll-ring svg { max-width: 18vmin; }
+  .scroll-ring { width: 130px; height: 120px; bottom: 8px; }
+  .scroll-ring svg { width: 100%; max-width: 100%; }
+  .scroll-ring text { font-size: clamp(10px, 3.2vw, 12px); }
   .lightbox img { max-width: 98vw; max-height: 80vh; }
   .lightbox-prev { left: 0.4rem; }
   .lightbox-next { right: 0.4rem; }
