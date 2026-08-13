@@ -58,6 +58,8 @@
     els.photoGalleryWrap = document.getElementById("photo-gallery-wrap");
     els.photoGallery = document.getElementById("photo-gallery");
     els.photoStatus = document.getElementById("photo-gallery-status");
+    els.photoMarqueeWrap = document.getElementById("photo-marquee-wrap");
+    els.photoMarqueeTrack = document.getElementById("photo-marquee-track");
     els.photoUploadCameraBtn = document.getElementById("photo-upload-camera-btn");
     els.photoUploadGalleryBtn = document.getElementById("photo-upload-gallery-btn");
     els.photoUploadInput = document.getElementById("photo-upload-input");
@@ -982,7 +984,7 @@
 
       return `
         <button type="button" class="reception-gallery__item" data-photo-index="${i}" aria-label="View photo ${i + 1}">
-          <img src="${escapeHtml(p.url)}" alt="" loading="lazy" decoding="async" />
+          <img src="${escapeHtml(p.url)}" alt="" loading="lazy" decoding="async" onerror="this.onerror=null;this.parentElement.style.display='none';" />
           ${tagText ? `<div class="rec-photo-tag-badge">${tagText}</div>` : ''}
           <div class="rec-photo-overlay">
             <button type="button" class="rec-photo-heart-btn ${state.likedPhotos.has(i) ? "is-liked" : ""}" data-like-index="${i}" aria-label="Like photo">
@@ -994,6 +996,31 @@
     }).join("");
 
     if (els.photoGalleryWrap) els.photoGalleryWrap.hidden = false;
+
+    // Render Live Marquee Ticker
+    if (els.photoMarqueeTrack && els.photoMarqueeWrap) {
+      els.photoMarqueeWrap.hidden = false;
+      const itemsHtml = state.photos.map((p, i) => {
+        const tag = p.uploaderName || (p.tableNumber ? `Table ${p.tableNumber}` : 'POV');
+        return `
+          <div class="rec-marquee-item" data-photo-index="${i}">
+            <img src="${escapeHtml(p.url)}" alt="" loading="lazy" onerror="this.onerror=null;this.parentElement.style.display='none';" />
+            <div class="rec-marquee-tag">${escapeHtml(tag)}</div>
+          </div>
+        `;
+      }).join("");
+
+      // Render all photos in track; duplicate sequence when >1 to allow seamless scrolling
+      els.photoMarqueeTrack.innerHTML = state.photos.length > 1 ? itemsHtml + itemsHtml : itemsHtml;
+
+      // Add lightbox click event for marquee items
+      els.photoMarqueeTrack.querySelectorAll(".rec-marquee-item").forEach(item => {
+        item.addEventListener("click", () => {
+          const idx = parseInt(item.dataset.photoIndex, 10);
+          if (!Number.isNaN(idx)) openPhotoLightbox(idx);
+        });
+      });
+    }
 
     // Like buttons
     els.photoGallery.querySelectorAll(".rec-photo-heart-btn").forEach(btn => {
@@ -1048,16 +1075,15 @@
     setTimeout(() => heart.remove(), 1200);
   }
 
-  // 10s Auto-polling for real-time gallery updates
+  // 5s Auto-polling for real-time gallery updates
   let photoPollTimer = null;
   function startPhotoPolling() {
     if (photoPollTimer) clearInterval(photoPollTimer);
     photoPollTimer = setInterval(async () => {
-      if (document.hidden || state.activeTab !== "photos") return;
+      if (document.hidden) return;
       try {
         const result = await apiGet("get-reception-photos");
         if (result.success && Array.isArray(result.data)) {
-          // preserve local liked status
           const currentCount = state.photos.length;
           state.photos = result.data;
           renderPhotos();
@@ -1068,7 +1094,7 @@
       } catch (e) {
         // silent poll fail
       }
-    }, 10000);
+    }, 5000);
   }
 
   /* ───────────────────────────────────────────
@@ -1167,7 +1193,7 @@
      ─────────────────────────────────────────── */
   async function compressPhoto(file) {
     if (file.type === 'image/heic' || file.type === 'image/heif') {
-      return file; // Let backend handle HEIC conversion if canvas lacks browser support
+      return file;
     }
     return new Promise((resolve) => {
       const img = new Image();
@@ -1177,7 +1203,8 @@
         const canvas = document.createElement('canvas');
         let width = img.width;
         let height = img.height;
-        const maxDim = 1920;
+        // Compress thumbnail dimension down for lightweight fast marquee/gallery stream
+        const maxDim = 800;
 
         if (width > maxDim || height > maxDim) {
           if (width > height) {
@@ -1196,7 +1223,7 @@
 
         canvas.toBlob(
           (blob) => {
-            if (blob && blob.size < file.size) {
+            if (blob) {
               const compressedFile = new File([blob], file.name.replace(/\.[^/.]+$/, ".jpg"), {
                 type: 'image/jpeg',
                 lastModified: Date.now()
@@ -1207,7 +1234,7 @@
             }
           },
           'image/jpeg',
-          0.82
+          0.78
         );
       };
       img.onerror = () => {
@@ -1397,6 +1424,14 @@
     }
 
     if (uploaded > 0) {
+      try {
+        const fresh = await apiGet("get-reception-photos");
+        if (fresh.success && Array.isArray(fresh.data)) {
+          state.photos = fresh.data;
+        }
+      } catch (e) {
+        // fallback to state.photos
+      }
       renderPhotos();
       if (els.photoStatus) els.photoStatus.textContent = `${state.photos.length} photo(s)`;
       showToast(uploaded === 1 ? 'POV shared! 🎉' : `${uploaded} POVs shared! 🎉`);

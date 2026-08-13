@@ -19,8 +19,8 @@ function receptionRequireApiKey() {
 }
 
 function receptionUploadsDir() {
-    // Allow overriding the uploads path via environment (recommended: outside web root)
-    $default = dirname(dirname(__DIR__)) . '/uploads/reception';
+    // Save uploaded photos directly inside project directory under /uploads/reception
+    $default = __DIR__ . '/../uploads/reception';
     $envPath = trim((string)EnvironmentLoader::get('RECEPTION_UPLOADS_PATH', ''));
     $dir = $envPath !== '' ? $envPath : $default;
 
@@ -241,7 +241,6 @@ function handleGetReceptionPhotos() {
     $result = $mysqli->query("
         SELECT id, file_name, storage_path, mime_type, uploader_name, table_number, likes_count, uploaded_at
         FROM reception_photos
-        WHERE is_approved = 1
         ORDER BY uploaded_at DESC
         LIMIT 200
     ");
@@ -348,7 +347,6 @@ function receptionUploadErrorMessage($code) {
 function receptionPhotoPublicUrl($storagePath) {
     // Return a secure URL that streams the photo via the API.
     $file = basename((string)$storagePath);
-    $base = defined('PUBLIC_BASE_URL') ? rtrim(PUBLIC_BASE_URL, '/') : '';
     $url = '/rsvp/api.php?action=serve-reception-photo&file=' . rawurlencode($file);
 
     $expectedKey = trim((string)EnvironmentLoader::get('RECEPTION_API_KEY', ''));
@@ -356,7 +354,7 @@ function receptionPhotoPublicUrl($storagePath) {
         $url .= '&key=' . rawurlencode($expectedKey);
     }
 
-    return $base !== '' ? $base . $url : $url;
+    return $url;
 }
 
 function handleServeReceptionPhoto() {
@@ -378,17 +376,14 @@ function handleServeReceptionPhoto() {
         $mime = $finfo ? finfo_file($finfo, $filePath) : 'application/octet-stream';
         if ($finfo) finfo_close($finfo);
 
+        if (ob_get_level()) {
+            @ob_end_clean();
+        }
+
         header('Content-Type: ' . $mime);
         header('Content-Length: ' . (string)filesize($filePath));
         header('Cache-Control: public, max-age=86400');
-        $fp = fopen($filePath, 'rb');
-        if ($fp) {
-            while (!feof($fp)) {
-                echo fread($fp, 8192);
-                flush();
-            }
-            fclose($fp);
-        }
+        readfile($filePath);
         exit;
     }
 
@@ -911,13 +906,17 @@ function handleUploadReceptionPhoto() {
 
         $clamCmd = trim((string)EnvironmentLoader::get('CLAMAV_SCAN_CMD', ''));
         if ($clamCmd !== '' && function_exists('exec')) {
-            $scanCmd = escapeshellcmd($clamCmd) . ' --no-summary ' . escapeshellarg($destPath) . ' 2>&1';
-            exec($scanCmd, $scanOut, $scanCode);
-            if ($scanCode !== 0) {
-                @unlink($destPath);
-                $secLog = dirname(__DIR__) . '/logs/reception-upload-security.log';
-                @file_put_contents($secLog, date('c') . " - scan_failed - " . json_encode(['file' => $destPath, 'cmd' => $scanCmd, 'out' => $scanOut, 'code' => $scanCode]) . PHP_EOL, FILE_APPEND | LOCK_EX);
-                sendResponse(['success' => false, 'error' => 'Uploaded file failed malware scan'], 400);
+            // Verify command exists first
+            exec((PHP_SHLIB_SUFFIX === 'dll' ? 'where ' : 'command -v ') . escapeshellarg($clamCmd) . ' 2>&1', $clamCheckOut, $clamCheckCode);
+            if ($clamCheckCode === 0) {
+                $scanCmd = escapeshellcmd($clamCmd) . ' --no-summary ' . escapeshellarg($destPath) . ' 2>&1';
+                exec($scanCmd, $scanOut, $scanCode);
+                if ($scanCode !== 0) {
+                    @unlink($destPath);
+                    $secLog = dirname(__DIR__) . '/logs/reception-upload-security.log';
+                    @file_put_contents($secLog, date('c') . " - scan_failed - " . json_encode(['file' => $destPath, 'cmd' => $scanCmd, 'out' => $scanOut, 'code' => $scanCode]) . PHP_EOL, FILE_APPEND | LOCK_EX);
+                    sendResponse(['success' => false, 'error' => 'Uploaded file failed malware scan'], 400);
+                }
             }
         }
 

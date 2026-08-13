@@ -296,8 +296,14 @@ class PgSqlConnectionAdapter {
         }
 
         if (preg_match("/^SHOW COLUMNS FROM ([a-zA-Z0-9_]+) LIKE '([^']+)'$/i", $sql, $matches)) {
-            $stmt = $this->pdo->prepare("SELECT column_name FROM information_schema.columns WHERE table_schema='public' AND table_name = ? AND column_name = ?");
+            $stmt = $this->pdo->prepare("SELECT column_name AS \"Field\" FROM information_schema.columns WHERE table_schema='public' AND table_name = ? AND column_name = ?");
             $stmt->execute([$matches[1], $matches[2]]);
+            return new PgSqlResultAdapter($stmt);
+        }
+
+        if (preg_match("/^SHOW COLUMNS FROM ([a-zA-Z0-9_]+)$/i", $sql, $matches)) {
+            $stmt = $this->pdo->prepare("SELECT column_name AS \"Field\" FROM information_schema.columns WHERE table_schema='public' AND table_name = ?");
+            $stmt->execute([$matches[1]]);
             return new PgSqlResultAdapter($stmt);
         }
 
