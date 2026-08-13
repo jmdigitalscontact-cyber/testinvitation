@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Wedding Live POV Wall</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,700;1,600&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --gold: #d4af47;
+      --gold-soft: #f3e5ab;
+      --bg-dark: #0a0c0e;
+      --font-heading: 'Cormorant Garamond', Georgia, serif;
+      --font-body: 'Outfit', -apple-system, sans-serif;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg-dark);
+      color: #fff;
+      font-family: var(--font-body);
+      overflow: hidden;
+      width: 100vw;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+
+    /* Ambient Blur Background */
+    .wall-ambient-bg {
+      position: absolute;
+      inset: 0;
+      background-size: cover;
+      background-position: center;
+      filter: blur(50px) brightness(0.25);
+      transform: scale(1.1);
+      transition: background-image 1.5s ease-in-out;
+      z-index: 0;
+    }
+
+    /* Header Overlay */
+    .wall-header {
+      position: relative;
+      z-index: 10;
+      padding: 1.8rem 3rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: linear-gradient(to bottom, rgba(0,0,0,0.8), transparent);
+    }
+
+    .wall-title {
+      font-family: var(--font-heading);
+      font-size: 2.4rem;
+      font-weight: 700;
+      color: var(--gold-soft);
+      letter-spacing: 0.05em;
+      text-shadow: 0 2px 10px rgba(0,0,0,0.7);
+    }
+
+    .wall-subtitle {
+      font-size: 1.1rem;
+      color: rgba(255,255,255,0.75);
+      font-weight: 300;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+    }
+
+    /* Main Slideshow View */
+    .wall-stage {
+      position: relative;
+      z-index: 5;
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 1rem;
+    }
+
+    .wall-photo-card {
+      position: relative;
+      max-width: 85vw;
+      max-height: 72vh;
+      border-radius: 20px;
+      overflow: hidden;
+      box-shadow: 0 25px 50px -12px rgba(0,0,0,0.8), 0 0 0 1px rgba(212,175,71,0.25);
+      background: rgba(18, 20, 24, 0.6);
+      backdrop-filter: blur(10px);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      transition: opacity 0.8s ease, transform 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .wall-photo-card img {
+      max-width: 85vw;
+      max-height: 65vh;
+      object-fit: contain;
+      display: block;
+    }
+
+    .wall-photo-meta {
+      width: 100%;
+      padding: 1rem 2rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: rgba(10, 12, 14, 0.85);
+      border-top: 1px solid rgba(255,255,255,0.08);
+    }
+
+    .wall-photo-author {
+      font-size: 1.25rem;
+      font-weight: 600;
+      color: var(--gold-soft);
+    }
+
+    .wall-photo-likes {
+      font-size: 1.2rem;
+      font-weight: 600;
+      color: #ff6b6b;
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+    }
+
+    /* Empty Wall State */
+    .wall-empty {
+      text-align: center;
+      padding: 3rem;
+      background: rgba(255,255,255,0.05);
+      border: 1px dashed rgba(212,175,71,0.3);
+      border-radius: 24px;
+      backdrop-filter: blur(12px);
+    }
+
+    .wall-empty h2 {
+      font-family: var(--font-heading);
+      font-size: 2.8rem;
+      color: var(--gold-soft);
+      margin-bottom: 0.5rem;
+    }
+
+    .wall-empty p {
+      font-size: 1.3rem;
+      color: rgba(255,255,255,0.8);
+    }
+
+    /* Footer & Corner QR Code Overlay */
+    .wall-footer {
+      position: relative;
+      z-index: 10;
+      padding: 1.5rem 3rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      background: linear-gradient(to top, rgba(0,0,0,0.85), transparent);
+    }
+
+    .wall-qr-badge {
+      display: flex;
+      align-items: center;
+      gap: 1.2rem;
+      background: rgba(18, 20, 24, 0.85);
+      border: 1px solid rgba(212,175,71,0.4);
+      border-radius: 16px;
+      padding: 0.8rem 1.2rem;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+      backdrop-filter: blur(12px);
+    }
+
+    .wall-qr-badge img {
+      width: 80px;
+      height: 80px;
+      border-radius: 8px;
+      background: #fff;
+      padding: 4px;
+    }
+
+    .wall-qr-text {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .wall-qr-title {
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: var(--gold-soft);
+    }
+
+    .wall-qr-desc {
+      font-size: 0.9rem;
+      color: rgba(255,255,255,0.7);
+    }
+
+    /* New Photo Toast Announcement */
+    .wall-toast {
+      position: fixed;
+      top: 6rem;
+      right: 3rem;
+      z-index: 50;
+      background: linear-gradient(135deg, #d4af47, #c9a87c);
+      color: #0a0c0e;
+      padding: 1rem 1.8rem;
+      border-radius: 50px;
+      font-weight: 700;
+      font-size: 1.2rem;
+      box-shadow: 0 10px 35px rgba(212,175,71,0.5);
+      display: flex;
+      align-items: center;
+      gap: 0.7rem;
+      animation: popToast 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    }
+
+    @keyframes popToast {
+      from { opacity: 0; transform: translateY(-20px) scale(0.8); }
+      to { opacity: 1; transform: translateY(0) scale(1); }
+    }
+  </style>
+</head>
+<body>
+  <!-- Ambient Backdrop -->
+  <div class="wall-ambient-bg" id="wall-ambient"></div>
+
+  <!-- Header -->
+  <header class="wall-header">
+    <div>
+      <h1 class="wall-title">Wedding POV Live Gallery</h1>
+      <p class="wall-subtitle">Live Moments Shared By Guests</p>
+    </div>
+    <div id="wall-counter" style="font-size:1.2rem; color:var(--gold-soft); font-weight:600;">0 POVs Shared</div>
+  </header>
+
+  <!-- Main Slideshow Stage -->
+  <main class="wall-stage">
+    <div id="wall-photo-container">
+      <div class="wall-empty">
+        <h2>Scan QR Code To Post Your POV! 📸</h2>
+        <p>Photos uploaded by guests will stream live on this screen.</p>
+      </div>
+    </div>
+  </main>
+
+  <!-- New Photo Popup Announcement -->
+  <div id="wall-toast" class="wall-toast" style="display: none;">
+    <span>🎉</span> <span id="wall-toast-msg">New POV Received!</span>
+  </div>
+
+  <!-- Footer with Corner QR Code Overlay -->
+  <footer class="wall-footer">
+    <div class="wall-qr-badge">
+      <img id="wall-qr-img" src="../rsvp/qr_codes/reception-qr.png" alt="Scan QR Code" onerror="this.src='https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=' + encodeURIComponent(window.location.origin + '/reception/')" />
+      <div class="wall-qr-text">
+        <span class="wall-qr-title">Share Your POV!</span>
+        <span class="wall-qr-desc">Scan to snap & stream live photos</span>
+      </div>
+    </div>
+    <div style="font-size:0.9rem; color:rgba(255,255,255,0.4);">Auto-Advancing Carousel · 8s Rotation</div>
+  </footer>
+
+  <script>
+    (function() {
+      const API_BASE = '../rsvp/api.php';
+      const params = new URLSearchParams(window.location.search);
+      const RECEPTION_KEY = params.get('key') || localStorage.getItem('reception_access_key') || '';
+
+      let photos = [];
+      let currentIndex = 0;
+      let knownIds = new Set();
+
+      const els = {
+        container: document.getElementById('wall-photo-container'),
+        ambient: document.getElementById('wall-ambient'),
+        counter: document.getElementById('wall-counter'),
+        toast: document.getElementById('wall-toast'),
+        toastMsg: document.getElementById('wall-toast-msg'),
+      };
+
+      async function fetchWallPhotos() {
+        try {
+          const url = `${API_BASE}?action=get-reception-photos${RECEPTION_KEY ? '&key=' + encodeURIComponent(RECEPTION_KEY) : ''}`;
+          const res = await fetch(url, {
+            headers: RECEPTION_KEY ? { 'X-Reception-Key': RECEPTION_KEY } : {}
+          });
+          const json = await res.json();
+          if (json.success && Array.isArray(json.data)) {
+            const newPhotos = json.data;
+            if (newPhotos.length > 0) {
+              if (photos.length > 0 && newPhotos[0].id !== photos[0].id && !knownIds.has(newPhotos[0].id)) {
+                showNewToast(newPhotos[0]);
+              }
+
+              photos = newPhotos;
+              photos.forEach(p => knownIds.add(p.id));
+              els.counter.textContent = `${photos.length} POV${photos.length === 1 ? '' : 's'} Shared`;
+            }
+          }
+        } catch (e) {
+          console.warn('Error fetching wall photos', e);
+        }
+      }
+
+      function showNewToast(photo) {
+        const name = photo.uploaderName || (photo.tableNumber ? `Table ${photo.tableNumber}` : 'a guest');
+        els.toastMsg.textContent = `New POV from ${name}! 🎉`;
+        els.toast.style.display = 'flex';
+        setTimeout(() => { els.toast.style.display = 'none'; }, 4000);
+      }
+
+      function renderCurrentPhoto() {
+        if (!photos.length) return;
+
+        const photo = photos[currentIndex % photos.length];
+        els.ambient.style.backgroundImage = `url('${photo.url}')`;
+
+        const authorTag = photo.uploaderName
+          ? (photo.tableNumber ? `POV by ${photo.uploaderName} — Table ${photo.tableNumber}` : `POV by ${photo.uploaderName}`)
+          : (photo.tableNumber ? `POV from Table ${photo.tableNumber}` : 'Guest POV');
+
+        const likesText = photo.likesCount ? `❤️ ${photo.likesCount}` : '❤️';
+
+        els.container.innerHTML = `
+          <div class="wall-photo-card">
+            <img src="${photo.url}" alt="Wedding POV Photo" />
+            <div class="wall-photo-meta">
+              <span class="wall-photo-author">${authorTag}</span>
+              <span class="wall-photo-likes">${likesText}</span>
+            </div>
+          </div>
+        `;
+      }
+
+      function nextSlide() {
+        if (photos.length > 0) {
+          currentIndex = (currentIndex + 1) % photos.length;
+          renderCurrentPhoto();
+        }
+      }
+
+      fetchWallPhotos().then(() => {
+        renderCurrentPhoto();
+      });
+
+      setInterval(fetchWallPhotos, 6000);
+      setInterval(nextSlide, 8000);
+    })();
+  </script>
+</body>
+</html>

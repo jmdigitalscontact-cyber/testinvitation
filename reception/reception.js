@@ -954,6 +954,7 @@
       if (result.success && Array.isArray(result.data)) {
         state.photos = result.data;
         renderPhotos();
+        startPhotoPolling();
         els.photoStatus.textContent = state.photos.length === 0
           ? "Be the first to share a photo!"
           : `${state.photos.length} photo(s)`;
@@ -973,16 +974,24 @@
       return;
     }
 
-    els.photoGallery.innerHTML = state.photos.map((p, i) => `
-      <button type="button" class="reception-gallery__item" data-photo-index="${i}" aria-label="View photo ${i + 1}">
-        <img src="${escapeHtml(p.url)}" alt="" loading="lazy" decoding="async" />
-        <div class="rec-photo-overlay">
-          <button type="button" class="rec-photo-heart-btn ${state.likedPhotos.has(i) ? "is-liked" : ""}" data-like-index="${i}" aria-label="${state.likedPhotos.has(i) ? "Unlike" : "Like"} photo">
-            ${state.likedPhotos.has(i) ? "❤️" : "🤍"}
-          </button>
-        </div>
-      </button>
-    `).join("");
+    els.photoGallery.innerHTML = state.photos.map((p, i) => {
+      const tagText = p.uploaderName
+        ? (p.tableNumber ? `${escapeHtml(p.uploaderName)} · T${p.tableNumber}` : escapeHtml(p.uploaderName))
+        : (p.tableNumber ? `Table ${p.tableNumber}` : '');
+      const likes = p.likesCount || 0;
+
+      return `
+        <button type="button" class="reception-gallery__item" data-photo-index="${i}" aria-label="View photo ${i + 1}">
+          <img src="${escapeHtml(p.url)}" alt="" loading="lazy" decoding="async" />
+          ${tagText ? `<div class="rec-photo-tag-badge">${tagText}</div>` : ''}
+          <div class="rec-photo-overlay">
+            <button type="button" class="rec-photo-heart-btn ${state.likedPhotos.has(i) ? "is-liked" : ""}" data-like-index="${i}" aria-label="Like photo">
+              ${state.likedPhotos.has(i) ? "❤️" : "🤍"} <span class="rec-like-count">${likes > 0 ? likes : ''}</span>
+            </button>
+          </div>
+        </button>
+      `;
+    }).join("");
 
     if (els.photoGalleryWrap) els.photoGalleryWrap.hidden = false;
 
@@ -996,13 +1005,70 @@
     });
   }
 
-  function togglePhotoLike(index) {
-    if (state.likedPhotos.has(index)) {
-      state.likedPhotos.delete(index);
-    } else {
+  async function togglePhotoLike(index) {
+    const photo = state.photos[index];
+    if (!photo) return;
+
+    if (!state.likedPhotos.has(index)) {
       state.likedPhotos.add(index);
+      photo.likesCount = (photo.likesCount || 0) + 1;
+      renderPhotos();
+
+      // Trigger floating hearts animation
+      spawnFloatingHeart(index);
+
+      try {
+        const form = new FormData();
+        form.append('action', 'like-reception-photo');
+        form.append('photo_id', photo.id);
+        const headers = {};
+        if (RECEPTION_KEY) headers['X-Reception-Key'] = RECEPTION_KEY;
+
+        const res = await fetch(API_BASE, { method: 'POST', headers, body: form });
+        const json = await res.json();
+        if (json.success && json.data) {
+          photo.likesCount = json.data.likesCount;
+          renderPhotos();
+        }
+      } catch (e) {
+        console.warn("Heart reaction sync error", e);
+      }
     }
-    renderPhotos();
+  }
+
+  function spawnFloatingHeart(index) {
+    const item = els.photoGallery?.querySelector(`[data-photo-index="${index}"]`);
+    if (!item) return;
+
+    const heart = document.createElement("div");
+    heart.className = "rec-floating-heart";
+    heart.textContent = "❤️";
+    heart.style.left = `${Math.random() * 60 + 20}%`;
+    item.appendChild(heart);
+    setTimeout(() => heart.remove(), 1200);
+  }
+
+  // 10s Auto-polling for real-time gallery updates
+  let photoPollTimer = null;
+  function startPhotoPolling() {
+    if (photoPollTimer) clearInterval(photoPollTimer);
+    photoPollTimer = setInterval(async () => {
+      if (document.hidden || state.activeTab !== "photos") return;
+      try {
+        const result = await apiGet("get-reception-photos");
+        if (result.success && Array.isArray(result.data)) {
+          // preserve local liked status
+          const currentCount = state.photos.length;
+          state.photos = result.data;
+          renderPhotos();
+          if (state.photos.length > currentCount && currentCount > 0) {
+            showToast("New POV photo posted! 📸");
+          }
+        }
+      } catch (e) {
+        // silent poll fail
+      }
+    }, 10000);
   }
 
   /* ───────────────────────────────────────────
@@ -1099,10 +1165,66 @@
   /* ───────────────────────────────────────────
      PHOTO UPLOAD with drag & drop
      ─────────────────────────────────────────── */
-  async function uploadPhoto(file) {
+  async function compressPhoto(file) {
+    if (file.type === 'image/heic' || file.type === 'image/heif') {
+      return file; // Let backend handle HEIC conversion if canvas lacks browser support
+    }
+    return new Promise((resolve) => {
+      const img = new Image();
+      const url = URL.createObjectURL(file);
+      img.onload = () => {
+        URL.revokeObjectURL(url);
+        const canvas = document.createElement('canvas');
+        let width = img.width;
+        let height = img.height;
+        const maxDim = 1920;
+
+        if (width > maxDim || height > maxDim) {
+          if (width > height) {
+            height = Math.round((height * maxDim) / width);
+            width = maxDim;
+          } else {
+            width = Math.round((width * maxDim) / height);
+            height = maxDim;
+          }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+
+        canvas.toBlob(
+          (blob) => {
+            if (blob && blob.size < file.size) {
+              const compressedFile = new File([blob], file.name.replace(/\.[^/.]+$/, ".jpg"), {
+                type: 'image/jpeg',
+                lastModified: Date.now()
+              });
+              resolve(compressedFile);
+            } else {
+              resolve(file);
+            }
+          },
+          'image/jpeg',
+          0.82
+        );
+      };
+      img.onerror = () => {
+        URL.revokeObjectURL(url);
+        resolve(file);
+      };
+      img.src = url;
+    });
+  }
+
+  async function uploadPhoto(file, nameTag, tableTag) {
+    const compressed = await compressPhoto(file);
     const form = new FormData();
     form.append('action', 'upload-reception-photo');
-    form.append('photo', file, file.name || 'photo.jpg');
+    form.append('photo', compressed, compressed.name || 'photo.jpg');
+    if (nameTag) form.append('uploader_name', nameTag);
+    if (tableTag) form.append('table_number', tableTag);
 
     const headers = {};
     if (RECEPTION_KEY) headers['X-Reception-Key'] = RECEPTION_KEY;
@@ -1186,7 +1308,10 @@
 
     els.photoUploadCameraBtn?.addEventListener('click', openCameraInput);
     els.photoUploadGalleryBtn?.addEventListener('click', openGalleryInput);
-    els.uploadZone?.addEventListener('click', openGalleryInput);
+    els.uploadZone?.addEventListener('click', (e) => {
+      if (e.target.tagName === 'INPUT') return;
+      openGalleryInput();
+    });
 
     els.photoUploadInput?.addEventListener('click', () => {
       if (els.photoUploadInput) {
@@ -1240,17 +1365,20 @@
 
     if (!valid.length) return;
 
+    const nameTag = document.getElementById("photo-tag-name")?.value || "";
+    const tableTag = document.getElementById("photo-tag-table")?.value || "";
+
     const total = valid.length;
     let uploaded = 0;
     let failed = 0;
 
     for (let index = 0; index < total; index += 1) {
       if (els.photoStatus) {
-        els.photoStatus.textContent = total > 1 ? `Uploading ${index + 1} of ${total}…` : 'Uploading…';
+        els.photoStatus.textContent = total > 1 ? `Compressing & uploading ${index + 1} of ${total}…` : 'Uploading…';
       }
 
       try {
-        const result = await uploadPhoto(valid[index]);
+        const result = await uploadPhoto(valid[index], nameTag, tableTag);
         if (result?.success && result.data) {
           state.photos.unshift(result.data);
           uploaded += 1;
@@ -1271,7 +1399,7 @@
     if (uploaded > 0) {
       renderPhotos();
       if (els.photoStatus) els.photoStatus.textContent = `${state.photos.length} photo(s)`;
-      showToast(uploaded === 1 ? 'Photo shared! 🎉' : `${uploaded} photos shared! 🎉`);
+      showToast(uploaded === 1 ? 'POV shared! 🎉' : `${uploaded} POVs shared! 🎉`);
     }
 
     if (failed > 0 && uploaded > 0) {

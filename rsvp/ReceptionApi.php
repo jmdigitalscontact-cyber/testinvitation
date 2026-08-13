@@ -33,23 +33,44 @@ function receptionUploadsDir() {
 
 function receptionEnsurePhotosTable($mysqli) {
     $result = $mysqli->query("SHOW TABLES LIKE 'reception_photos'");
-    if ($result && $result->num_rows > 0) {
+    if (!$result || $result->num_rows === 0) {
+        $engine = defined('DB_ENGINE') ? DB_ENGINE : 'mysql';
+        $schemaFile = ($engine === 'mysql') ? 'database-reception-photos-mysql.sql' : 'database-reception-photos.sql';
+        $sql = file_get_contents(__DIR__ . '/' . $schemaFile);
+        if ($sql) {
+            $statements = array_filter(array_map('trim', preg_split('/;\s*\n/', $sql)));
+            foreach ($statements as $statement) {
+                $statement = preg_replace('/^--.*\R/m', '', $statement);
+                $statement = trim($statement);
+                if ($statement === '') {
+                    continue;
+                }
+                $mysqli->query($statement);
+            }
+        }
         return true;
     }
 
-    $engine = defined('DB_ENGINE') ? DB_ENGINE : 'mysql';
-    $schemaFile = ($engine === 'mysql') ? 'database-reception-photos-mysql.sql' : 'database-reception-photos.sql';
-    $sql = file_get_contents(__DIR__ . '/' . $schemaFile);
-    if ($sql) {
-        $statements = array_filter(array_map('trim', preg_split('/;\s*\n/', $sql)));
-        foreach ($statements as $statement) {
-            $statement = preg_replace('/^--.*\R/m', '', $statement);
-            $statement = trim($statement);
-            if ($statement === '') {
-                continue;
-            }
-            $mysqli->query($statement);
+    // Auto-migrate missing columns for existing tables
+    $columnsRes = $mysqli->query("SHOW COLUMNS FROM reception_photos");
+    $existing = [];
+    if ($columnsRes) {
+        while ($col = $columnsRes->fetch_assoc()) {
+            $existing[$col['Field']] = true;
         }
+    }
+
+    if (!isset($existing['uploader_name'])) {
+        $mysqli->query("ALTER TABLE reception_photos ADD COLUMN uploader_name VARCHAR(128) DEFAULT NULL");
+    }
+    if (!isset($existing['table_number'])) {
+        $mysqli->query("ALTER TABLE reception_photos ADD COLUMN table_number INT DEFAULT NULL");
+    }
+    if (!isset($existing['likes_count'])) {
+        $mysqli->query("ALTER TABLE reception_photos ADD COLUMN likes_count INT DEFAULT 0");
+    }
+    if (!isset($existing['is_approved'])) {
+        $mysqli->query("ALTER TABLE reception_photos ADD COLUMN is_approved TINYINT(1) DEFAULT 1");
     }
 
     return true;
@@ -218,8 +239,9 @@ function handleGetReceptionPhotos() {
 
     $photos = [];
     $result = $mysqli->query("
-        SELECT id, file_name, storage_path, mime_type, uploaded_at
+        SELECT id, file_name, storage_path, mime_type, uploader_name, table_number, likes_count, uploaded_at
         FROM reception_photos
+        WHERE is_approved = 1
         ORDER BY uploaded_at DESC
         LIMIT 200
     ");
@@ -232,6 +254,9 @@ function handleGetReceptionPhotos() {
                 'fileName' => $row['file_name'],
                 'url' => receptionPhotoPublicUrl($path),
                 'mimeType' => $row['mime_type'],
+                'uploaderName' => $row['uploader_name'] ?? null,
+                'tableNumber' => $row['table_number'] !== null ? (int)$row['table_number'] : null,
+                'likesCount' => (int)($row['likes_count'] ?? 0),
                 'uploadedAt' => $row['uploaded_at'],
             ];
         }
@@ -902,19 +927,25 @@ function handleUploadReceptionPhoto() {
         $storagePath = $safeName;
     }
 
+    $uploaderName = isset($_POST['uploader_name']) ? trim(sanitize($_POST['uploader_name'])) : null;
+    if ($uploaderName === '') $uploaderName = null;
+    $tableNumber = isset($_POST['table_number']) && is_numeric($_POST['table_number']) ? (int)$_POST['table_number'] : null;
+
     $db = Database::getInstance();
     $mysqli = $db->getConnection();
     receptionEnsurePhotosTable($mysqli);
 
     $stmt = $mysqli->prepare("
-        INSERT INTO reception_photos (file_name, storage_path, mime_type)
-        VALUES (?, ?, ?)
+        INSERT INTO reception_photos (file_name, storage_path, mime_type, uploader_name, table_number)
+        VALUES (?, ?, ?, ?, ?)
     ");
     $originalName = basename((string)($file['name'] ?? $safeName));
-    $stmt->bind_param('sss', $originalName, $storagePath, $storedMime);
+    $stmt->bind_param('ssssi', $originalName, $storagePath, $storedMime, $uploaderName, $tableNumber);
 
     if (!$stmt->execute()) {
-        @unlink($destPath);
+        if (!empty($destPath) && is_file($destPath)) {
+            @unlink($destPath);
+        }
         sendResponse(['success' => false, 'error' => 'Database error'], 500);
     }
 
@@ -939,8 +970,172 @@ function handleUploadReceptionPhoto() {
             'fileName' => $originalName,
             'url' => receptionPhotoPublicUrl($storagePath),
             'mimeType' => $storedMime,
+            'uploaderName' => $uploaderName,
+            'tableNumber' => $tableNumber,
+            'likesCount' => 0,
             'uploadedAt' => date('c'),
             'useGooglePhotos' => $usedGooglePhotos,
         ],
     ]);
+}
+
+function handleLikeReceptionPhoto() {
+    receptionRequireApiKey();
+
+    $input = getRequestInput();
+    $photoId = (int)($_POST['photo_id'] ?? $input['photo_id'] ?? $_GET['photo_id'] ?? 0);
+
+    if ($photoId < 1) {
+        sendResponse(['success' => false, 'error' => 'Invalid photo ID'], 400);
+    }
+
+    $db = Database::getInstance();
+    $mysqli = $db->getConnection();
+    receptionEnsurePhotosTable($mysqli);
+
+    $stmt = $mysqli->prepare("UPDATE reception_photos SET likes_count = likes_count + 1 WHERE id = ?");
+    $stmt->bind_param('i', $photoId);
+    $stmt->execute();
+    $stmt->close();
+
+    $stmtGet = $mysqli->prepare("SELECT likes_count FROM reception_photos WHERE id = ?");
+    $stmtGet->bind_param('i', $photoId);
+    $stmtGet->execute();
+    $res = $stmtGet->get_result();
+    $row = $res ? $res->fetch_assoc() : null;
+    $stmtGet->close();
+
+    $likes = $row ? (int)$row['likes_count'] : 0;
+
+    sendResponse([
+        'success' => true,
+        'data' => [
+            'id' => $photoId,
+            'likesCount' => $likes,
+        ]
+    ]);
+}
+
+function handleAdminGetReceptionPhotos() {
+    requireAdminAuth();
+
+    $db = Database::getInstance();
+    $mysqli = $db->getConnection();
+    receptionEnsurePhotosTable($mysqli);
+
+    $photos = [];
+    $result = $mysqli->query("
+        SELECT id, file_name, storage_path, mime_type, uploader_name, table_number, likes_count, is_approved, uploaded_at
+        FROM reception_photos
+        ORDER BY uploaded_at DESC
+    ");
+
+    if ($result) {
+        while ($row = $result->fetch_assoc()) {
+            $path = str_replace('\\', '/', (string)$row['storage_path']);
+            $photos[] = [
+                'id' => (int)$row['id'],
+                'fileName' => $row['file_name'],
+                'url' => receptionPhotoPublicUrl($path),
+                'mimeType' => $row['mime_type'],
+                'uploaderName' => $row['uploader_name'] ?? null,
+                'tableNumber' => $row['table_number'] !== null ? (int)$row['table_number'] : null,
+                'likesCount' => (int)($row['likes_count'] ?? 0),
+                'isApproved' => (bool)$row['is_approved'],
+                'uploadedAt' => $row['uploaded_at'],
+            ];
+        }
+    }
+
+    sendResponse(['success' => true, 'data' => $photos]);
+}
+
+function handleAdminDeleteReceptionPhoto() {
+    requireAdminAuth();
+
+    $input = getRequestInput();
+    $photoId = (int)($_POST['photo_id'] ?? $input['photo_id'] ?? $_GET['photo_id'] ?? 0);
+
+    if ($photoId < 1) {
+        sendResponse(['success' => false, 'error' => 'Invalid photo ID'], 400);
+    }
+
+    $db = Database::getInstance();
+    $mysqli = $db->getConnection();
+    receptionEnsurePhotosTable($mysqli);
+
+    // Soft delete / hide by default or remove file
+    $stmt = $mysqli->prepare("SELECT storage_path FROM reception_photos WHERE id = ?");
+    $stmt->bind_param('i', $photoId);
+    $stmt->execute();
+    $res = $stmt->get_result();
+    $row = $res ? $res->fetch_assoc() : null;
+    $stmt->close();
+
+    if ($row) {
+        $storagePath = $row['storage_path'];
+        $uploadsDir = receptionUploadsDir();
+        $filePath = $uploadsDir . DIRECTORY_SEPARATOR . basename($storagePath);
+        if (is_file($filePath)) {
+            @unlink($filePath);
+        }
+
+        $delStmt = $mysqli->prepare("DELETE FROM reception_photos WHERE id = ?");
+        $delStmt->bind_param('i', $photoId);
+        $delStmt->execute();
+        $delStmt->close();
+    }
+
+    sendResponse(['success' => true, 'message' => 'Photo deleted successfully']);
+}
+
+function handleAdminDownloadPhotosZip() {
+    requireAdminAuth();
+
+    $db = Database::getInstance();
+    $mysqli = $db->getConnection();
+    receptionEnsurePhotosTable($mysqli);
+
+    $result = $mysqli->query("SELECT storage_path, file_name FROM reception_photos WHERE is_approved = 1 ORDER BY id ASC");
+    if (!$result || $result->num_rows === 0) {
+        sendResponse(['success' => false, 'error' => 'No photos available to download'], 404);
+    }
+
+    $uploadsDir = receptionUploadsDir();
+
+    if (class_exists('ZipArchive')) {
+        $zipFileName = 'wedding-pov-photos-' . date('Ymd-His') . '.zip';
+        $zipPath = sys_get_temp_dir() . DIRECTORY_SEPARATOR . $zipFileName;
+
+        $zip = new ZipArchive();
+        if ($zip->open($zipPath, ZipArchive::CREATE | ZipArchive::OVERWRITE) !== true) {
+            sendResponse(['success' => false, 'error' => 'Could not create ZIP archive'], 500);
+        }
+
+        $count = 0;
+        while ($row = $result->fetch_assoc()) {
+            $file = basename($row['storage_path']);
+            $fullPath = $uploadsDir . DIRECTORY_SEPARATOR . $file;
+            if (is_file($fullPath) && is_readable($fullPath)) {
+                $count++;
+                $origExt = pathinfo($file, PATHINFO_EXTENSION);
+                $entryName = sprintf('POV_%03d_%s', $count, !empty($row['file_name']) ? basename($row['file_name']) : 'photo.' . $origExt);
+                $zip->addFile($fullPath, $entryName);
+            }
+        }
+        $zip->close();
+
+        if ($count === 0 || !is_file($zipPath)) {
+            sendResponse(['success' => false, 'error' => 'No photo files found on disk to zip'], 404);
+        }
+
+        header('Content-Type: application/zip');
+        header('Content-Disposition: attachment; filename="' . $zipFileName . '"');
+        header('Content-Length: ' . filesize($zipPath));
+        readfile($zipPath);
+        @unlink($zipPath);
+        exit;
+    } else {
+        sendResponse(['success' => false, 'error' => 'PHP ZipArchive extension is not enabled on server'], 500);
+    }
 }

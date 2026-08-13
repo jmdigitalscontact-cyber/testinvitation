@@ -227,6 +227,12 @@
               </div>
               <p class="reception-upload-zone__text">Drop photos here or tap to upload</p>
               <p class="reception-upload-zone__hint">JPEG, PNG, WebP, HEIC/HEIF · max 10MB each</p>
+              
+              <div class="rec-upload-tags-wrap" onclick="event.stopPropagation()">
+                <input type="text" id="photo-tag-name" class="rec-upload-tag-input" placeholder="Your name (optional)" />
+                <input type="number" id="photo-tag-table" class="rec-upload-tag-input rec-upload-tag-input--sm" placeholder="Table #" min="1" max="99" />
+              </div>
+
               <input
                 type="file"
                 id="photo-upload-input"
@@ -237,11 +243,10 @@
               <div class="reception-upload-actions">
                 <button type="button" class="reception-btn reception-btn--primary" id="photo-upload-camera-btn">
                   <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                    <polyline points="17 8 12 3 7 8"/>
-                    <line x1="12" y1="3" x2="12" y2="15"/>
+                    <circle cx="12" cy="13" r="4"/>
+                    <path d="M5 7h2l2-3h6l2 3h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2z"/>
                   </svg>
-                  Take photo
+                  Snap your POV
                 </button>
                 <button type="button" class="reception-btn reception-btn--secondary" id="photo-upload-gallery-btn">
                   <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">

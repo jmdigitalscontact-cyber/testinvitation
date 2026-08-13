@@ -93,6 +93,84 @@
     else if (tabName === "invitations") loadInvitations();
     else if (tabName === "responses") loadResponses();
     else if (tabName === "tables") loadTableAssignments();
+    else if (tabName === "reception") loadAdminPhotos();
+  };
+
+  window.loadAdminPhotos = function loadAdminPhotos() {
+    const grid = document.getElementById("admin-photos-grid");
+    if (!grid) return;
+    grid.innerHTML = '<p style="color:var(--admin-muted)">Loading guest photos…</p>';
+
+    AdminAuth.apiCall("api.php?action=admin-get-reception-photos")
+      .then((res) => res.json())
+      .then((json) => {
+        if (json.success && Array.isArray(json.data)) {
+          if (json.data.length === 0) {
+            grid.innerHTML = '<p style="color:var(--admin-muted)">No guest POV photos uploaded yet.</p>';
+            return;
+          }
+          grid.innerHTML = json.data.map((p) => {
+            const tag = p.uploaderName
+              ? (p.tableNumber ? `${escapeHtml(p.uploaderName)} (T${p.tableNumber})` : escapeHtml(p.uploaderName))
+              : (p.tableNumber ? `Table ${p.tableNumber}` : 'Anonymous');
+            const likes = p.likesCount || 0;
+            return `
+              <div class="admin-photo-card" style="position:relative;border:1px solid var(--admin-border);border-radius:8px;overflow:hidden;background:var(--admin-surface);display:flex;flex-direction:column;">
+                <img src="${escapeHtml(p.url)}" alt="" style="width:100%;height:160px;object-fit:cover;display:block;" />
+                <div style="padding:0.5rem 0.75rem;flex:1;display:flex;flex-direction:column;justify-content:space-between;">
+                  <div>
+                    <div style="font-weight:600;font-size:0.85rem;">${tag}</div>
+                    <div style="font-size:0.75rem;color:var(--admin-muted);">❤️ ${likes} likes · ${escapeHtml(p.uploadedAt || '')}</div>
+                  </div>
+                  <button type="button" class="admin-btn admin-btn-secondary admin-btn-sm" style="margin-top:0.5rem;color:#d9534f;" onclick="deleteAdminPhoto(${p.id})">Delete Photo</button>
+                </div>
+              </div>
+            `;
+          }).join("");
+        } else {
+          grid.innerHTML = '<p style="color:var(--admin-muted)">Could not load photos.</p>';
+        }
+      })
+      .catch((err) => {
+        grid.innerHTML = `<p style="color:var(--admin-muted)">Error loading photos: ${escapeHtml(err.message)}</p>`;
+      });
+  };
+
+  window.deleteAdminPhoto = function deleteAdminPhoto(photoId) {
+    if (!confirm("Are you sure you want to delete this guest photo?")) return;
+
+    AdminAuth.apiCall("api.php?action=admin-delete-reception-photo", {
+      method: "POST",
+      body: JSON.stringify({ photo_id: photoId }),
+    })
+      .then((res) => res.json())
+      .then((json) => {
+        if (json.success) {
+          loadAdminPhotos();
+        } else {
+          alert(json.error || "Failed to delete photo");
+        }
+      })
+      .catch((err) => alert(err.message || "Failed to delete photo"));
+  };
+
+  window.downloadAllPhotosZip = function downloadAllPhotosZip() {
+    AdminAuth.apiCall("api.php?action=admin-download-photos-zip")
+      .then((res) => {
+        if (!res.ok) return res.json().then((j) => { throw new Error(j.error || "Download failed"); });
+        return res.blob();
+      })
+      .then((blob) => {
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `wedding-pov-photos-${Date.now()}.zip`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.URL.revokeObjectURL(url);
+      })
+      .catch((err) => alert(err.message || "Failed to download ZIP"));
   };
 
   function extractGuestNamesFromResponse(response) {

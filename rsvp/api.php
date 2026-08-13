@@ -228,6 +228,22 @@ try {
             handleUploadReceptionPhoto();
             break;
 
+        case 'like-reception-photo':
+            handleLikeReceptionPhoto();
+            break;
+
+        case 'admin-get-reception-photos':
+            handleAdminGetReceptionPhotos();
+            break;
+
+        case 'admin-delete-reception-photo':
+            handleAdminDeleteReceptionPhoto();
+            break;
+
+        case 'admin-download-photos-zip':
+            handleAdminDownloadPhotosZip();
+            break;
+
         default:
             sendResponse(['error' => 'Invalid action'], 400);
     }

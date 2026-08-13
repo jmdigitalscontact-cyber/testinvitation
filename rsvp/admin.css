@@ -738,3 +738,11 @@ body.admin-app {
   color: var(--admin-danger);
   border: 1px solid #ebcaca;
 }
+
+.admin-photos-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 1rem;
+  margin-top: 1rem;
+}
+

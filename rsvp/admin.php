@@ -312,6 +312,21 @@
                         <p style="text-align:center;font-size:0.82rem;color:var(--admin-muted)">Reception access link is embedded in this QR. Anyone who scans it can unlock the reception app.</p>
                     </div>
                 </div>
+
+                <div class="admin-card">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
+                        <h2>Guest POV Photos Moderation</h2>
+                        <button type="button" class="admin-btn admin-btn-primary" onclick="downloadAllPhotosZip()">Download All POVs (.zip)</button>
+                    </div>
+                    <p class="admin-card-lead">Review guest uploaded POV photos, view likes, or delete inappropriate uploads.</p>
+                    
+                    <div id="admin-photos-grid" class="admin-photos-grid">
+                        <p style="color:var(--admin-muted)">Loading photos…</p>
+                    </div>
+                    <div class="admin-actions" style="margin-top:1rem;">
+                        <button type="button" class="admin-btn admin-btn-secondary" onclick="loadAdminPhotos()">Refresh Photos</button>
+                    </div>
+                </div>
             </section>
         </main>
     </div>
