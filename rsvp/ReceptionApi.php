@@ -25,7 +25,10 @@ function receptionUploadsDir() {
     $dir = $envPath !== '' ? $envPath : $default;
 
     if (!is_dir($dir)) {
-        @mkdir($dir, 0755, true);
+        @mkdir($dir, 0777, true);
+    }
+    if (is_dir($dir) && !is_writable($dir)) {
+        @chmod($dir, 0777);
     }
 
     return $dir;
