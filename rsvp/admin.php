@@ -158,7 +158,7 @@
                 <div class="admin-card">
                     <h2>All invitations</h2>
                     <div class="admin-field">
-                        <input type="text" id="invitations-search" placeholder="Search by guest name or invitation ID...">
+                        <input type="search" id="invitations-search" placeholder="Search by guest name or invitation ID..." autocomplete="off" oninput="filterInvitations(event)">
                     </div>
                     <div class="admin-table-wrap">
                         <table class="admin-table" id="invitations-table">
@@ -423,8 +423,8 @@
         </div>
     </div>
 
-    <script src="admin-auth.js"></script>
-    <script src="admin-dashboard.js"></script>
+    <script src="admin-auth.js?v=<?= (int) @filemtime(__DIR__ . '/admin-auth.js') ?>"></script>
+    <script src="admin-dashboard.js?v=<?= (int) @filemtime(__DIR__ . '/admin-dashboard.js') ?>"></script>
     <script>
         window.addEventListener('load', function () {
             AdminAuth.init({

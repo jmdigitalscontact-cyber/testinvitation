@@ -19,7 +19,6 @@
   let currentQrGuestPage = 1;
   let invitationsSearchTerm = "";
   let filteredInvitations = [];
-  let invitationsSearchBound = false;
 
   function $(id) {
     return document.getElementById(id);
@@ -522,11 +521,8 @@
         }
 
         allInvitations = data.data || [];
-        invitationsSearchTerm = "";
-        const searchInput = $("invitations-search");
-        if (searchInput) searchInput.value = "";
         currentInvitationsPage = 1;
-        filteredInvitations = allInvitations;
+        applyInvitationsSearchFromInput();
         renderInvitationsPage();
       })
       .catch(() => {
@@ -548,35 +544,25 @@
     return invitationsSearchTerm ? filteredInvitations : allInvitations;
   }
 
-  window.filterInvitations = function filterInvitations(evt) {
+  function applyInvitationsSearchFromInput() {
     const searchInput = $("invitations-search");
-    const rawValue =
-      evt && evt.target
-        ? evt.target.value
-        : searchInput
-          ? searchInput.value
-          : "";
-    invitationsSearchTerm = String(rawValue || "").trim().toLowerCase();
+    invitationsSearchTerm = searchInput ? String(searchInput.value || "").trim().toLowerCase() : "";
 
     if (!invitationsSearchTerm) {
       filteredInvitations = allInvitations;
-    } else {
-      filteredInvitations = allInvitations.filter((inv) =>
-        invitationMatchesSearch(inv, invitationsSearchTerm)
-      );
+      return;
     }
 
+    filteredInvitations = allInvitations.filter((inv) =>
+      invitationMatchesSearch(inv, invitationsSearchTerm)
+    );
+  }
+
+  window.filterInvitations = function filterInvitations(evt) {
+    applyInvitationsSearchFromInput();
     currentInvitationsPage = 1;
     renderInvitationsPage();
   };
-
-  function bindInvitationsSearch() {
-    if (invitationsSearchBound) return;
-    const searchInput = $("invitations-search");
-    if (!searchInput) return;
-    searchInput.addEventListener("input", filterInvitations);
-    invitationsSearchBound = true;
-  }
 
   function renderInvitationsPage() {
     const tbody = $("invitations-tbody");
@@ -1481,8 +1467,6 @@
   window.closeModal = closeModal;
 
   function bindDelegatedActions() {
-    bindInvitationsSearch();
-
     $("invitations-tbody").addEventListener("click", (event) => {
       const btn = event.target.closest("[data-action]");
       if (!btn) return;
