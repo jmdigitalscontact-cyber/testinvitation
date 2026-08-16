@@ -19,19 +19,48 @@ function receptionRequireApiKey() {
 }
 
 function receptionUploadsDir() {
-    // Save uploaded photos directly inside project directory under /uploads/reception
-    $default = __DIR__ . '/../uploads/reception';
+    // Primary storage per project spec: reception/uploads
+    $default = __DIR__ . '/../reception/uploads';
     $envPath = trim((string)EnvironmentLoader::get('RECEPTION_UPLOADS_PATH', ''));
     $dir = $envPath !== '' ? $envPath : $default;
 
     if (!is_dir($dir)) {
-        @mkdir($dir, 0777, true);
+        @mkdir($dir, 0755, true);
     }
     if (is_dir($dir) && !is_writable($dir)) {
-        @chmod($dir, 0777);
+        @chmod($dir, 0755);
     }
 
     return $dir;
+}
+
+function receptionLegacyUploadsDir() {
+    return __DIR__ . '/../uploads/reception';
+}
+
+function receptionUploadsCandidateDirs() {
+    $dirs = [receptionUploadsDir()];
+    $legacy = receptionLegacyUploadsDir();
+    if ($legacy !== $dirs[0] && is_dir($legacy)) {
+        $dirs[] = $legacy;
+    }
+    return $dirs;
+}
+
+function receptionResolvePhotoFilePath($storagePath) {
+    $file = basename((string)$storagePath);
+    if ($file === '') {
+        return null;
+    }
+
+    foreach (receptionUploadsCandidateDirs() as $dir) {
+        $candidate = $dir . DIRECTORY_SEPARATOR . $file;
+        if (is_file($candidate) && is_readable($candidate)) {
+            return $candidate;
+        }
+    }
+
+    return null;
 }
 
 function receptionEnsurePhotosTable($mysqli) {
@@ -233,6 +262,20 @@ function handleGetReceptionGuests() {
     sendResponse(['success' => true, 'data' => $guests]);
 }
 
+function receptionMapPhotoRow(array $row) {
+    $path = str_replace('\\', '/', (string)$row['storage_path']);
+    return [
+        'id' => (int)$row['id'],
+        'fileName' => $row['file_name'],
+        'url' => receptionPhotoPublicUrl($path),
+        'mimeType' => $row['mime_type'],
+        'uploaderName' => $row['uploader_name'] ?? null,
+        'tableNumber' => $row['table_number'] !== null ? (int)$row['table_number'] : null,
+        'likesCount' => (int)($row['likes_count'] ?? 0),
+        'uploadedAt' => $row['uploaded_at'],
+    ];
+}
+
 function handleGetReceptionPhotos() {
     receptionRequireApiKey();
 
@@ -240,27 +283,37 @@ function handleGetReceptionPhotos() {
     $mysqli = $db->getConnection();
     receptionEnsurePhotosTable($mysqli);
 
+    $sinceId = (int)($_GET['since_id'] ?? 0);
     $photos = [];
-    $result = $mysqli->query("
-        SELECT id, file_name, storage_path, mime_type, uploader_name, table_number, likes_count, uploaded_at
-        FROM reception_photos
-        ORDER BY uploaded_at DESC
-        LIMIT 200
-    ");
 
-    if ($result) {
+    if ($sinceId > 0) {
+        $stmt = $mysqli->prepare("
+            SELECT id, file_name, storage_path, mime_type, uploader_name, table_number, likes_count, uploaded_at
+            FROM reception_photos
+            WHERE is_approved = 1 AND id > ?
+            ORDER BY id ASC
+            LIMIT 100
+        ");
+        $stmt->bind_param('i', $sinceId);
+        $stmt->execute();
+        $result = $stmt->get_result();
         while ($row = $result->fetch_assoc()) {
-            $path = str_replace('\\', '/', (string)$row['storage_path']);
-            $photos[] = [
-                'id' => (int)$row['id'],
-                'fileName' => $row['file_name'],
-                'url' => receptionPhotoPublicUrl($path),
-                'mimeType' => $row['mime_type'],
-                'uploaderName' => $row['uploader_name'] ?? null,
-                'tableNumber' => $row['table_number'] !== null ? (int)$row['table_number'] : null,
-                'likesCount' => (int)($row['likes_count'] ?? 0),
-                'uploadedAt' => $row['uploaded_at'],
-            ];
+            $photos[] = receptionMapPhotoRow($row);
+        }
+        $stmt->close();
+    } else {
+        $result = $mysqli->query("
+            SELECT id, file_name, storage_path, mime_type, uploader_name, table_number, likes_count, uploaded_at
+            FROM reception_photos
+            WHERE is_approved = 1
+            ORDER BY uploaded_at DESC
+            LIMIT 200
+        ");
+
+        if ($result) {
+            while ($row = $result->fetch_assoc()) {
+                $photos[] = receptionMapPhotoRow($row);
+            }
         }
     }
 
@@ -371,10 +424,9 @@ function handleServeReceptionPhoto() {
         exit;
     }
 
-    $uploadsDir = receptionUploadsDir();
-    $filePath = $uploadsDir . DIRECTORY_SEPARATOR . $file;
+    $filePath = receptionResolvePhotoFilePath($file);
 
-    if (is_file($filePath) && is_readable($filePath)) {
+    if ($filePath) {
         $finfo = finfo_open(FILEINFO_MIME_TYPE);
         $mime = $finfo ? finfo_file($finfo, $filePath) : 'application/octet-stream';
         if ($finfo) finfo_close($finfo);
@@ -1034,22 +1086,40 @@ function handleAdminGetReceptionPhotos() {
 
     if ($result) {
         while ($row = $result->fetch_assoc()) {
-            $path = str_replace('\\', '/', (string)$row['storage_path']);
-            $photos[] = [
-                'id' => (int)$row['id'],
-                'fileName' => $row['file_name'],
-                'url' => receptionPhotoPublicUrl($path),
-                'mimeType' => $row['mime_type'],
-                'uploaderName' => $row['uploader_name'] ?? null,
-                'tableNumber' => $row['table_number'] !== null ? (int)$row['table_number'] : null,
-                'likesCount' => (int)($row['likes_count'] ?? 0),
+            $photos[] = array_merge(receptionMapPhotoRow($row), [
                 'isApproved' => (bool)$row['is_approved'],
-                'uploadedAt' => $row['uploaded_at'],
-            ];
+            ]);
         }
     }
 
     sendResponse(['success' => true, 'data' => $photos]);
+}
+
+function handleAdminHideReceptionPhoto() {
+    requireAdminAuth();
+
+    $input = getRequestInput();
+    $photoId = (int)($_POST['photo_id'] ?? $input['photo_id'] ?? $_GET['photo_id'] ?? 0);
+
+    if ($photoId < 1) {
+        sendResponse(['success' => false, 'error' => 'Invalid photo ID'], 400);
+    }
+
+    $db = Database::getInstance();
+    $mysqli = $db->getConnection();
+    receptionEnsurePhotosTable($mysqli);
+
+    $stmt = $mysqli->prepare("UPDATE reception_photos SET is_approved = 0 WHERE id = ?");
+    $stmt->bind_param('i', $photoId);
+    $stmt->execute();
+    $changed = $stmt->affected_rows > 0;
+    $stmt->close();
+
+    if (!$changed) {
+        sendResponse(['success' => false, 'error' => 'Photo not found'], 404);
+    }
+
+    sendResponse(['success' => true, 'message' => 'Photo hidden from gallery']);
 }
 
 function handleAdminDeleteReceptionPhoto() {
@@ -1076,9 +1146,8 @@ function handleAdminDeleteReceptionPhoto() {
 
     if ($row) {
         $storagePath = $row['storage_path'];
-        $uploadsDir = receptionUploadsDir();
-        $filePath = $uploadsDir . DIRECTORY_SEPARATOR . basename($storagePath);
-        if (is_file($filePath)) {
+        $filePath = receptionResolvePhotoFilePath($storagePath);
+        if ($filePath) {
             @unlink($filePath);
         }
 
@@ -1103,8 +1172,6 @@ function handleAdminDownloadPhotosZip() {
         sendResponse(['success' => false, 'error' => 'No photos available to download'], 404);
     }
 
-    $uploadsDir = receptionUploadsDir();
-
     if (class_exists('ZipArchive')) {
         $zipFileName = 'wedding-pov-photos-' . date('Ymd-His') . '.zip';
         $zipPath = sys_get_temp_dir() . DIRECTORY_SEPARATOR . $zipFileName;
@@ -1116,10 +1183,10 @@ function handleAdminDownloadPhotosZip() {
 
         $count = 0;
         while ($row = $result->fetch_assoc()) {
-            $file = basename($row['storage_path']);
-            $fullPath = $uploadsDir . DIRECTORY_SEPARATOR . $file;
-            if (is_file($fullPath) && is_readable($fullPath)) {
+            $fullPath = receptionResolvePhotoFilePath($row['storage_path']);
+            if ($fullPath) {
                 $count++;
+                $file = basename($row['storage_path']);
                 $origExt = pathinfo($file, PATHINFO_EXTENSION);
                 $entryName = sprintf('POV_%03d_%s', $count, !empty($row['file_name']) ? basename($row['file_name']) : 'photo.' . $origExt);
                 $zip->addFile($fullPath, $entryName);

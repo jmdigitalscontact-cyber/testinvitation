@@ -116,15 +116,21 @@
               ? (p.tableNumber ? `${escapeHtml(p.uploaderName)} (T${p.tableNumber})` : escapeHtml(p.uploaderName))
               : (p.tableNumber ? `Table ${p.tableNumber}` : 'Anonymous');
             const likes = p.likesCount || 0;
+            const hiddenBadge = p.isApproved === false
+              ? '<span style="font-size:0.72rem;color:#d9534f;">Hidden</span>'
+              : "";
             return `
-              <div class="admin-photo-card" style="position:relative;border:1px solid var(--admin-border);border-radius:8px;overflow:hidden;background:var(--admin-surface);display:flex;flex-direction:column;">
+              <div class="admin-photo-card" style="position:relative;border:1px solid var(--admin-border);border-radius:8px;overflow:hidden;background:var(--admin-surface);display:flex;flex-direction:column;${p.isApproved === false ? "opacity:0.72;" : ""}">
                 <img src="${escapeHtml(p.url)}" alt="" style="width:100%;height:160px;object-fit:cover;display:block;" />
                 <div style="padding:0.5rem 0.75rem;flex:1;display:flex;flex-direction:column;justify-content:space-between;">
                   <div>
                     <div style="font-weight:600;font-size:0.85rem;">${tag}</div>
-                    <div style="font-size:0.75rem;color:var(--admin-muted);">❤️ ${likes} likes · ${escapeHtml(p.uploadedAt || '')}</div>
+                    <div style="font-size:0.75rem;color:var(--admin-muted);">❤️ ${likes} likes · ${escapeHtml(p.uploadedAt || "")} ${hiddenBadge}</div>
                   </div>
-                  <button type="button" class="admin-btn admin-btn-secondary admin-btn-sm" style="margin-top:0.5rem;color:#d9534f;" onclick="deleteAdminPhoto(${p.id})">Delete Photo</button>
+                  <div style="display:flex;gap:0.35rem;margin-top:0.5rem;flex-wrap:wrap;">
+                    ${p.isApproved !== false ? `<button type="button" class="admin-btn admin-btn-secondary admin-btn-sm" onclick="hideAdminPhoto(${p.id})">Hide</button>` : ""}
+                    <button type="button" class="admin-btn admin-btn-secondary admin-btn-sm" style="color:#d9534f;" onclick="deleteAdminPhoto(${p.id})">Delete</button>
+                  </div>
                 </div>
               </div>
             `;
@@ -136,6 +142,24 @@
       .catch((err) => {
         grid.innerHTML = `<p style="color:var(--admin-muted)">Error loading photos: ${escapeHtml(err.message)}</p>`;
       });
+  };
+
+  window.hideAdminPhoto = function hideAdminPhoto(photoId) {
+    if (!confirm("Hide this photo from the live guest gallery?")) return;
+
+    AdminAuth.apiCall("api.php?action=admin-hide-reception-photo", {
+      method: "POST",
+      body: JSON.stringify({ photo_id: photoId }),
+    })
+      .then((res) => res.json())
+      .then((json) => {
+        if (json.success) {
+          loadAdminPhotos();
+        } else {
+          alert(json.error || "Failed to hide photo");
+        }
+      })
+      .catch((err) => alert(err.message || "Failed to hide photo"));
   };
 
   window.deleteAdminPhoto = function deleteAdminPhoto(photoId) {

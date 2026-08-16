@@ -271,23 +271,51 @@
       let photos = [];
       let currentIndex = 0;
       let knownIds = new Set();
+      let maxPhotoId = 0;
 
       const els = {
-        container: document.getElementById('wall-photo-container'),
-        ambient: document.getElementById('wall-ambient'),
-        counter: document.getElementById('wall-counter'),
-        toast: document.getElementById('wall-toast'),
-        toastMsg: document.getElementById('wall-toast-msg'),
+        container: document.getElementById("wall-photo-container"),
+        ambient: document.getElementById("wall-ambient"),
+        counter: document.getElementById("wall-counter"),
+        toast: document.getElementById("wall-toast"),
+        toastMsg: document.getElementById("wall-toast-msg"),
       };
+
+      function wallApiUrl(extraParams) {
+        const url = new URL(API_BASE, window.location.href);
+        url.searchParams.set("action", "get-reception-photos");
+        if (RECEPTION_KEY) url.searchParams.set("key", RECEPTION_KEY);
+        if (extraParams) {
+          Object.entries(extraParams).forEach(([key, value]) => {
+            if (value !== undefined && value !== null && value !== "") {
+              url.searchParams.set(key, String(value));
+            }
+          });
+        }
+        return url.toString();
+      }
 
       async function fetchWallPhotos() {
         try {
-          const url = `${API_BASE}?action=get-reception-photos${RECEPTION_KEY ? '&key=' + encodeURIComponent(RECEPTION_KEY) : ''}`;
-          const res = await fetch(url, {
-            headers: RECEPTION_KEY ? { 'X-Reception-Key': RECEPTION_KEY } : {}
-          });
+          const useDelta = maxPhotoId > 0;
+          const url = wallApiUrl(useDelta ? { since_id: maxPhotoId } : {});
+          const res = await fetch(url);
           const json = await res.json();
           if (json.success && Array.isArray(json.data)) {
+            if (useDelta) {
+              const newPhotos = json.data.filter((photo) => !knownIds.has(photo.id));
+              if (newPhotos.length > 0) {
+                showNewToast(newPhotos[newPhotos.length - 1]);
+                photos = [...newPhotos, ...photos];
+                newPhotos.forEach((photo) => {
+                  knownIds.add(photo.id);
+                  if (photo.id > maxPhotoId) maxPhotoId = photo.id;
+                });
+                els.counter.textContent = `${photos.length} POV${photos.length === 1 ? "" : "s"} Shared`;
+              }
+              return;
+            }
+
             const newPhotos = json.data;
             if (newPhotos.length > 0) {
               if (photos.length > 0 && newPhotos[0].id !== photos[0].id && !knownIds.has(newPhotos[0].id)) {
@@ -295,12 +323,15 @@
               }
 
               photos = newPhotos;
-              photos.forEach(p => knownIds.add(p.id));
-              els.counter.textContent = `${photos.length} POV${photos.length === 1 ? '' : 's'} Shared`;
+              photos.forEach((photo) => {
+                knownIds.add(photo.id);
+                if (photo.id > maxPhotoId) maxPhotoId = photo.id;
+              });
+              els.counter.textContent = `${photos.length} POV${photos.length === 1 ? "" : "s"} Shared`;
             }
           }
         } catch (e) {
-          console.warn('Error fetching wall photos', e);
+          console.warn("Error fetching wall photos", e);
         }
       }
 

@@ -240,6 +240,10 @@ try {
             handleAdminDeleteReceptionPhoto();
             break;
 
+        case 'admin-hide-reception-photo':
+            handleAdminHideReceptionPhoto();
+            break;
+
         case 'admin-download-photos-zip':
             handleAdminDownloadPhotosZip();
             break;

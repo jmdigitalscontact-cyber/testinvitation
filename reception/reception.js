@@ -11,6 +11,8 @@
   const RECEPTION_KEY = RECEPTION_KEY_PARAM || localStorage.getItem(RECEPTION_KEY_STORAGE) || "";
   const MIN_SEARCH_CHARS = 2;
   const THEME_STORAGE = "reception_theme";
+  const LIKED_PHOTOS_STORAGE = "reception_liked_photo_ids";
+  const PHOTO_POLL_MS = 10000;
 
   if (RECEPTION_KEY_PARAM) {
     localStorage.setItem(RECEPTION_KEY_STORAGE, RECEPTION_KEY_PARAM);
@@ -26,9 +28,36 @@
     activeTab: "search",
     floorTransform: { scale: 1, x: 0, y: 0 },
     theme: localStorage.getItem(THEME_STORAGE) || "dark",
-    likedPhotos: new Set(),
+    likedPhotos: loadLikedPhotoIds(),
     giftBoxOpened: false,
   };
+
+  let maxPhotoId = 0;
+
+  function loadLikedPhotoIds() {
+    try {
+      const raw = localStorage.getItem(LIKED_PHOTOS_STORAGE);
+      const parsed = raw ? JSON.parse(raw) : [];
+      return new Set(Array.isArray(parsed) ? parsed.map((id) => Number(id)).filter((id) => id > 0) : []);
+    } catch {
+      return new Set();
+    }
+  }
+
+  function saveLikedPhotoIds() {
+    localStorage.setItem(LIKED_PHOTOS_STORAGE, JSON.stringify([...state.likedPhotos]));
+  }
+
+  function isPhotoLiked(photo) {
+    return photo && state.likedPhotos.has(Number(photo.id));
+  }
+
+  function updateMaxPhotoId(photos) {
+    (photos || []).forEach((photo) => {
+      const id = Number(photo.id || 0);
+      if (id > maxPhotoId) maxPhotoId = id;
+    });
+  }
 
   /* ───────────────────────────────────────────
      DOM REFS
@@ -111,9 +140,22 @@
     showToast._timer = setTimeout(() => { els.toast.hidden = true; }, durationMs || 2800);
   }
 
-  async function apiGet(action) {
-    const url = `${API_BASE}?action=${encodeURIComponent(action)}`;
-    const res = await fetch(url, { headers: apiHeaders(false) });
+  function apiUrl(action, extraParams) {
+    const url = new URL(API_BASE);
+    url.searchParams.set("action", action);
+    if (RECEPTION_KEY) url.searchParams.set("key", RECEPTION_KEY);
+    if (extraParams) {
+      Object.entries(extraParams).forEach(([key, value]) => {
+        if (value !== undefined && value !== null && value !== "") {
+          url.searchParams.set(key, String(value));
+        }
+      });
+    }
+    return url.toString();
+  }
+
+  async function apiGet(action, extraParams) {
+    const res = await fetch(apiUrl(action, extraParams), { headers: apiHeaders(false) });
     if (!res.ok) throw new Error(`API error ${res.status}`);
     return res.json();
   }
@@ -955,6 +997,7 @@
       const result = await apiGet("get-reception-photos");
       if (result.success && Array.isArray(result.data)) {
         state.photos = result.data;
+        updateMaxPhotoId(state.photos);
         renderPhotos();
         startPhotoPolling();
         els.photoStatus.textContent = state.photos.length === 0
@@ -987,8 +1030,8 @@
           <img src="${escapeHtml(p.url)}" alt="" loading="lazy" decoding="async" onerror="this.onerror=null;this.parentElement.style.display='none';" />
           ${tagText ? `<div class="rec-photo-tag-badge">${tagText}</div>` : ''}
           <div class="rec-photo-overlay">
-            <button type="button" class="rec-photo-heart-btn ${state.likedPhotos.has(i) ? "is-liked" : ""}" data-like-index="${i}" aria-label="Like photo">
-              ${state.likedPhotos.has(i) ? "❤️" : "🤍"} <span class="rec-like-count">${likes > 0 ? likes : ''}</span>
+            <button type="button" class="rec-photo-heart-btn ${isPhotoLiked(p) ? "is-liked" : ""}" data-like-id="${p.id}" aria-label="Like photo">
+              ${isPhotoLiked(p) ? "❤️" : "🤍"} <span class="rec-like-count">${likes > 0 ? likes : ''}</span>
             </button>
           </div>
         </button>
@@ -1026,32 +1069,39 @@
     els.photoGallery.querySelectorAll(".rec-photo-heart-btn").forEach(btn => {
       btn.addEventListener("click", e => {
         e.stopPropagation();
-        const idx = parseInt(btn.dataset.likeIndex, 10);
-        togglePhotoLike(idx);
+        const photoId = parseInt(btn.dataset.likeId, 10);
+        togglePhotoLike(photoId);
       });
     });
   }
 
-  async function togglePhotoLike(index) {
-    const photo = state.photos[index];
+  function findPhotoById(photoId) {
+    return state.photos.find((photo) => Number(photo.id) === Number(photoId));
+  }
+
+  async function togglePhotoLike(photoId) {
+    const photo = findPhotoById(photoId);
     if (!photo) return;
 
-    if (!state.likedPhotos.has(index)) {
-      state.likedPhotos.add(index);
+    if (!isPhotoLiked(photo)) {
+      state.likedPhotos.add(Number(photo.id));
+      saveLikedPhotoIds();
       photo.likesCount = (photo.likesCount || 0) + 1;
       renderPhotos();
 
-      // Trigger floating hearts animation
-      spawnFloatingHeart(index);
+      const galleryIndex = state.photos.findIndex((item) => Number(item.id) === Number(photo.id));
+      if (galleryIndex >= 0) spawnFloatingHeart(galleryIndex);
 
       try {
         const form = new FormData();
-        form.append('action', 'like-reception-photo');
-        form.append('photo_id', photo.id);
-        const headers = {};
-        if (RECEPTION_KEY) headers['X-Reception-Key'] = RECEPTION_KEY;
+        form.append("action", "like-reception-photo");
+        form.append("photo_id", photo.id);
 
-        const res = await fetch(API_BASE, { method: 'POST', headers, body: form });
+        const res = await fetch(apiUrl("like-reception-photo"), {
+          method: "POST",
+          headers: apiHeaders(false),
+          body: form,
+        });
         const json = await res.json();
         if (json.success && json.data) {
           photo.likesCount = json.data.likesCount;
@@ -1075,17 +1125,33 @@
     setTimeout(() => heart.remove(), 1200);
   }
 
-  // 5s Auto-polling for real-time gallery updates
+  // 10s delta polling for real-time gallery updates
   let photoPollTimer = null;
   function startPhotoPolling() {
     if (photoPollTimer) clearInterval(photoPollTimer);
     photoPollTimer = setInterval(async () => {
       if (document.hidden) return;
       try {
+        if (maxPhotoId > 0) {
+          const result = await apiGet("get-reception-photos", { since_id: maxPhotoId });
+          if (result.success && Array.isArray(result.data) && result.data.length > 0) {
+            const existingIds = new Set(state.photos.map((photo) => Number(photo.id)));
+            const newPhotos = result.data.filter((photo) => !existingIds.has(Number(photo.id)));
+            if (newPhotos.length > 0) {
+              state.photos = [...newPhotos, ...state.photos];
+              updateMaxPhotoId(newPhotos);
+              renderPhotos();
+              showToast("New POV photo posted! 📸");
+            }
+          }
+          return;
+        }
+
         const result = await apiGet("get-reception-photos");
         if (result.success && Array.isArray(result.data)) {
           const currentCount = state.photos.length;
           state.photos = result.data;
+          updateMaxPhotoId(state.photos);
           renderPhotos();
           if (state.photos.length > currentCount && currentCount > 0) {
             showToast("New POV photo posted! 📸");
@@ -1094,7 +1160,7 @@
       } catch (e) {
         // silent poll fail
       }
-    }, 5000);
+    }, PHOTO_POLL_MS);
   }
 
   /* ───────────────────────────────────────────
@@ -1116,7 +1182,7 @@
     if (els.photoLightboxNext) els.photoLightboxNext.disabled = single;
 
     if (els.photoLikeBtn) {
-      const isLiked = state.likedPhotos.has(photoLightboxIndex);
+      const isLiked = isPhotoLiked(photo);
       els.photoLikeBtn.classList.toggle("is-liked", isLiked);
     }
   }
@@ -1176,7 +1242,8 @@
     els.photoLightboxNext?.addEventListener("click", () => stepPhotoLightbox(1));
 
     els.photoLikeBtn?.addEventListener("click", () => {
-      togglePhotoLike(photoLightboxIndex);
+      const photo = state.photos[photoLightboxIndex];
+      if (photo) togglePhotoLike(photo.id);
       updatePhotoLightboxView();
     });
 
@@ -1192,49 +1259,48 @@
      PHOTO UPLOAD with drag & drop
      ─────────────────────────────────────────── */
   async function compressPhoto(file) {
-    if (file.type === 'image/heic' || file.type === 'image/heif') {
+    if (file.type === "image/heic" || file.type === "image/heif") {
       return file;
     }
-    return new Promise((resolve) => {
+
+    return new Promise((resolve, reject) => {
       const img = new Image();
       const url = URL.createObjectURL(file);
       img.onload = () => {
         URL.revokeObjectURL(url);
-        const canvas = document.createElement('canvas');
-        let width = img.width;
-        let height = img.height;
-        // Compress thumbnail dimension down for lightweight fast marquee/gallery stream
-        const maxDim = 800;
+        let { width, height } = img;
+        const maxDimension = 1920;
 
-        if (width > maxDim || height > maxDim) {
+        if (width > maxDimension || height > maxDimension) {
           if (width > height) {
-            height = Math.round((height * maxDim) / width);
-            width = maxDim;
+            height = Math.round((height * maxDimension) / width);
+            width = maxDimension;
           } else {
-            width = Math.round((width * maxDim) / height);
-            height = maxDim;
+            width = Math.round((width * maxDimension) / height);
+            height = maxDimension;
           }
         }
 
+        const canvas = document.createElement("canvas");
         canvas.width = width;
         canvas.height = height;
-        const ctx = canvas.getContext('2d');
+        const ctx = canvas.getContext("2d");
         ctx.drawImage(img, 0, 0, width, height);
 
         canvas.toBlob(
           (blob) => {
-            if (blob) {
-              const compressedFile = new File([blob], file.name.replace(/\.[^/.]+$/, ".jpg"), {
-                type: 'image/jpeg',
-                lastModified: Date.now()
-              });
-              resolve(compressedFile);
-            } else {
+            if (!blob) {
               resolve(file);
+              return;
             }
+            resolve(new File(
+              [blob],
+              (file.name || "photo").replace(/\.[^/.]+$/, "") + ".webp",
+              { type: "image/webp", lastModified: Date.now() }
+            ));
           },
-          'image/jpeg',
-          0.78
+          "image/webp",
+          0.82
         );
       };
       img.onerror = () => {
@@ -1248,17 +1314,13 @@
   async function uploadPhoto(file, nameTag, tableTag) {
     const compressed = await compressPhoto(file);
     const form = new FormData();
-    form.append('action', 'upload-reception-photo');
-    form.append('photo', compressed, compressed.name || 'photo.jpg');
-    if (nameTag) form.append('uploader_name', nameTag);
-    if (tableTag) form.append('table_number', tableTag);
+    form.append("photo", compressed, compressed.name || "photo.webp");
+    if (nameTag) form.append("uploader_name", nameTag);
+    if (tableTag) form.append("table_number", tableTag);
 
-    const headers = {};
-    if (RECEPTION_KEY) headers['X-Reception-Key'] = RECEPTION_KEY;
-
-    const res = await fetch(API_BASE, {
-      method: 'POST',
-      headers,
+    const res = await fetch(apiUrl("upload-reception-photo"), {
+      method: "POST",
+      headers: apiHeaders(false),
       body: form,
     });
 
@@ -1333,8 +1395,14 @@
       }
     };
 
-    els.photoUploadCameraBtn?.addEventListener('click', openCameraInput);
-    els.photoUploadGalleryBtn?.addEventListener('click', openGalleryInput);
+    els.photoUploadCameraBtn?.addEventListener("click", (event) => {
+      event.stopPropagation();
+      openCameraInput();
+    });
+    els.photoUploadGalleryBtn?.addEventListener("click", (event) => {
+      event.stopPropagation();
+      openGalleryInput();
+    });
     els.uploadZone?.addEventListener('click', (e) => {
       if (e.target.tagName === 'INPUT') return;
       openGalleryInput();
@@ -1408,6 +1476,7 @@
         const result = await uploadPhoto(valid[index], nameTag, tableTag);
         if (result?.success && result.data) {
           state.photos.unshift(result.data);
+          updateMaxPhotoId([result.data]);
           uploaded += 1;
         } else {
           failed += 1;
@@ -1428,6 +1497,7 @@
         const fresh = await apiGet("get-reception-photos");
         if (fresh.success && Array.isArray(fresh.data)) {
           state.photos = fresh.data;
+          updateMaxPhotoId(state.photos);
         }
       } catch (e) {
         // fallback to state.photos

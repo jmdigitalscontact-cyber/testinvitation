@@ -45,5 +45,14 @@ if (!$valid) {
     exit;
 }
 
-// Valid key — serve the app entry point.
-readfile(__DIR__ . '/app.html');
+// Valid key — serve the app entry point with cache-busted assets.
+$html = file_get_contents(__DIR__ . '/app.html');
+$assetVersion = (int)max(
+    @filemtime(__DIR__ . '/reception.js') ?: 0,
+    @filemtime(__DIR__ . '/reception.css') ?: 0
+);
+if ($assetVersion > 0) {
+    $html = str_replace('./reception.js', './reception.js?v=' . $assetVersion, $html);
+    $html = str_replace('./reception.css', './reception.css?v=' . $assetVersion, $html);
+}
+echo $html;
