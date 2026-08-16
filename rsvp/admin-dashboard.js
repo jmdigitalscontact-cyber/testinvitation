@@ -19,6 +19,7 @@
   let currentQrGuestPage = 1;
   let invitationsSearchTerm = "";
   let filteredInvitations = [];
+  let invitationsSearchBound = false;
 
   function $(id) {
     return document.getElementById(id);
@@ -523,10 +524,7 @@
         allInvitations = data.data || [];
         invitationsSearchTerm = "";
         const searchInput = $("invitations-search");
-        if (searchInput) {
-          searchInput.value = "";
-          searchInput.addEventListener("input", filterInvitations);
-        }
+        if (searchInput) searchInput.value = "";
         currentInvitationsPage = 1;
         filteredInvitations = allInvitations;
         renderInvitationsPage();
@@ -537,28 +535,54 @@
       });
   };
 
+  function invitationMatchesSearch(inv, query) {
+    const guestName = (inv.guest_name || "").toLowerCase();
+    const invitationId = (inv.invitation_id || "").toLowerCase();
+    if (guestName.includes(query) || invitationId.includes(query)) return true;
+
+    const invitedNames = Array.isArray(inv.invited_guest_names) ? inv.invited_guest_names : [];
+    return invitedNames.some((name) => String(name || "").toLowerCase().includes(query));
+  }
+
+  function getInvitationsToShow() {
+    return invitationsSearchTerm ? filteredInvitations : allInvitations;
+  }
+
   window.filterInvitations = function filterInvitations(evt) {
-    invitationsSearchTerm = (evt.target.value || "").trim().toLowerCase();
-    
+    const searchInput = $("invitations-search");
+    const rawValue =
+      evt && evt.target
+        ? evt.target.value
+        : searchInput
+          ? searchInput.value
+          : "";
+    invitationsSearchTerm = String(rawValue || "").trim().toLowerCase();
+
     if (!invitationsSearchTerm) {
       filteredInvitations = allInvitations;
     } else {
-      filteredInvitations = allInvitations.filter((inv) => {
-        const guestName = (inv.guest_name || "").toLowerCase();
-        const invitationId = (inv.invitation_id || "").toLowerCase();
-        return guestName.includes(invitationsSearchTerm) || invitationId.includes(invitationsSearchTerm);
-      });
+      filteredInvitations = allInvitations.filter((inv) =>
+        invitationMatchesSearch(inv, invitationsSearchTerm)
+      );
     }
-    
+
     currentInvitationsPage = 1;
     renderInvitationsPage();
   };
+
+  function bindInvitationsSearch() {
+    if (invitationsSearchBound) return;
+    const searchInput = $("invitations-search");
+    if (!searchInput) return;
+    searchInput.addEventListener("input", filterInvitations);
+    invitationsSearchBound = true;
+  }
 
   function renderInvitationsPage() {
     const tbody = $("invitations-tbody");
     tbody.innerHTML = "";
 
-    const invitationsToShow = invitationsSearchTerm ? filteredInvitations : allInvitations;
+    const invitationsToShow = getInvitationsToShow();
     const totalPages = Math.max(1, Math.ceil(invitationsToShow.length / INVITATIONS_PER_PAGE));
     if (currentInvitationsPage > totalPages) currentInvitationsPage = totalPages;
 
@@ -637,7 +661,7 @@
   };
 
   window.invitationsNextPage = function invitationsNextPage() {
-    const invitationsToShow = filteredInvitations.length > 0 ? filteredInvitations : allInvitations;
+    const invitationsToShow = getInvitationsToShow();
     const totalPages = Math.max(1, Math.ceil(invitationsToShow.length / INVITATIONS_PER_PAGE));
     if (currentInvitationsPage < totalPages) {
       currentInvitationsPage += 1;
@@ -1082,8 +1106,14 @@
         globalAssignments = assignmentsRes.success ? assignmentsRes.data || [] : [];
 
         populateTableAssignmentsTable(globalInvitations, globalResponses, globalAssignments);
-        populateTableOverview(globalAssignments, globalResponses);
         updateTablePlanningSummary(globalInvitations, globalResponses, globalAssignments);
+
+        const tableSearchValue = ($("table-search")?.value || "").trim();
+        if (tableSearchValue) {
+          filterTableOverview();
+        } else {
+          populateTableOverview(globalAssignments, globalResponses);
+        }
 
         const totalCapacity = parseInt($("total-capacity").value, 10) || 200;
         const seatsPerTable = parseInt($("seats-per-table").value, 10) || 10;
@@ -1356,30 +1386,43 @@
     window.currentTableData = { invitations, responses, assignments };
   }
 
-  window.filterTableOverview = function filterTableOverview() {
-    const query = ($("table-search").value || "").trim().toLowerCase();
-    if (!window.currentTableData) return;
+  function assignmentMatchesTableSearch(assignment, responses, query) {
+    const guestName = (assignment.guest_name || "").toLowerCase();
+    if (guestName.includes(query)) return true;
 
-    const { responses, assignments } = window.currentTableData;
+    const attendeeLists = [];
+    if (Array.isArray(assignment.attendees)) attendeeLists.push(assignment.attendees);
+
+    const response = responses.find((r) => r.invitation_id === assignment.invitation_id);
+    if (response && Array.isArray(response.attendees)) attendeeLists.push(response.attendees);
+
+    return attendeeLists.some((attendees) =>
+      attendees.some((guest) =>
+        String(guest?.attendee_name || guest?.name || "")
+          .toLowerCase()
+          .includes(query)
+      )
+    );
+  }
+
+  window.filterTableOverview = function filterTableOverview() {
+    const searchInput = $("table-search");
+    const query = (searchInput ? searchInput.value : "").trim().toLowerCase();
+    const tableData = window.currentTableData || {
+      responses: globalResponses,
+      assignments: globalAssignments,
+    };
+    const { responses, assignments } = tableData;
+
     if (!query) {
       populateTableOverview(assignments, responses);
       $("table-overview-search-result").textContent = "";
       return;
     }
 
-    const matchedAssignments = assignments.filter((assignment) => {
-      const guestName = (assignment.guest_name || "").toLowerCase();
-      if (guestName.includes(query)) return true;
-      const response = responses.find((r) => r.invitation_id === assignment.invitation_id);
-      if (response && Array.isArray(response.attendees)) {
-        return response.attendees.some((guest) =>
-          String(guest.attendee_name || guest.name || "")
-            .toLowerCase()
-            .includes(query)
-        );
-      }
-      return false;
-    });
+    const matchedAssignments = assignments.filter((assignment) =>
+      assignmentMatchesTableSearch(assignment, responses, query)
+    );
 
     populateTableOverview(matchedAssignments, responses);
     $("table-overview-search-result").textContent = matchedAssignments.length
@@ -1438,6 +1481,8 @@
   window.closeModal = closeModal;
 
   function bindDelegatedActions() {
+    bindInvitationsSearch();
+
     $("invitations-tbody").addEventListener("click", (event) => {
       const btn = event.target.closest("[data-action]");
       if (!btn) return;
