@@ -438,6 +438,24 @@
         return;
       }
 
+      var goingNames = attendees.filter(function (attendee) { return attendee.attending; }).map(function (attendee) { return attendee.name; });
+      var notGoingNames = attendees.filter(function (attendee) { return !attendee.attending; }).map(function (attendee) { return attendee.name; });
+      var confirmLines = ['Please confirm your RSVP:\n'];
+
+      if (goingNames.length) {
+        confirmLines.push('\nAttending:');
+        goingNames.forEach(function (name) { confirmLines.push('• ' + name); });
+      }
+      if (notGoingNames.length) {
+        confirmLines.push('\nNot attending:');
+        notGoingNames.forEach(function (name) { confirmLines.push('• ' + name); });
+      }
+      confirmLines.push('\nThis cannot be changed after you submit. Continue?');
+
+      if (!window.confirm(confirmLines.join('\n'))) {
+        return;
+      }
+
       btn.disabled = true;
       btn.textContent = 'Submitting...';
 
