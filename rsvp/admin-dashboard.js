@@ -558,7 +558,7 @@
     const tbody = $("invitations-tbody");
     tbody.innerHTML = "";
 
-    const invitationsToShow = filteredInvitations.length > 0 ? filteredInvitations : allInvitations;
+    const invitationsToShow = invitationsSearchTerm ? filteredInvitations : allInvitations;
     const totalPages = Math.max(1, Math.ceil(invitationsToShow.length / INVITATIONS_PER_PAGE));
     if (currentInvitationsPage > totalPages) currentInvitationsPage = totalPages;
 
