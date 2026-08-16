@@ -1456,6 +1456,24 @@ body {
 
 .reception-upload__input { position: absolute; }
 
+.reception-upload__input--camera {
+  position: fixed;
+  left: -9999px;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.reception-upload-actions {
+  position: relative;
+  z-index: 2;
+}
+
+.reception-upload-actions .reception-btn {
+  cursor: pointer;
+}
+
 .reception-gallery-viewport {
   width: 100%;
   margin: 0.45rem 0 0;

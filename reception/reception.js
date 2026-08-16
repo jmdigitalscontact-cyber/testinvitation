@@ -91,7 +91,9 @@
     els.photoMarqueeTrack = document.getElementById("photo-marquee-track");
     els.photoUploadCameraBtn = document.getElementById("photo-upload-camera-btn");
     els.photoUploadGalleryBtn = document.getElementById("photo-upload-gallery-btn");
-    els.photoUploadInput = document.getElementById("photo-upload-input");
+    els.photoUploadCameraInput = document.getElementById("photo-upload-camera-input");
+    els.photoUploadGalleryInput = document.getElementById("photo-upload-gallery-input");
+    els.photoUploadActions = document.getElementById("photo-upload-actions");
     els.uploadZone = document.getElementById("upload-zone");
     els.photoLightbox = document.getElementById("photo-lightbox");
     els.photoLightboxImg = document.querySelector(".reception-photo-lightbox__img");
@@ -1347,21 +1349,22 @@
   function isAllowedPhotoFile(file) {
     const maxBytes = 10 * 1024 * 1024;
     const allowedTypes = [
-      'image/jpeg',
-      'image/jpg',
-      'image/pjpeg',
-      'image/png',
-      'image/webp',
-      'image/heic',
-      'image/heif',
+      "image/jpeg",
+      "image/jpg",
+      "image/pjpeg",
+      "image/png",
+      "image/webp",
+      "image/heic",
+      "image/heif",
     ];
-    const allowedExt = ['jpg', 'jpeg', 'png', 'webp', 'heic', 'heif'];
-    const ext = (file.name || '').split('.').pop().toLowerCase();
-    const typeOk = !file.type || allowedTypes.includes(file.type);
-    const extOk = allowedExt.includes(ext);
+    const allowedExt = ["jpg", "jpeg", "png", "webp", "heic", "heif"];
+    const name = file.name || "";
+    const ext = name.includes(".") ? name.split(".").pop().toLowerCase() : "";
+    const typeOk = !file.type || allowedTypes.includes(file.type) || file.type.startsWith("image/");
+    const extOk = !name || allowedExt.includes(ext);
 
     if (!typeOk && !extOk) {
-      return { ok: false, error: `${file.name}: use JPEG, PNG, WebP, or HEIC/HEIF` };
+      return { ok: false, error: `${name || "Photo"}: use JPEG, PNG, WebP, or HEIC/HEIF` };
     }
 
     if (file.size > maxBytes) {
@@ -1372,51 +1375,36 @@
   }
 
   function initPhotoUpload() {
-    const openCameraInput = () => {
-      if (!els.photoUploadInput) return;
-      els.photoUploadInput.removeAttribute('multiple');
-      els.photoUploadInput.setAttribute('capture', 'environment');
-      els.photoUploadInput.click();
+    const resetFileInput = (input) => {
+      if (input) input.value = "";
     };
 
-    const openGalleryInput = () => {
-      if (!els.photoUploadInput) return;
-      els.photoUploadInput.removeAttribute('capture');
-      els.photoUploadInput.setAttribute('multiple', '');
-      els.photoUploadInput.click();
-    };
-
-    const handleSelectedFiles = async (files) => {
+    const handleSelectedFiles = async (files, sourceInput) => {
       if (!files.length) return;
       await processUploads(files);
-      if (els.photoUploadInput) {
-        els.photoUploadInput.value = '';
-        els.photoUploadInput.removeAttribute('capture');
-      }
+      resetFileInput(sourceInput);
     };
 
-    els.photoUploadCameraBtn?.addEventListener("click", (event) => {
+    const bindFileInput = (input) => {
+      if (!input) return;
+      input.addEventListener("change", async () => {
+        const files = [...(input.files || [])];
+        await handleSelectedFiles(files, input);
+      });
+    };
+
+    bindFileInput(els.photoUploadCameraInput);
+    bindFileInput(els.photoUploadGalleryInput);
+
+    els.photoUploadActions?.addEventListener("click", (event) => {
       event.stopPropagation();
-      openCameraInput();
-    });
-    els.photoUploadGalleryBtn?.addEventListener("click", (event) => {
-      event.stopPropagation();
-      openGalleryInput();
-    });
-    els.uploadZone?.addEventListener('click', (e) => {
-      if (e.target.tagName === 'INPUT') return;
-      openGalleryInput();
     });
 
-    els.photoUploadInput?.addEventListener('click', () => {
-      if (els.photoUploadInput) {
-        els.photoUploadInput.value = '';
+    els.uploadZone?.addEventListener("click", (event) => {
+      if (event.target.closest("#photo-upload-actions") || event.target.closest(".rec-upload-tags-wrap")) {
+        return;
       }
-    });
-
-    els.photoUploadInput?.addEventListener('change', async () => {
-      const files = [...(els.photoUploadInput.files || [])];
-      await handleSelectedFiles(files);
+      els.photoUploadGalleryInput?.click();
     });
 
     const zone = els.uploadZone;
