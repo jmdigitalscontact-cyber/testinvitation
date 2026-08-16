@@ -1375,6 +1375,8 @@
   }
 
   function initPhotoUpload() {
+    let cameraOpening = false;
+
     const resetFileInput = (input) => {
       if (input) input.value = "";
     };
@@ -1382,19 +1384,38 @@
     const handleSelectedFiles = async (files, sourceInput) => {
       if (!files.length) return;
       await processUploads(files);
-      resetFileInput(sourceInput);
+      window.setTimeout(() => resetFileInput(sourceInput), 400);
     };
 
-    const bindFileInput = (input) => {
+    const bindFileInput = (input, { isCamera = false } = {}) => {
       if (!input) return;
       input.addEventListener("change", async () => {
+        cameraOpening = false;
         const files = [...(input.files || [])];
+        if (!files.length) return;
         await handleSelectedFiles(files, input);
       });
+      if (isCamera) {
+        input.addEventListener("cancel", () => {
+          cameraOpening = false;
+        });
+      }
     };
 
-    bindFileInput(els.photoUploadCameraInput);
+    bindFileInput(els.photoUploadCameraInput, { isCamera: true });
     bindFileInput(els.photoUploadGalleryInput);
+
+    els.photoUploadCameraBtn?.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      if (cameraOpening || els.photoUploadCameraBtn?.disabled) return;
+      if (!els.photoUploadCameraInput) return;
+      cameraOpening = true;
+      els.photoUploadCameraInput.click();
+      window.setTimeout(() => {
+        cameraOpening = false;
+      }, 1500);
+    });
 
     els.photoUploadActions?.addEventListener("click", (event) => {
       event.stopPropagation();
@@ -1425,7 +1446,7 @@
       zone.classList.remove('is-dragover');
       const files = [...(event.dataTransfer?.files || [])].filter((file) => file.type.startsWith('image/'));
       if (!files.length) return;
-      await handleSelectedFiles(files);
+      await handleSelectedFiles(files, null);
     });
   }
 
@@ -1450,7 +1471,18 @@
 
     const nameTag = document.getElementById("photo-tag-name")?.value || "";
     const tableTag = document.getElementById("photo-tag-table")?.value || "";
+    const cameraBtn = els.photoUploadCameraBtn;
+    const cameraBtnLabel = cameraBtn?.querySelector(".rec-upload-btn-label");
 
+    if (cameraBtn) cameraBtn.disabled = true;
+    if (cameraBtnLabel) cameraBtnLabel.textContent = "Uploading…";
+
+    if (cameraBtn) {
+      cameraBtn.disabled = true;
+      cameraBtn.textContent = "Uploading…";
+    }
+
+    try {
     const total = valid.length;
     let uploaded = 0;
     let failed = 0;
@@ -1497,6 +1529,10 @@
 
     if (failed > 0 && uploaded > 0) {
       showToast(`${failed} photo(s) could not be uploaded`);
+    }
+    } finally {
+      if (cameraBtn) cameraBtn.disabled = false;
+      if (cameraBtnLabel) cameraBtnLabel.textContent = "Snap your POV";
     }
   }
 
