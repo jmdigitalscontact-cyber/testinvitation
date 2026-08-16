@@ -157,6 +157,9 @@
 
                 <div class="admin-card">
                     <h2>All invitations</h2>
+                    <div class="admin-field">
+                        <input type="text" id="invitations-search" placeholder="Search by guest name or invitation ID...">
+                    </div>
                     <div class="admin-table-wrap">
                         <table class="admin-table" id="invitations-table">
                         <thead>

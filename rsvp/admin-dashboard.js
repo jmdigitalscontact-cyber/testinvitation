@@ -17,6 +17,8 @@
   let qrGuestListRows = [];
   let currentUnusedPage = 1;
   let currentQrGuestPage = 1;
+  let invitationsSearchTerm = "";
+  let filteredInvitations = [];
 
   function $(id) {
     return document.getElementById(id);
@@ -519,7 +521,14 @@
         }
 
         allInvitations = data.data || [];
+        invitationsSearchTerm = "";
+        const searchInput = $("invitations-search");
+        if (searchInput) {
+          searchInput.value = "";
+          searchInput.addEventListener("input", filterInvitations);
+        }
         currentInvitationsPage = 1;
+        filteredInvitations = allInvitations;
         renderInvitationsPage();
       })
       .catch(() => {
@@ -528,18 +537,39 @@
       });
   };
 
+  window.filterInvitations = function filterInvitations(evt) {
+    invitationsSearchTerm = (evt.target.value || "").trim().toLowerCase();
+    
+    if (!invitationsSearchTerm) {
+      filteredInvitations = allInvitations;
+    } else {
+      filteredInvitations = allInvitations.filter((inv) => {
+        const guestName = (inv.guest_name || "").toLowerCase();
+        const invitationId = (inv.invitation_id || "").toLowerCase();
+        return guestName.includes(invitationsSearchTerm) || invitationId.includes(invitationsSearchTerm);
+      });
+    }
+    
+    currentInvitationsPage = 1;
+    renderInvitationsPage();
+  };
+
   function renderInvitationsPage() {
     const tbody = $("invitations-tbody");
     tbody.innerHTML = "";
 
-    const totalPages = Math.max(1, Math.ceil(allInvitations.length / INVITATIONS_PER_PAGE));
+    const invitationsToShow = filteredInvitations.length > 0 ? filteredInvitations : allInvitations;
+    const totalPages = Math.max(1, Math.ceil(invitationsToShow.length / INVITATIONS_PER_PAGE));
     if (currentInvitationsPage > totalPages) currentInvitationsPage = totalPages;
 
     const startIndex = (currentInvitationsPage - 1) * INVITATIONS_PER_PAGE;
-    const pageInvitations = allInvitations.slice(startIndex, startIndex + INVITATIONS_PER_PAGE);
+    const pageInvitations = invitationsToShow.slice(startIndex, startIndex + INVITATIONS_PER_PAGE);
 
     if (!pageInvitations.length) {
-      tbody.innerHTML = '<tr><td colspan="7" class="admin-empty">No invitations yet.</td></tr>';
+      const emptyMsg = invitationsSearchTerm 
+        ? `No invitations found matching "${escapeHtml(invitationsSearchTerm)}".`
+        : "No invitations yet.";
+      tbody.innerHTML = `<tr><td colspan="7" class="admin-empty">${emptyMsg}</td></tr>`;
     } else {
       pageInvitations.forEach((inv) => {
         const tr = document.createElement("tr");
@@ -607,7 +637,8 @@
   };
 
   window.invitationsNextPage = function invitationsNextPage() {
-    const totalPages = Math.max(1, Math.ceil(allInvitations.length / INVITATIONS_PER_PAGE));
+    const invitationsToShow = filteredInvitations.length > 0 ? filteredInvitations : allInvitations;
+    const totalPages = Math.max(1, Math.ceil(invitationsToShow.length / INVITATIONS_PER_PAGE));
     if (currentInvitationsPage < totalPages) {
       currentInvitationsPage += 1;
       renderInvitationsPage();
