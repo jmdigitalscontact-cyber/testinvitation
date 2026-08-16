@@ -200,6 +200,14 @@ try {
             handleAssignTable();
             break;
 
+        case 'admin-update-rsvp':
+            handleAdminUpdateRSVP();
+            break;
+
+        case 'admin-clear-rsvp':
+            handleAdminClearRSVP();
+            break;
+
         // ==================== RECEPTION ACCESS ====================
 
         case 'verify-reception-key':
@@ -1358,6 +1366,66 @@ function handleAssignTable() {
     } catch (Exception $e) {
         sendResponse(['success' => false, 'error' => $e->getMessage()], 500);
     }
+}
+
+// ==================== ADMIN RSVP OVERRIDE ====================
+
+function handleAdminUpdateRSVP() {
+    requireAdminAuth();
+    $input = getRequestInput();
+    $invitation_id = sanitize($input['invitation_id'] ?? '');
+    $attending = sanitize($input['attending'] ?? '');
+    $attendees = $input['attendees'] ?? [];
+    $dietary_restrictions = sanitize($input['dietary_restrictions'] ?? '');
+    $special_notes = sanitize($input['special_notes'] ?? '');
+
+    if (empty($invitation_id)) {
+        sendResponse(['success' => false, 'error' => 'Missing invitation ID'], 400);
+    }
+
+    if (!in_array($attending, ['yes', 'no', 'maybe'], true)) {
+        sendResponse(['success' => false, 'error' => 'Invalid attendance value'], 400);
+    }
+
+    $rsvp = new RSVPHandler();
+    $result = $rsvp->adminUpdateRSVP(
+        $invitation_id,
+        $attending,
+        $attendees,
+        $dietary_restrictions,
+        $special_notes
+    );
+
+    if (empty($result['success'])) {
+        sendResponse(['success' => false, 'error' => $result['error'] ?? 'Update failed'], 400);
+    }
+
+    sendResponse([
+        'success' => true,
+        'message' => $result['message'] ?? 'RSVP updated successfully'
+    ]);
+}
+
+function handleAdminClearRSVP() {
+    requireAdminAuth();
+    $input = getRequestInput();
+    $invitation_id = sanitize($input['invitation_id'] ?? '');
+
+    if (empty($invitation_id)) {
+        sendResponse(['success' => false, 'error' => 'Missing invitation ID'], 400);
+    }
+
+    $rsvp = new RSVPHandler();
+    $result = $rsvp->adminClearRSVP($invitation_id);
+
+    if (empty($result['success'])) {
+        sendResponse(['success' => false, 'error' => $result['error'] ?? 'Reset failed'], 400);
+    }
+
+    sendResponse([
+        'success' => true,
+        'message' => $result['message'] ?? 'RSVP reset successfully'
+    ]);
 }
 
 // ==================== UTILITY FUNCTIONS ====================

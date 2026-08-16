@@ -132,6 +132,176 @@ class RSVPHandler {
     }
 
     /**
+     * Admin override for accidental or incorrect guest submissions.
+     */
+    public function adminUpdateRSVP($invitation_id, $attending, $attendees = [], $dietary_restrictions = '', $special_notes = '') {
+        $invitation = $this->getInvitationInfo($invitation_id);
+        if (!$invitation) {
+            return ['success' => false, 'error' => 'Invalid invitation ID'];
+        }
+
+        if (!in_array($attending, ['yes', 'no', 'maybe'], true)) {
+            return ['success' => false, 'error' => 'Invalid attendance value'];
+        }
+
+        $normalizedAttendees = [];
+        foreach ((array)$attendees as $attendee) {
+            if (is_string($attendee)) {
+                $name = trim($attendee);
+                if ($name === '') {
+                    continue;
+                }
+                $normalizedAttendees[] = [
+                    'name' => $name,
+                    'attending' => true,
+                    'dietary_restrictions' => '',
+                    'special_notes' => '',
+                ];
+                continue;
+            }
+
+            if (!is_array($attendee)) {
+                continue;
+            }
+
+            $name = trim((string)($attendee['name'] ?? $attendee['attendee_name'] ?? ''));
+            if ($name === '') {
+                continue;
+            }
+
+            $isGoingValue = $attendee['attending'] ?? $attendee['going'] ?? $attendee['is_going'] ?? true;
+            if (is_string($isGoingValue)) {
+                $isGoing = in_array(strtolower(trim($isGoingValue)), ['1', 'true', 'yes', 'y', 'on', 'checked'], true);
+            } else {
+                $isGoing = (bool)$isGoingValue;
+            }
+
+            $normalizedAttendees[] = [
+                'name' => $name,
+                'attending' => $isGoing,
+                'dietary_restrictions' => (string)($attendee['dietary_restrictions'] ?? ''),
+                'special_notes' => (string)($attendee['special_notes'] ?? ''),
+            ];
+        }
+
+        $selectedAttendees = array_values(array_filter($normalizedAttendees, function ($attendee) {
+            return !empty($attendee['attending']);
+        }));
+
+        if ($attending === 'yes' && empty($selectedAttendees)) {
+            $selectedAttendees[] = [
+                'name' => $invitation['guest_name'],
+                'attending' => true,
+                'dietary_restrictions' => '',
+                'special_notes' => '',
+            ];
+        }
+
+        if ($attending === 'yes' && count($selectedAttendees) > (int)$invitation['max_guests']) {
+            return [
+                'success' => false,
+                'error' => 'Attendee count exceeds the invitation maximum of ' . (int)$invitation['max_guests'] . '.',
+            ];
+        }
+
+        $attendee_count = $attending === 'yes' ? count($selectedAttendees) : 0;
+        $existing = $this->getRSVPResponse($invitation_id);
+
+        try {
+            $attendees_json = json_encode($normalizedAttendees);
+
+            if ($existing) {
+                $stmt = $this->mysqli->prepare("
+                    UPDATE rsvp_responses
+                    SET attending = ?, attendee_count = ?, attendees = ?, dietary_restrictions = ?, special_notes = ?, edited_once = 1
+                    WHERE invitation_id = ?
+                ");
+                $stmt->bind_param("sissss", $attending, $attendee_count, $attendees_json, $dietary_restrictions, $special_notes, $invitation_id);
+                if (!$stmt->execute()) {
+                    throw new Exception('Failed to update RSVP: ' . $stmt->error);
+                }
+                $stmt->close();
+                $rsvp_id = (int)$existing['id'];
+            } else {
+                $stmt = $this->mysqli->prepare("
+                    INSERT INTO rsvp_responses
+                    (invitation_id, attending, attendee_count, attendees, dietary_restrictions, special_notes, edited_once)
+                    VALUES (?, ?, ?, ?, ?, ?, 1)
+                ");
+                $stmt->bind_param("ssisss", $invitation_id, $attending, $attendee_count, $attendees_json, $dietary_restrictions, $special_notes);
+                if (!$stmt->execute()) {
+                    throw new Exception('Failed to create RSVP: ' . $stmt->error);
+                }
+                $rsvp_id = (int)$this->db->lastInsertId();
+                $stmt->close();
+            }
+
+            $new_status = ($attending === 'yes' || $attending === 'maybe')
+                ? 'responded'
+                : (($attending === 'no') ? 'declined' : 'responded');
+            $stmt = $this->mysqli->prepare("UPDATE invitations SET status = ? WHERE invitation_id = ?");
+            $stmt->bind_param("ss", $new_status, $invitation_id);
+            $stmt->execute();
+            $stmt->close();
+
+            if (!empty($selectedAttendees) && $attending !== 'no') {
+                $this->saveAttendeesList($rsvp_id, $invitation_id, $selectedAttendees);
+            } else {
+                $stmt = $this->mysqli->prepare("DELETE FROM attendees WHERE rsvp_response_id = ?");
+                $stmt->bind_param("i", $rsvp_id);
+                $stmt->execute();
+                $stmt->close();
+            }
+
+            return [
+                'success' => true,
+                'message' => 'RSVP updated by admin.',
+                'invitation_id' => $invitation_id,
+            ];
+        } catch (Exception $e) {
+            return ['success' => false, 'error' => $e->getMessage()];
+        }
+    }
+
+    /**
+     * Clear a guest RSVP so they can submit again.
+     */
+    public function adminClearRSVP($invitation_id) {
+        $invitation = $this->getInvitationInfo($invitation_id);
+        if (!$invitation) {
+            return ['success' => false, 'error' => 'Invalid invitation ID'];
+        }
+
+        $existing = $this->getRSVPResponse($invitation_id);
+        if (!$existing) {
+            return ['success' => false, 'error' => 'No RSVP response to reset.'];
+        }
+
+        try {
+            $stmt = $this->mysqli->prepare("DELETE FROM rsvp_responses WHERE invitation_id = ?");
+            $stmt->bind_param("s", $invitation_id);
+            if (!$stmt->execute()) {
+                throw new Exception('Failed to clear RSVP: ' . $stmt->error);
+            }
+            $stmt->close();
+
+            $pendingStatus = 'pending';
+            $stmt = $this->mysqli->prepare("UPDATE invitations SET status = ? WHERE invitation_id = ?");
+            $stmt->bind_param("ss", $pendingStatus, $invitation_id);
+            $stmt->execute();
+            $stmt->close();
+
+            return [
+                'success' => true,
+                'message' => 'RSVP reset. Guest can submit again.',
+                'invitation_id' => $invitation_id,
+            ];
+        } catch (Exception $e) {
+            return ['success' => false, 'error' => $e->getMessage()];
+        }
+    }
+
+    /**
      * Save individual attendees list
      * @param int $rsvp_id
      * @param string $invitation_id

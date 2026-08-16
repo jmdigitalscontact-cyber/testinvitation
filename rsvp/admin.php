@@ -409,6 +409,31 @@
                     <label for="edit-invited-names">Invited guest names (one per line)</label>
                     <textarea id="edit-invited-names" rows="4"></textarea>
                 </div>
+                <div class="admin-card" style="margin-top:1rem;padding:1rem;background:var(--admin-surface-alt, #f7f9f7)">
+                    <h4 style="margin:0 0 0.75rem;font-size:0.95rem">RSVP override</h4>
+                    <p style="font-size:0.82rem;color:var(--admin-muted);margin:0 0 0.85rem">Fix mistaken submissions or set attendance on behalf of a guest.</p>
+                    <div class="admin-form-grid">
+                        <div class="admin-field">
+                            <label for="edit-rsvp-status">RSVP status</label>
+                            <select id="edit-rsvp-status">
+                                <option value="pending">Pending (no response)</option>
+                                <option value="yes">Yes — attending</option>
+                                <option value="no">No — declined</option>
+                                <option value="maybe">Maybe</option>
+                            </select>
+                        </div>
+                        <div class="admin-field" style="display:flex;align-items:flex-end">
+                            <button type="button" class="admin-btn admin-btn-secondary admin-btn-sm" onclick="resetEditInvitationRsvp()">Reset RSVP</button>
+                        </div>
+                    </div>
+                    <p id="edit-rsvp-pending-note" style="font-size:0.82rem;color:var(--admin-muted);margin:0.5rem 0 0" hidden>
+                        Pending clears the stored response so the guest can scan their QR and submit again.
+                    </p>
+                    <div id="edit-rsvp-attendees-wrap" class="admin-field" style="margin-top:0.75rem;margin-bottom:0" hidden>
+                        <label>Who is attending</label>
+                        <div id="edit-rsvp-attendees" class="admin-rsvp-attendees"></div>
+                    </div>
+                </div>
                 <div class="admin-actions">
                     <button type="button" class="admin-btn admin-btn-secondary" data-close-modal="edit-modal">Cancel</button>
                     <button type="submit" class="admin-btn admin-btn-primary">Save changes</button>

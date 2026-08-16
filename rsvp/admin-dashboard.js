@@ -22,6 +22,7 @@
   let allResponses = [];
   let filteredResponses = [];
   let responsesSearchTerm = "";
+  let editRsvpCurrentResponse = null;
 
   function $(id) {
     return document.getElementById(id);
@@ -272,6 +273,109 @@
         .filter(Boolean);
     }
     return names;
+  }
+
+  function getInvitedNamesFromEditForm() {
+    const guestName = ($("edit-guest-name")?.value || "").trim();
+    const fromTextarea = String($("edit-invited-names")?.value || "")
+      .split(/\r?\n/)
+      .map((n) => n.trim())
+      .filter(Boolean);
+    return fromTextarea.length ? fromTextarea : guestName ? [guestName] : [];
+  }
+
+  function getGoingNamesFromResponse(response) {
+    return new Set(extractGuestNamesFromResponse(response));
+  }
+
+  function syncEditRsvpAttendeesVisibility() {
+    const status = $("edit-rsvp-status")?.value || "pending";
+    const wrap = $("edit-rsvp-attendees-wrap");
+    const pendingNote = $("edit-rsvp-pending-note");
+    if (wrap) wrap.hidden = status !== "yes" && status !== "maybe";
+    if (pendingNote) pendingNote.hidden = status !== "pending";
+  }
+
+  function renderEditRsvpAttendees(response) {
+    const container = $("edit-rsvp-attendees");
+    if (!container) return;
+
+    container.innerHTML = "";
+    const names = getInvitedNamesFromEditForm();
+    if (!names.length) {
+      container.innerHTML =
+        '<p style="font-size:0.82rem;color:var(--admin-muted);margin:0">Add invited guest names above.</p>';
+      return;
+    }
+
+    const goingNames = getGoingNamesFromResponse(response);
+    const status = $("edit-rsvp-status")?.value || "pending";
+    const defaultAllChecked = (status === "yes" || status === "maybe") && goingNames.size === 0 && !response;
+
+    names.forEach((name) => {
+      const label = document.createElement("label");
+      label.className = "admin-checkbox";
+      const input = document.createElement("input");
+      input.type = "checkbox";
+      input.value = name;
+      input.checked = goingNames.has(name) || defaultAllChecked;
+      const span = document.createElement("span");
+      span.textContent = name;
+      label.appendChild(input);
+      label.appendChild(span);
+      container.appendChild(label);
+    });
+  }
+
+  function populateEditRsvpFields(invitation, response) {
+    const statusEl = $("edit-rsvp-status");
+    if (!statusEl) return;
+
+    const attending = response?.attending || invitation?.rsvp_status || "pending";
+    statusEl.value = attending === "pending" || !response ? "pending" : attending;
+    renderEditRsvpAttendees(response);
+    syncEditRsvpAttendeesVisibility();
+  }
+
+  function collectEditRsvpAttendees() {
+    const container = $("edit-rsvp-attendees");
+    if (!container) return [];
+    return Array.from(container.querySelectorAll('input[type="checkbox"]')).map((cb) => ({
+      name: cb.value,
+      attending: cb.checked,
+    }));
+  }
+
+  async function saveEditRsvpStatus(invitationId) {
+    const status = $("edit-rsvp-status")?.value || "pending";
+
+    if (status === "pending") {
+      const response = await AdminAuth.apiCall("api.php?action=admin-clear-rsvp", {
+        method: "POST",
+        body: JSON.stringify({ invitation_id: invitationId }),
+      });
+      const data = await response.json();
+      const errorText = String(data.error || "").toLowerCase();
+      if (!data.success && !errorText.includes("no rsvp")) {
+        throw new Error(data.error || "Failed to reset RSVP status.");
+      }
+      return data;
+    }
+
+    const payload = {
+      invitation_id: invitationId,
+      attending: status,
+      attendees: status === "yes" || status === "maybe" ? collectEditRsvpAttendees() : [],
+    };
+    const response = await AdminAuth.apiCall("api.php?action=admin-update-rsvp", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+    const data = await response.json();
+    if (!data.success) {
+      throw new Error(data.error || "Failed to update RSVP.");
+    }
+    return data;
   }
 
   function computeDashboardStats(invitations, responses) {
@@ -979,18 +1083,24 @@
 
   window.openEditInvitation = async function openEditInvitation(invitationId) {
     try {
-      const response = await AdminAuth.apiCall("api.php?action=get-invitations");
-      const data = await response.json();
-      if (!data.success) {
-        showFlash("invitations-message", data.error || "Unable to load invitations.", "error");
+      const [invRes, respRes] = await Promise.all([
+        AdminAuth.apiCall("api.php?action=get-invitations").then((r) => r.json()),
+        AdminAuth.apiCall("api.php?action=get-rsvp-summary").then((r) => r.json()),
+      ]);
+
+      if (!invRes.success) {
+        showFlash("invitations-message", invRes.error || "Unable to load invitations.", "error");
         return;
       }
 
-      const invitation = (data.data || []).find((inv) => inv.invitation_id === invitationId);
+      const invitation = (invRes.data || []).find((inv) => inv.invitation_id === invitationId);
       if (!invitation) {
         showFlash("invitations-message", "Invitation not found.", "error");
         return;
       }
+
+      const response = (respRes.data || []).find((r) => r.invitation_id === invitationId) || null;
+      editRsvpCurrentResponse = response;
 
       $("edit-invitation-id").value = invitation.invitation_id;
       $("edit-guest-name").value = invitation.guest_name || "";
@@ -1001,9 +1111,40 @@
       $("edit-invited-names").value = Array.isArray(invitation.invited_guest_names)
         ? invitation.invited_guest_names.join("\n")
         : "";
+      populateEditRsvpFields(invitation, response);
       openModal("edit-modal");
     } catch (error) {
       showFlash("invitations-message", error.message || "Failed to open editor.", "error");
+    }
+  };
+
+  window.resetEditInvitationRsvp = async function resetEditInvitationRsvp() {
+    const invitationId = $("edit-invitation-id")?.value;
+    if (!invitationId) return;
+    if (!confirm("Clear this RSVP so the guest can submit again?")) return;
+
+    hideFlash("invitations-message");
+    try {
+      const response = await AdminAuth.apiCall("api.php?action=admin-clear-rsvp", {
+        method: "POST",
+        body: JSON.stringify({ invitation_id: invitationId }),
+      });
+      const data = await response.json();
+      if (!data.success) {
+        showFlash("invitations-message", data.error || "Reset failed.", "error");
+        return;
+      }
+
+      editRsvpCurrentResponse = null;
+      $("edit-rsvp-status").value = "pending";
+      renderEditRsvpAttendees(null);
+      syncEditRsvpAttendeesVisibility();
+      showFlash("invitations-message", "RSVP cleared. Guest can respond again.", "success");
+      loadInvitations();
+      loadStats();
+      loadResponses();
+    } catch (error) {
+      showFlash("invitations-message", error.message || "Reset failed.", "error");
     }
   };
 
@@ -1032,15 +1173,28 @@
       body: JSON.stringify(payload),
     })
       .then((r) => r.json())
-      .then((data) => {
+      .then(async (data) => {
         if (!data.success) {
           showFlash("invitations-message", data.error || "Update failed.", "error");
           return;
         }
+
+        try {
+          await saveEditRsvpStatus(invitationId);
+        } catch (rsvpError) {
+          showFlash(
+            "invitations-message",
+            rsvpError.message || "Invitation saved, but RSVP update failed.",
+            "error"
+          );
+          return;
+        }
+
         closeModal("edit-modal");
-        showFlash("invitations-message", "Invitation updated.", "success");
+        showFlash("invitations-message", "Invitation and RSVP updated.", "success");
         loadInvitations();
         loadStats();
+        loadResponses();
       })
       .catch((error) => {
         showFlash("invitations-message", error.message || "Update failed.", "error");
@@ -1628,6 +1782,17 @@
 
   window.initAdminDashboard = function initAdminDashboard() {
     bindDelegatedActions();
+    const rsvpStatusEl = $("edit-rsvp-status");
+    if (rsvpStatusEl) {
+      rsvpStatusEl.addEventListener("change", () => {
+        renderEditRsvpAttendees(editRsvpCurrentResponse);
+        syncEditRsvpAttendeesVisibility();
+      });
+    }
+    const invitedNamesEl = $("edit-invited-names");
+    if (invitedNamesEl) {
+      invitedNamesEl.addEventListener("input", () => renderEditRsvpAttendees(editRsvpCurrentResponse));
+    }
     const sheetBtn = document.getElementById("open-google-sheet-btn");
     if (sheetBtn) {
       sheetBtn.addEventListener("click", () => {
