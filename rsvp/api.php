@@ -248,6 +248,10 @@ try {
             handleAdminDownloadPhotosZip();
             break;
 
+        case 'admin-clear-all-reception-photos':
+            handleAdminClearAllReceptionPhotos();
+            break;
+
         default:
             sendResponse(['error' => 'Invalid action'], 400);
     }

@@ -746,3 +746,79 @@ body.admin-app {
   margin-top: 1rem;
 }
 
+.admin-photos-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.75rem;
+}
+
+.admin-kpi--compact {
+  min-width: 120px;
+  padding: 0.75rem 1rem;
+}
+
+.admin-actions--wrap {
+  flex-wrap: wrap;
+  margin-bottom: 0.5rem;
+}
+
+.admin-photo-card {
+  border: 1px solid var(--admin-border);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--admin-surface);
+  display: flex;
+  flex-direction: column;
+}
+
+.admin-photo-card.is-hidden-photo {
+  opacity: 0.72;
+}
+
+.admin-photo-card img {
+  width: 100%;
+  height: 180px;
+  object-fit: cover;
+  display: block;
+}
+
+.admin-photo-card__body {
+  padding: 0.65rem 0.75rem;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.admin-photo-card__title {
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+
+.admin-photo-card__meta {
+  font-size: 0.75rem;
+  color: var(--admin-muted);
+}
+
+.admin-photo-card__actions {
+  display: flex;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+
+.admin-photo-badge {
+  font-size: 0.72rem;
+}
+
+.admin-photo-badge--hidden {
+  color: var(--admin-danger);
+}
+
+.admin-btn-danger-text {
+  color: var(--admin-danger);
+}
+

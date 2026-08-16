@@ -95,52 +95,63 @@
     else if (tabName === "invitations") loadInvitations();
     else if (tabName === "responses") loadResponses();
     else if (tabName === "tables") loadTableAssignments();
-    else if (tabName === "reception") loadAdminPhotos();
+    else if (tabName === "photos") loadAdminPhotos();
+    else if (tabName === "reception") { /* QR tools only */ }
   };
+
+  function renderAdminPhotoCard(p) {
+    const tag = p.uploaderName
+      ? (p.tableNumber ? `${escapeHtml(p.uploaderName)} (T${p.tableNumber})` : escapeHtml(p.uploaderName))
+      : (p.tableNumber ? `Table ${p.tableNumber}` : "Anonymous");
+    const likes = p.likesCount || 0;
+    const hiddenBadge = p.isApproved === false
+      ? '<span class="admin-photo-badge admin-photo-badge--hidden">Hidden</span>'
+      : "";
+    return `
+      <div class="admin-photo-card${p.isApproved === false ? " is-hidden-photo" : ""}">
+        <img src="${escapeHtml(p.url)}" alt="" loading="lazy" />
+        <div class="admin-photo-card__body">
+          <div>
+            <div class="admin-photo-card__title">${tag}</div>
+            <div class="admin-photo-card__meta">❤️ ${likes} likes · ${escapeHtml(p.uploadedAt || "")} ${hiddenBadge}</div>
+          </div>
+          <div class="admin-photo-card__actions">
+            ${p.isApproved !== false ? `<button type="button" class="admin-btn admin-btn-secondary admin-btn-sm" onclick="hideAdminPhoto(${p.id})">Hide</button>` : ""}
+            <button type="button" class="admin-btn admin-btn-secondary admin-btn-sm admin-btn-danger-text" onclick="deleteAdminPhoto(${p.id})">Delete</button>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  function updateAdminPhotosCount(count) {
+    const counter = $("admin-photos-count");
+    if (counter) counter.textContent = String(count);
+  }
 
   window.loadAdminPhotos = function loadAdminPhotos() {
     const grid = document.getElementById("admin-photos-grid");
     if (!grid) return;
-    grid.innerHTML = '<p style="color:var(--admin-muted)">Loading guest photos…</p>';
+    grid.innerHTML = '<p class="admin-empty">Loading guest photos…</p>';
 
     AdminAuth.apiCall("api.php?action=admin-get-reception-photos")
       .then((res) => res.json())
       .then((json) => {
         if (json.success && Array.isArray(json.data)) {
+          updateAdminPhotosCount(json.data.length);
           if (json.data.length === 0) {
-            grid.innerHTML = '<p style="color:var(--admin-muted)">No guest POV photos uploaded yet.</p>';
+            grid.innerHTML = '<p class="admin-empty">No guest POV photos uploaded yet.</p>';
             return;
           }
-          grid.innerHTML = json.data.map((p) => {
-            const tag = p.uploaderName
-              ? (p.tableNumber ? `${escapeHtml(p.uploaderName)} (T${p.tableNumber})` : escapeHtml(p.uploaderName))
-              : (p.tableNumber ? `Table ${p.tableNumber}` : 'Anonymous');
-            const likes = p.likesCount || 0;
-            const hiddenBadge = p.isApproved === false
-              ? '<span style="font-size:0.72rem;color:#d9534f;">Hidden</span>'
-              : "";
-            return `
-              <div class="admin-photo-card" style="position:relative;border:1px solid var(--admin-border);border-radius:8px;overflow:hidden;background:var(--admin-surface);display:flex;flex-direction:column;${p.isApproved === false ? "opacity:0.72;" : ""}">
-                <img src="${escapeHtml(p.url)}" alt="" style="width:100%;height:160px;object-fit:cover;display:block;" />
-                <div style="padding:0.5rem 0.75rem;flex:1;display:flex;flex-direction:column;justify-content:space-between;">
-                  <div>
-                    <div style="font-weight:600;font-size:0.85rem;">${tag}</div>
-                    <div style="font-size:0.75rem;color:var(--admin-muted);">❤️ ${likes} likes · ${escapeHtml(p.uploadedAt || "")} ${hiddenBadge}</div>
-                  </div>
-                  <div style="display:flex;gap:0.35rem;margin-top:0.5rem;flex-wrap:wrap;">
-                    ${p.isApproved !== false ? `<button type="button" class="admin-btn admin-btn-secondary admin-btn-sm" onclick="hideAdminPhoto(${p.id})">Hide</button>` : ""}
-                    <button type="button" class="admin-btn admin-btn-secondary admin-btn-sm" style="color:#d9534f;" onclick="deleteAdminPhoto(${p.id})">Delete</button>
-                  </div>
-                </div>
-              </div>
-            `;
-          }).join("");
+          grid.innerHTML = json.data.map(renderAdminPhotoCard).join("");
         } else {
-          grid.innerHTML = '<p style="color:var(--admin-muted)">Could not load photos.</p>';
+          updateAdminPhotosCount(0);
+          grid.innerHTML = '<p class="admin-empty">Could not load photos.</p>';
         }
       })
       .catch((err) => {
-        grid.innerHTML = `<p style="color:var(--admin-muted)">Error loading photos: ${escapeHtml(err.message)}</p>`;
+        updateAdminPhotosCount(0);
+        grid.innerHTML = `<p class="admin-empty">Error loading photos: ${escapeHtml(err.message)}</p>`;
       });
   };
 
@@ -155,11 +166,12 @@
       .then((json) => {
         if (json.success) {
           loadAdminPhotos();
+          showFlash("photos-message", "Photo hidden from live gallery.", "success");
         } else {
-          alert(json.error || "Failed to hide photo");
+          showFlash("photos-message", json.error || "Failed to hide photo.", "error");
         }
       })
-      .catch((err) => alert(err.message || "Failed to hide photo"));
+      .catch((err) => showFlash("photos-message", err.message || "Failed to hide photo.", "error"));
   };
 
   window.deleteAdminPhoto = function deleteAdminPhoto(photoId) {
@@ -173,14 +185,16 @@
       .then((json) => {
         if (json.success) {
           loadAdminPhotos();
+          showFlash("photos-message", "Photo deleted.", "success");
         } else {
-          alert(json.error || "Failed to delete photo");
+          showFlash("photos-message", json.error || "Failed to delete photo.", "error");
         }
       })
-      .catch((err) => alert(err.message || "Failed to delete photo"));
+      .catch((err) => showFlash("photos-message", err.message || "Failed to delete photo.", "error"));
   };
 
   window.downloadAllPhotosZip = function downloadAllPhotosZip() {
+    hideFlash("photos-message");
     AdminAuth.apiCall("api.php?action=admin-download-photos-zip")
       .then((res) => {
         if (!res.ok) return res.json().then((j) => { throw new Error(j.error || "Download failed"); });
@@ -195,8 +209,38 @@
         a.click();
         a.remove();
         window.URL.revokeObjectURL(url);
+        showFlash("photos-message", "ZIP export downloaded.", "success");
       })
-      .catch((err) => alert(err.message || "Failed to download ZIP"));
+      .catch((err) => showFlash("photos-message", err.message || "Failed to download ZIP.", "error"));
+  };
+
+  window.clearAllAdminPhotos = function clearAllAdminPhotos() {
+    const confirmed = confirm(
+      "Clear ALL guest POV photos?\n\nThis permanently deletes every uploaded photo and file. Use this for testing only."
+    );
+    if (!confirmed) return;
+
+    const typed = prompt('Type DELETE to confirm clearing all photos:');
+    if (typed !== "DELETE") {
+      showFlash("photos-message", "Clear all cancelled.", "info");
+      return;
+    }
+
+    AdminAuth.apiCall("api.php?action=admin-clear-all-reception-photos", {
+      method: "POST",
+      body: JSON.stringify({ confirm: "DELETE" }),
+    })
+      .then((res) => res.json())
+      .then((json) => {
+        if (json.success) {
+          loadAdminPhotos();
+          const count = json.data?.deletedRows ?? 0;
+          showFlash("photos-message", `Cleared ${count} photo(s) from the gallery.`, "success");
+        } else {
+          showFlash("photos-message", json.error || "Failed to clear photos.", "error");
+        }
+      })
+      .catch((err) => showFlash("photos-message", err.message || "Failed to clear photos.", "error"));
   };
 
   function extractGuestNamesFromResponse(response) {

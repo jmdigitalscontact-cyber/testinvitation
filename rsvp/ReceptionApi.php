@@ -1160,6 +1160,39 @@ function handleAdminDeleteReceptionPhoto() {
     sendResponse(['success' => true, 'message' => 'Photo deleted successfully']);
 }
 
+function handleAdminClearAllReceptionPhotos() {
+    requireAdminAuth();
+
+    $db = Database::getInstance();
+    $mysqli = $db->getConnection();
+    receptionEnsurePhotosTable($mysqli);
+
+    $result = $mysqli->query("SELECT id, storage_path FROM reception_photos");
+    if (!$result) {
+        sendResponse(['success' => false, 'error' => 'Could not read photos'], 500);
+    }
+
+    $deletedFiles = 0;
+    while ($row = $result->fetch_assoc()) {
+        $filePath = receptionResolvePhotoFilePath($row['storage_path'] ?? '');
+        if ($filePath && @unlink($filePath)) {
+            $deletedFiles++;
+        }
+    }
+
+    $mysqli->query("DELETE FROM reception_photos");
+    $deletedRows = (int)$mysqli->affected_rows;
+
+    sendResponse([
+        'success' => true,
+        'message' => 'All guest POV photos cleared.',
+        'data' => [
+            'deletedRows' => $deletedRows,
+            'deletedFiles' => $deletedFiles,
+        ],
+    ]);
+}
+
 function handleAdminDownloadPhotosZip() {
     requireAdminAuth();
 
@@ -1167,7 +1200,7 @@ function handleAdminDownloadPhotosZip() {
     $mysqli = $db->getConnection();
     receptionEnsurePhotosTable($mysqli);
 
-    $result = $mysqli->query("SELECT storage_path, file_name FROM reception_photos WHERE is_approved = 1 ORDER BY id ASC");
+    $result = $mysqli->query("SELECT storage_path, file_name FROM reception_photos ORDER BY id ASC");
     if (!$result || $result->num_rows === 0) {
         sendResponse(['success' => false, 'error' => 'No photos available to download'], 404);
     }

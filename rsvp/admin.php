@@ -30,6 +30,7 @@
                 <button type="button" class="admin-nav-btn" data-tab="responses">Responses</button>
                 <button type="button" class="admin-nav-btn" data-tab="export">Export</button>
                 <button type="button" class="admin-nav-btn" data-tab="tables">Seating</button>
+                <button type="button" class="admin-nav-btn" data-tab="photos">Photos</button>
                 <button type="button" class="admin-nav-btn" data-tab="reception">Reception</button>
             </nav>
 
@@ -297,6 +298,34 @@
                 </div>
             </section>
 
+            <!-- POV Photos -->
+            <section id="photos" class="admin-panel" aria-label="POV Photos">
+                <div id="photos-message" class="admin-flash" role="status"></div>
+
+                <div class="admin-card">
+                    <div class="admin-photos-head">
+                        <div>
+                            <h2>Guest POV gallery</h2>
+                            <p class="admin-card-lead">All guest-uploaded reception photos in one place. Export everything or clear the gallery for testing.</p>
+                        </div>
+                        <div class="admin-kpi admin-kpi--compact">
+                            <div class="admin-kpi-label">Total photos</div>
+                            <div class="admin-kpi-value" id="admin-photos-count">0</div>
+                        </div>
+                    </div>
+
+                    <div class="admin-actions admin-actions--wrap">
+                        <button type="button" class="admin-btn admin-btn-primary" onclick="downloadAllPhotosZip()">Export all (.zip)</button>
+                        <button type="button" class="admin-btn admin-btn-secondary" onclick="loadAdminPhotos()">Refresh</button>
+                        <button type="button" class="admin-btn admin-btn-danger" onclick="clearAllAdminPhotos()">Clear all photos</button>
+                    </div>
+
+                    <div id="admin-photos-grid" class="admin-photos-grid">
+                        <p class="admin-empty">Loading photos…</p>
+                    </div>
+                </div>
+            </section>
+
             <!-- Reception access -->
             <section id="reception" class="admin-panel" aria-label="Reception">
                 <div id="reception-message" class="admin-flash" role="status"></div>
@@ -313,21 +342,6 @@
                     <div class="admin-qr-preview" id="reception-qr-preview" hidden>
                         <img id="reception-qr-image" src="" alt="Reception access QR code">
                         <p style="text-align:center;font-size:0.82rem;color:var(--admin-muted)">Reception access link is embedded in this QR. Anyone who scans it can unlock the reception app.</p>
-                    </div>
-                </div>
-
-                <div class="admin-card">
-                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
-                        <h2>Guest POV Photos Moderation</h2>
-                        <button type="button" class="admin-btn admin-btn-primary" onclick="downloadAllPhotosZip()">Download All POVs (.zip)</button>
-                    </div>
-                    <p class="admin-card-lead">Review guest uploaded POV photos, view likes, or delete inappropriate uploads.</p>
-                    
-                    <div id="admin-photos-grid" class="admin-photos-grid">
-                        <p style="color:var(--admin-muted)">Loading photos…</p>
-                    </div>
-                    <div class="admin-actions" style="margin-top:1rem;">
-                        <button type="button" class="admin-btn admin-btn-secondary" onclick="loadAdminPhotos()">Refresh Photos</button>
                     </div>
                 </div>
             </section>
