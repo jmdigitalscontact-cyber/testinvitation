@@ -192,6 +192,9 @@
             <section id="responses" class="admin-panel" aria-label="Responses">
                 <div class="admin-card">
                     <h2>RSVP responses</h2>
+                    <div class="admin-field">
+                        <input type="search" id="responses-search" placeholder="Search by guest, invitation ID, status, or attendee name..." autocomplete="off" oninput="filterResponses(event)">
+                    </div>
                     <div class="admin-table-wrap">
                         <table class="admin-table" id="responses-table">
                         <thead>

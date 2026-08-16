@@ -19,6 +19,9 @@
   let currentQrGuestPage = 1;
   let invitationsSearchTerm = "";
   let filteredInvitations = [];
+  let allResponses = [];
+  let filteredResponses = [];
+  let responsesSearchTerm = "";
 
   function $(id) {
     return document.getElementById(id);
@@ -798,75 +801,122 @@
     AdminAuth.apiCall("api.php?action=get-rsvp-summary")
       .then((response) => response.json())
       .then((data) => {
-        const tbody = $("responses-tbody");
-        tbody.innerHTML = "";
-
         if (!data.success) {
-          tbody.innerHTML = '<tr><td colspan="6" class="admin-empty">Failed to load responses.</td></tr>';
+          $("responses-tbody").innerHTML =
+            '<tr><td colspan="6" class="admin-empty">Failed to load responses.</td></tr>';
           return;
         }
 
-        const responses = (data.data || []).filter((item) => item.attending !== null);
-        if (!responses.length) {
-          tbody.innerHTML = '<tr><td colspan="6" class="admin-empty">No responses yet.</td></tr>';
-          return;
-        }
-
-        responses.forEach((item) => {
-          let guestNamesHtml;
-          if (Array.isArray(item.attendees) && item.attendees.length > 0) {
-            guestNamesHtml = item.attendees
-              .filter((a) => {
-                if (!a || typeof a !== "object") return false;
-                if (Object.prototype.hasOwnProperty.call(a, "attending")) {
-                  return !!a.attending && a.attending !== "false" && a.attending !== "0";
-                }
-                if (Object.prototype.hasOwnProperty.call(a, "going")) {
-                  return !!a.going;
-                }
-                return true;
-              })
-              .map((a) => escapeHtml(a.attendee_name || a.name || ""))
-              .filter(Boolean)
-              .map((name) => `<div>${name}</div>`)
-              .join("");
-          } else if (item.special_notes) {
-            guestNamesHtml = escapeHtml(item.special_notes)
-              .split(/\r\n|\r|\n/)
-              .map((n) => n.trim())
-              .filter(Boolean)
-              .map((name) => `<div>${name}</div>`)
-              .join("");
-          } else {
-            guestNamesHtml = '<div>—</div>';
-          }
-
-          const submittedAt = item.submitted_at
-            ? new Date(item.submitted_at).toLocaleString()
-            : "—";
-          const tr = document.createElement("tr");
-          tr.innerHTML = `
-            <td>${escapeHtml(item.guest_name)}</td>
-            <td>${attendanceBadge(item.attending)}</td>
-            <td>${escapeHtml(String(item.attendee_count || 0))}</td>
-            <td>${escapeHtml(submittedAt)}</td>
-            <td>${guestNamesHtml}</td>
-            <td></td>
-          `;
-          const detailsBtn = document.createElement("button");
-          detailsBtn.type = "button";
-          detailsBtn.className = "admin-btn admin-btn-secondary admin-btn-sm";
-          detailsBtn.textContent = "View";
-          detailsBtn.dataset.action = "details";
-          detailsBtn.dataset.id = item.invitation_id;
-          tr.lastElementChild.appendChild(detailsBtn);
-          tbody.appendChild(tr);
-        });
+        allResponses = (data.data || []).filter((item) => item.attending !== null);
+        applyResponsesSearchFromInput();
+        renderResponsesTable();
       })
       .catch(() => {
         $("responses-tbody").innerHTML =
           '<tr><td colspan="6" class="admin-empty">Failed to load responses.</td></tr>';
       });
+  };
+
+  function responseAttendeeNames(item) {
+    if (Array.isArray(item.attendees) && item.attendees.length > 0) {
+      return item.attendees
+        .filter((a) => {
+          if (!a || typeof a !== "object") return false;
+          if (Object.prototype.hasOwnProperty.call(a, "attending")) {
+            return !!a.attending && a.attending !== "false" && a.attending !== "0";
+          }
+          if (Object.prototype.hasOwnProperty.call(a, "going")) {
+            return !!a.going;
+          }
+          return true;
+        })
+        .map((a) => String(a.attendee_name || a.name || "").trim())
+        .filter(Boolean);
+    }
+
+    if (item.special_notes) {
+      return String(item.special_notes)
+        .split(/\r\n|\r|\n|,/)
+        .map((name) => name.trim())
+        .filter(Boolean);
+    }
+
+    return [];
+  }
+
+  function responseMatchesSearch(item, query) {
+    const guestName = (item.guest_name || "").toLowerCase();
+    const invitationId = (item.invitation_id || "").toLowerCase();
+    const attending = (item.attending || "").toLowerCase();
+    const attendeeCount = String(item.attendee_count || "");
+
+    if (guestName.includes(query) || invitationId.includes(query)) return true;
+    if (attending.includes(query) || attendeeCount.includes(query)) return true;
+
+    return responseAttendeeNames(item).some((name) => name.toLowerCase().includes(query));
+  }
+
+  function applyResponsesSearchFromInput() {
+    const searchInput = $("responses-search");
+    responsesSearchTerm = searchInput ? String(searchInput.value || "").trim().toLowerCase() : "";
+
+    if (!responsesSearchTerm) {
+      filteredResponses = allResponses;
+      return;
+    }
+
+    filteredResponses = allResponses.filter((item) => responseMatchesSearch(item, responsesSearchTerm));
+  }
+
+  window.filterResponses = function filterResponses() {
+    applyResponsesSearchFromInput();
+    renderResponsesTable();
+  };
+
+  function renderGuestNamesCell(item) {
+    const names = responseAttendeeNames(item);
+    if (names.length) {
+      return names.map((name) => `<div>${escapeHtml(name)}</div>`).join("");
+    }
+    return "<div>—</div>";
+  }
+
+  function renderResponsesTable() {
+    const tbody = $("responses-tbody");
+    tbody.innerHTML = "";
+
+    const responsesToShow = responsesSearchTerm ? filteredResponses : allResponses;
+
+    if (!responsesToShow.length) {
+      const emptyMsg = responsesSearchTerm
+        ? `No responses found matching "${escapeHtml(responsesSearchTerm)}".`
+        : "No responses yet.";
+      tbody.innerHTML = `<tr><td colspan="6" class="admin-empty">${emptyMsg}</td></tr>`;
+      return;
+    }
+
+    responsesToShow.forEach((item) => {
+      const submittedAt = item.submitted_at
+        ? new Date(item.submitted_at).toLocaleString()
+        : "—";
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td>${escapeHtml(item.guest_name)}</td>
+        <td>${attendanceBadge(item.attending)}</td>
+        <td>${escapeHtml(String(item.attendee_count || 0))}</td>
+        <td>${escapeHtml(submittedAt)}</td>
+        <td>${renderGuestNamesCell(item)}</td>
+        <td></td>
+      `;
+      const detailsBtn = document.createElement("button");
+      detailsBtn.type = "button";
+      detailsBtn.className = "admin-btn admin-btn-secondary admin-btn-sm";
+      detailsBtn.textContent = "View";
+      detailsBtn.dataset.action = "details";
+      detailsBtn.dataset.id = item.invitation_id;
+      tr.lastElementChild.appendChild(detailsBtn);
+      tbody.appendChild(tr);
+    });
   };
 
   window.showQRCode = function showQRCode(invitationId) {
