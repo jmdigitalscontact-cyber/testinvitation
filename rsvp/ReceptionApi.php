@@ -608,7 +608,12 @@ function receptionSaveUploadRateData(array $data) {
 }
 
 function receptionAssertUploadRateLimit() {
-    $maxPerHour = (int)EnvironmentLoader::get('RECEPTION_UPLOAD_MAX_PER_HOUR', 40);
+    // Venue Wi-Fi shares one public IP across many guests, so the default must
+    // be high enough for wedding-day bulk uploads (not a per-person cap).
+    $maxPerHour = (int)EnvironmentLoader::get('RECEPTION_UPLOAD_MAX_PER_HOUR', 500);
+    if ($maxPerHour < 1) {
+        $maxPerHour = 500;
+    }
     $ip = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
     $data = receptionLoadUploadRateData();
 
@@ -619,11 +624,20 @@ function receptionAssertUploadRateLimit() {
     if (count($data[$ip]) >= $maxPerHour) {
         sendResponse([
             'success' => false,
-            'error' => 'Upload limit reached for now. Please try again in a little while.',
+            'error' => 'Upload limit reached for this network right now. Please try again in a little while.',
+            'code' => 'rate_limited',
+            'limit' => $maxPerHour,
         ], 429);
     }
 
     return [$ip, $data];
+}
+
+function receptionClearUploadRateData() {
+    $logFile = receptionUploadRateLogFile();
+    if (is_file($logFile)) {
+        @unlink($logFile);
+    }
 }
 
 function receptionRecordSuccessfulUpload($ip, array $data) {
@@ -635,10 +649,12 @@ function receptionRecordSuccessfulUpload($ip, array $data) {
 }
 
 function receptionUploadErrorMessage($code) {
+    $appMaxMb = max(1, (int)round(((int)EnvironmentLoader::get('RECEPTION_UPLOAD_MAX_BYTES', 10485760)) / 1048576));
+    $iniMax = ini_get('upload_max_filesize') ?: 'unknown';
     switch ((int)$code) {
         case UPLOAD_ERR_INI_SIZE:
         case UPLOAD_ERR_FORM_SIZE:
-            return 'File is too large for the server (max 10MB).';
+            return "File is too large for the server (PHP upload_max_filesize={$iniMax}, app max {$appMaxMb}MB).";
         case UPLOAD_ERR_PARTIAL:
             return 'Upload was interrupted. Please try again.';
         case UPLOAD_ERR_NO_FILE:
@@ -1084,12 +1100,45 @@ function receptionConvertHeicToWebp($tmpPath, $destPath) {
     return $resultCode === 0 && is_file($destPath) && filesize($destPath) > 0;
 }
 
+function receptionParseIniBytes($value) {
+    $value = trim((string)$value);
+    if ($value === '') {
+        return 0;
+    }
+    if (is_numeric($value)) {
+        return (int)$value;
+    }
+    $unit = strtolower(substr($value, -1));
+    $number = (float)substr($value, 0, -1);
+    switch ($unit) {
+        case 'g':
+            return (int)round($number * 1024 * 1024 * 1024);
+        case 'm':
+            return (int)round($number * 1024 * 1024);
+        case 'k':
+            return (int)round($number * 1024);
+        default:
+            return (int)$number;
+    }
+}
+
 function handleUploadReceptionPhoto() {
     @ini_set('memory_limit', '512M');
     receptionRequireApiKey();
     [$rateIp, $rateData] = receptionAssertUploadRateLimit();
 
     $useGooglePhotos = receptionGooglePhotosEnabled();
+
+    // When the request body exceeds post_max_size, PHP empties $_POST/$_FILES.
+    $contentLength = (int)($_SERVER['CONTENT_LENGTH'] ?? 0);
+    $postMax = receptionParseIniBytes(ini_get('post_max_size'));
+    if ($contentLength > 0 && $postMax > 0 && $contentLength > $postMax && empty($_FILES)) {
+        sendResponse([
+            'success' => false,
+            'error' => 'Photo is larger than the server post_max_size (' . ini_get('post_max_size') . '). Compress it or raise PHP limits.',
+            'code' => 'post_too_large',
+        ], 413);
+    }
 
     if (!isset($_FILES['photo']) || !is_array($_FILES['photo'])) {
         sendResponse(['success' => false, 'error' => 'No photo uploaded'], 400);
@@ -1414,6 +1463,9 @@ function handleAdminClearAllReceptionPhotos() {
 
     $mysqli->query("DELETE FROM reception_photos");
     $deletedRows = (int)$mysqli->affected_rows;
+
+    // Clearing the gallery for testing should also clear the hourly upload counter.
+    receptionClearUploadRateData();
 
     sendResponse([
         'success' => true,

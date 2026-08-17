@@ -1675,59 +1675,69 @@
     if (cameraBtn) cameraBtn.disabled = true;
     if (cameraBtnLabel) cameraBtnLabel.textContent = "Uploading…";
 
-    if (cameraBtn) {
-      cameraBtn.disabled = true;
-      cameraBtn.textContent = "Uploading…";
-    }
-
     try {
-    const total = valid.length;
-    let uploaded = 0;
-    let failed = 0;
+      const total = valid.length;
+      let uploaded = 0;
+      let failed = 0;
+      let lastError = "";
+      let stoppedEarly = false;
 
-    for (let index = 0; index < total; index += 1) {
-      if (els.photoStatus) {
-        els.photoStatus.textContent = total > 1 ? `Compressing & uploading ${index + 1} of ${total}…` : 'Uploading…';
-      }
+      for (let index = 0; index < total; index += 1) {
+        if (els.photoStatus) {
+          els.photoStatus.textContent = total > 1
+            ? `Compressing & uploading ${index + 1} of ${total}… (${uploaded} ok, ${failed} failed)`
+            : "Uploading…";
+        }
 
-      try {
-        const result = await uploadPhoto(valid[index], nameTag, tableTag);
-        if (result?.success && result.data) {
-          state.photos.unshift(result.data);
-          updateMaxPhotoId([result.data]);
-          uploaded += 1;
-        } else {
+        try {
+          const result = await uploadPhoto(valid[index], nameTag, tableTag);
+          if (result?.success && result.data) {
+            state.photos.unshift(result.data);
+            updateMaxPhotoId([result.data]);
+            uploaded += 1;
+          } else {
+            failed += 1;
+            lastError = result?.error || "Upload failed";
+          }
+        } catch (error) {
           failed += 1;
-          throw new Error(result?.error || 'Upload failed');
-        }
-      } catch (error) {
-        failed += 1;
-        if (uploaded === 0 && index === 0) {
-          showToast(error?.message || 'Upload failed');
-          if (els.photoStatus) els.photoStatus.textContent = 'Upload failed — try again';
-          return;
+          lastError = error?.message || "Upload failed";
+          // Rate limits / server size caps will keep failing — stop the batch.
+          if (/limit reached|too large|post_max_size|429|413/i.test(lastError)) {
+            stoppedEarly = true;
+            break;
+          }
         }
       }
-    }
 
-    if (uploaded > 0) {
-      try {
-        const fresh = await apiGet("get-reception-photos");
-        if (fresh.success && Array.isArray(fresh.data)) {
-          state.photos = fresh.data;
-          updateMaxPhotoId(state.photos);
+      if (uploaded > 0) {
+        try {
+          const fresh = await apiGet("get-reception-photos");
+          if (fresh.success && Array.isArray(fresh.data)) {
+            state.photos = fresh.data;
+            updateMaxPhotoId(state.photos);
+          }
+        } catch (e) {
+          // fallback to state.photos
         }
-      } catch (e) {
-        // fallback to state.photos
+        renderPhotos();
+        if (els.photoStatus) els.photoStatus.textContent = `${state.photos.length} photo(s)`;
+        showToast(uploaded === 1 ? "POV shared! 🎉" : `${uploaded} POVs shared! 🎉`);
       }
-      renderPhotos();
-      if (els.photoStatus) els.photoStatus.textContent = `${state.photos.length} photo(s)`;
-      showToast(uploaded === 1 ? 'POV shared! 🎉' : `${uploaded} POVs shared! 🎉`);
-    }
 
-    if (failed > 0 && uploaded > 0) {
-      showToast(`${failed} photo(s) could not be uploaded`);
-    }
+      if (failed > 0) {
+        const remaining = stoppedEarly ? Math.max(0, total - uploaded - failed) : 0;
+        const detail = lastError || "Upload failed";
+        const summary = uploaded > 0
+          ? `${failed} photo(s) could not be uploaded${remaining ? ` (${remaining} skipped)` : ""}: ${detail}`
+          : `Upload failed: ${detail}`;
+        showToast(summary);
+        if (els.photoStatus) {
+          els.photoStatus.textContent = uploaded > 0
+            ? `${state.photos.length} photo(s) — ${failed} failed`
+            : "Upload failed — try again";
+        }
+      }
     } finally {
       if (cameraBtn) cameraBtn.disabled = false;
       if (cameraBtnLabel) cameraBtnLabel.textContent = "Snap your POV";

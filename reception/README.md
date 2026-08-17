@@ -27,8 +27,16 @@ Ensure `reception/uploads/` exists and is writable by PHP.
 
 - `RECEPTION_API_KEY` — required for QR-only access. The app and API now require this key.
 - `RECEPTION_UPLOAD_MAX_BYTES` — default 10485760 (10MB)
-- `RECEPTION_UPLOAD_MAX_PER_HOUR` — default 10 per IP
+- `RECEPTION_UPLOAD_MAX_PER_HOUR` — default 500 per IP (venue Wi-Fi shares one IP)
 - `RECEPTION_WEBP_QUALITY` — optional WebP conversion quality (50-100, default 82)
+
+Also raise PHP body limits (defaults are often 2M). Use `php-dev.ini` locally:
+
+```powershell
+php -c php-dev.ini -S localhost:3000
+```
+
+On cPanel / shared hosting, `.user.ini` at the project root sets `upload_max_filesize=12M` and `post_max_size=16M`.
 
 ## QR-only access setup
 
