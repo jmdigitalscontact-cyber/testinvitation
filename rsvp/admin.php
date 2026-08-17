@@ -334,6 +334,29 @@
                 <div id="reception-message" class="admin-flash" role="status"></div>
 
                 <div class="admin-card">
+                    <h2>Team Bride vs Team Groom</h2>
+                    <p class="admin-card-lead">Live guest vote totals. Reset votes after rehearsal or testing so guests can vote again on the same phones.</p>
+                    <div class="admin-kpi-grid">
+                        <div class="admin-kpi">
+                            <div class="admin-kpi-label">Team Bride</div>
+                            <div class="admin-kpi-value" id="reception-votes-bride">—</div>
+                        </div>
+                        <div class="admin-kpi">
+                            <div class="admin-kpi-label">Team Groom</div>
+                            <div class="admin-kpi-value" id="reception-votes-groom">—</div>
+                        </div>
+                        <div class="admin-kpi">
+                            <div class="admin-kpi-label">Total votes</div>
+                            <div class="admin-kpi-value" id="reception-votes-total">—</div>
+                        </div>
+                    </div>
+                    <div class="admin-actions">
+                        <button type="button" class="admin-btn admin-btn-secondary" onclick="loadReceptionVotes()">Refresh votes</button>
+                        <button type="button" class="admin-btn admin-btn-secondary admin-btn-danger-text" onclick="resetReceptionVotes()">Reset votes for testing</button>
+                    </div>
+                </div>
+
+                <div class="admin-card">
                     <h2>Reception access QR</h2>
                     <p class="admin-card-lead">Guests scan this QR code to unlock the reception app (seating, menu, gallery, gifts). The code embeds your <code>RECEPTION_API_KEY</code> from <code>.env</code>, so the main content stays hidden until the correct key is scanned.</p>
 

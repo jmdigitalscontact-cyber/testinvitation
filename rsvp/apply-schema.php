@@ -23,6 +23,7 @@ if ($engine === 'mysql') {
         'database-table-assignments-mysql.sql',
         'database-migration-edit-once.sql',
         'database-reception-photos-mysql.sql',
+        'database-reception-votes-mysql.sql',
     ];
 } else {
     echo "Database engine: PostgreSQL\n";
@@ -32,6 +33,7 @@ if ($engine === 'mysql') {
         'database-table-assignments.sql',
         'database-migration-edit-once.sql',
         'database-reception-photos.sql',
+        'database-reception-votes.sql',
     ];
 }
 

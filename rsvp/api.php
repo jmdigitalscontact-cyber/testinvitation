@@ -232,6 +232,14 @@ try {
             handleGetReceptionPhotos();
             break;
 
+        case 'get-reception-votes':
+            handleGetReceptionVotes();
+            break;
+
+        case 'submit-reception-vote':
+            handleSubmitReceptionVote();
+            break;
+
         case 'upload-reception-photo':
             handleUploadReceptionPhoto();
             break;
@@ -258,6 +266,14 @@ try {
 
         case 'admin-clear-all-reception-photos':
             handleAdminClearAllReceptionPhotos();
+            break;
+
+        case 'admin-get-reception-votes':
+            handleAdminGetReceptionVotes();
+            break;
+
+        case 'admin-clear-reception-votes':
+            handleAdminClearReceptionVotes();
             break;
 
         default:

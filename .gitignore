@@ -18,6 +18,7 @@ rsvp/qr_codes/*
 # Guest photo uploads
 reception/uploads/*
 !reception/uploads/.gitkeep
+!reception/uploads/.htaccess
 
 # Google service-account / credential JSON
 **/credentials/*.json

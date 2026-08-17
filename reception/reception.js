@@ -12,6 +12,8 @@
   const MIN_SEARCH_CHARS = 2;
   const THEME_STORAGE = "reception_theme";
   const LIKED_PHOTOS_STORAGE = "reception_liked_photo_ids";
+  const VOTER_TOKEN_STORAGE = "reception_voter_token";
+  const TEAM_VOTE_STORAGE = "reception_team_vote";
   const PHOTO_POLL_MS = 10000;
 
   if (RECEPTION_KEY_PARAM) {
@@ -119,6 +121,18 @@
     els.receptionMain = document.getElementById("reception-main");
     els.welcomeOverlay = document.getElementById("rec-welcome-overlay");
     els.welcomeCta = document.getElementById("rec-welcome-cta");
+    els.welcomeHint = document.getElementById("rec-welcome-hint");
+    els.voteOverlay = document.getElementById("rec-vote-overlay");
+    els.voteOptions = document.getElementById("rec-vote-options");
+    els.voteButtons = document.querySelectorAll("[data-vote-team]");
+    els.voteStatus = document.getElementById("rec-vote-status");
+    els.voteResults = document.getElementById("rec-vote-results");
+    els.voteBrideCount = document.getElementById("rec-vote-bride-count");
+    els.voteGroomCount = document.getElementById("rec-vote-groom-count");
+    els.voteTotal = document.getElementById("rec-vote-total");
+    els.voteBrideBar = document.getElementById("rec-vote-bride-bar");
+    els.voteGroomBar = document.getElementById("rec-vote-groom-bar");
+    els.voteContinue = document.getElementById("rec-vote-continue");
   }
 
   let photoLightboxIndex = 0;
@@ -431,26 +445,143 @@
     return true;
   }
 
-  function dismissWelcome() {
-    if (!els.welcomeOverlay) return;
-    // The welcome CTA always begins the guest journey at seat search, rather
-    // than exposing a stale hash-selected tab from a previous visit.
+  function getVoterToken() {
+    let token = localStorage.getItem(VOTER_TOKEN_STORAGE) || "";
+    if (!/^[A-Za-z0-9-]{16,128}$/.test(token)) {
+      token = window.crypto?.randomUUID
+        ? window.crypto.randomUUID()
+        : `${Date.now()}-${Math.random().toString(36).slice(2)}-${Math.random().toString(36).slice(2)}`;
+      localStorage.setItem(VOTER_TOKEN_STORAGE, token);
+    }
+    return token;
+  }
+
+  function setVoteButtonsDisabled(disabled) {
+    els.voteButtons?.forEach((button) => { button.disabled = disabled; });
+  }
+
+  function renderVoteResults(data) {
+    const bride = Number(data?.bride || 0);
+    const groom = Number(data?.groom || 0);
+    const total = Number(data?.total || bride + groom);
+    const myTeam = data?.myTeam === "groom" ? "groom" : "bride";
+    const bridePercent = total > 0 ? (bride / total) * 100 : 50;
+
+    if (els.voteBrideCount) els.voteBrideCount.textContent = String(bride);
+    if (els.voteGroomCount) els.voteGroomCount.textContent = String(groom);
+    if (els.voteTotal) els.voteTotal.textContent = String(total);
+    if (els.voteBrideBar) els.voteBrideBar.style.width = `${bridePercent}%`;
+    if (els.voteGroomBar) els.voteGroomBar.style.width = `${100 - bridePercent}%`;
+    els.voteButtons?.forEach((button) => {
+      button.classList.toggle("is-selected", button.dataset.voteTeam === myTeam);
+      button.disabled = true;
+    });
+    if (els.voteStatus) {
+      els.voteStatus.classList.remove("is-error");
+      els.voteStatus.textContent = `You're officially on Team ${myTeam === "bride" ? "Bride" : "Groom"}!`;
+    }
+    if (els.voteResults) els.voteResults.hidden = false;
+  }
+
+  function enterSeatSearch() {
     switchTab("search");
     const searchPanel = document.getElementById("panel-search");
     if (searchPanel) searchPanel.scrollTop = 0;
     revealApp();
-    els.welcomeOverlay.classList.add("is-exiting");
-    els.welcomeCta?.blur();
-    fireConfetti();
-    setTimeout(() => {
+    if (els.voteOverlay) els.voteOverlay.hidden = true;
+    if (els.welcomeOverlay) {
       els.welcomeOverlay.hidden = true;
       els.welcomeOverlay.classList.remove("is-exiting");
-      els.searchInput?.focus({ preventScroll: true });
-    }, 450);
+    }
+    setTimeout(() => els.searchInput?.focus({ preventScroll: true }), 100);
+  }
+
+  function showVoteOverlay() {
+    if (!els.voteOverlay) {
+      enterSeatSearch();
+      return;
+    }
+    els.voteOverlay.hidden = false;
+    setVoteButtonsDisabled(false);
+    els.voteButtons?.forEach((button) => button.classList.remove("is-selected"));
+    if (els.voteResults) els.voteResults.hidden = true;
+    if (els.voteStatus) {
+      els.voteStatus.textContent = "";
+      els.voteStatus.classList.remove("is-error");
+    }
+    setTimeout(() => els.voteButtons?.[0]?.focus({ preventScroll: true }), 300);
+  }
+
+  async function continueFromWelcome() {
+    if (!els.welcomeOverlay || els.welcomeCta?.disabled) return;
+    if (els.welcomeCta) els.welcomeCta.disabled = true;
+    if (els.welcomeHint) els.welcomeHint.textContent = "Checking your team vote…";
+
+    try {
+      const data = await apiGet("get-reception-votes", { voter_token: getVoterToken() });
+      if (!data?.success) throw new Error(data?.error || "Could not check vote");
+
+      const myTeam = data.data?.myTeam;
+      if (myTeam === "bride" || myTeam === "groom") {
+        localStorage.setItem(TEAM_VOTE_STORAGE, myTeam);
+        enterSeatSearch();
+        return;
+      }
+
+      // An admin reset removes the server vote, so clear the local marker too.
+      localStorage.removeItem(TEAM_VOTE_STORAGE);
+      els.welcomeOverlay.classList.add("is-exiting");
+      setTimeout(() => {
+        els.welcomeOverlay.hidden = true;
+        els.welcomeOverlay.classList.remove("is-exiting");
+        showVoteOverlay();
+      }, 400);
+    } catch (error) {
+      if (els.welcomeHint) els.welcomeHint.textContent = "Could not load voting. Check your connection and try again.";
+      if (els.welcomeCta) els.welcomeCta.disabled = false;
+    }
+  }
+
+  async function submitTeamVote(team) {
+    if (!["bride", "groom"].includes(team)) return;
+    setVoteButtonsDisabled(true);
+    if (els.voteStatus) {
+      els.voteStatus.classList.remove("is-error");
+      els.voteStatus.textContent = "Locking in your vote…";
+    }
+
+    try {
+      const response = await fetch(apiUrl("submit-reception-vote"), {
+        method: "POST",
+        headers: apiHeaders(true),
+        body: JSON.stringify({ voter_token: getVoterToken(), team }),
+      });
+      const data = await response.json().catch(() => null);
+      if (!response.ok || !data?.success) {
+        throw new Error(data?.error || "Could not save vote");
+      }
+
+      const savedTeam = data.data?.myTeam;
+      if (savedTeam === "bride" || savedTeam === "groom") {
+        localStorage.setItem(TEAM_VOTE_STORAGE, savedTeam);
+      }
+      renderVoteResults(data.data);
+      if (data.data?.created) fireConfetti();
+    } catch (error) {
+      setVoteButtonsDisabled(false);
+      if (els.voteStatus) {
+        els.voteStatus.classList.add("is-error");
+        els.voteStatus.textContent = error.message || "Could not save vote. Please try again.";
+      }
+    }
   }
 
   function initWelcome() {
-    els.welcomeCta?.addEventListener("click", dismissWelcome);
+    els.welcomeCta?.addEventListener("click", continueFromWelcome);
+    els.voteButtons?.forEach((button) => {
+      button.addEventListener("click", () => submitTeamVote(button.dataset.voteTeam));
+    });
+    els.voteContinue?.addEventListener("click", enterSeatSearch);
 
     // Browsers may restore this page from the back/forward cache with the
     // previously open Search tab already painted. Reset it before the page is
@@ -465,6 +596,9 @@
         els.welcomeOverlay.classList.remove("is-exiting");
         els.welcomeOverlay.hidden = false;
       }
+      if (els.voteOverlay) els.voteOverlay.hidden = true;
+      if (els.welcomeCta) els.welcomeCta.disabled = false;
+      if (els.welcomeHint) els.welcomeHint.textContent = "Celebrating, dining & making memories together";
     });
   }
 
@@ -1360,7 +1494,7 @@
     const allowedExt = ["jpg", "jpeg", "png", "webp", "heic", "heif"];
     const name = file.name || "";
     const ext = name.includes(".") ? name.split(".").pop().toLowerCase() : "";
-    const typeOk = !file.type || allowedTypes.includes(file.type) || file.type.startsWith("image/");
+    const typeOk = !file.type || allowedTypes.includes(file.type);
     const extOk = !name || allowedExt.includes(ext);
 
     if (!typeOk && !extOk) {

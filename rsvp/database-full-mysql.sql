@@ -202,6 +202,18 @@ CREATE TABLE IF NOT EXISTS reception_photos (
 CREATE INDEX idx_reception_photos_uploaded_at ON reception_photos(uploaded_at);
 CREATE INDEX idx_reception_photos_approved ON reception_photos(is_approved, uploaded_at DESC);
 
+-- ------------------------------------------------------------
+-- 11) RECEPTION TEAM VOTES
+-- ------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS reception_votes (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    voter_token CHAR(64) NOT NULL,
+    team ENUM('bride', 'groom') NOT NULL,
+    voted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_reception_voter_token (voter_token),
+    INDEX idx_reception_votes_team (team)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 SET FOREIGN_KEY_CHECKS = 1;
 
 -- ============================================================

@@ -511,6 +511,127 @@ body {
   animation: recWelcomeOut 0.5s var(--rec-ease-in-out) both;
 }
 
+.rec-vote-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9998;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.25rem;
+  background: rgba(9, 18, 14, 0.82);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.rec-vote-overlay[hidden] { display: none !important; }
+
+.rec-vote-card {
+  width: min(100%, 470px);
+  padding: 2.1rem 1.5rem 1.5rem;
+  border: 1px solid var(--rec-border-accent);
+  border-radius: 28px;
+  background: rgba(22, 40, 30, 0.94);
+  box-shadow: var(--rec-shadow-card), var(--rec-shadow-glow);
+  text-align: center;
+  animation: recWelcomeIn 0.65s var(--rec-ease-spring) both;
+}
+
+[data-theme="light"] .rec-vote-card { background: rgba(255, 255, 255, 0.96); }
+
+.rec-vote-intro {
+  margin: -0.15rem 0 1.2rem;
+  color: var(--rec-text-secondary);
+  font-size: 0.88rem;
+  line-height: 1.5;
+}
+
+.rec-vote-options {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+}
+
+.rec-team-card {
+  min-height: 145px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.65rem;
+  border: 2px solid transparent;
+  border-radius: 20px;
+  color: var(--rec-text);
+  cursor: pointer;
+  transition: transform 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
+}
+
+.rec-team-card--bride {
+  background: linear-gradient(145deg, rgba(212, 165, 180, 0.28), rgba(212, 165, 180, 0.1));
+  border-color: rgba(212, 165, 180, 0.42);
+}
+
+.rec-team-card--groom {
+  background: linear-gradient(145deg, rgba(107, 140, 120, 0.34), rgba(107, 140, 120, 0.11));
+  border-color: rgba(143, 168, 154, 0.42);
+}
+
+.rec-team-card:hover,
+.rec-team-card:focus-visible { transform: translateY(-3px); }
+.rec-team-card--bride:hover,
+.rec-team-card--bride:focus-visible,
+.rec-team-card--bride.is-selected {
+  border-color: #d4a5b4;
+  box-shadow: 0 8px 25px rgba(212, 165, 180, 0.24);
+}
+.rec-team-card--groom:hover,
+.rec-team-card--groom:focus-visible,
+.rec-team-card--groom.is-selected {
+  border-color: #8fa89a;
+  box-shadow: 0 8px 25px rgba(107, 140, 120, 0.28);
+}
+.rec-team-card:disabled { cursor: default; opacity: 0.55; transform: none; }
+.rec-team-card.is-selected:disabled { opacity: 1; }
+
+.rec-team-card__icon { font-size: 2.25rem; }
+.rec-team-card__label {
+  font-family: var(--rec-font-display);
+  font-size: 1.08rem;
+  font-weight: 700;
+}
+
+.rec-vote-status {
+  min-height: 1.25rem;
+  margin: 0.85rem 0 0;
+  color: var(--rec-text-secondary);
+  font-size: 0.82rem;
+}
+.rec-vote-status.is-error { color: #ef9a9a; }
+
+.rec-vote-results { margin-top: 0.85rem; }
+.rec-vote-results[hidden] { display: none; }
+.rec-vote-score {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  color: var(--rec-text-secondary);
+  font-size: 0.82rem;
+}
+.rec-vote-score strong { color: var(--rec-text); font-size: 1rem; }
+.rec-vote-bar {
+  display: flex;
+  height: 14px;
+  margin: 0.55rem 0;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+}
+.rec-vote-bar span { min-width: 0; transition: width 500ms var(--rec-ease-out); }
+.rec-vote-bar__bride { background: #d4a5b4; }
+.rec-vote-bar__groom { background: #6b8c78; }
+.rec-vote-total { margin: 0.45rem 0 1rem; color: var(--rec-muted); font-size: 0.82rem; }
+.rec-vote-continue { width: 100%; }
+
 @keyframes recWelcomeIn {
   from { opacity: 0; transform: translateY(30px) scale(0.95); }
   to { opacity: 1; transform: translateY(0) scale(1); }

@@ -320,6 +320,136 @@ function handleGetReceptionPhotos() {
     sendResponse(['success' => true, 'data' => $photos]);
 }
 
+function receptionEnsureVotesTable($mysqli) {
+    $sql = "
+        CREATE TABLE IF NOT EXISTS reception_votes (
+            id BIGINT AUTO_INCREMENT PRIMARY KEY,
+            voter_token CHAR(64) NOT NULL,
+            team ENUM('bride', 'groom') NOT NULL,
+            voted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE KEY uq_reception_voter_token (voter_token),
+            INDEX idx_reception_votes_team (team)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    ";
+
+    if (!$mysqli->query($sql)) {
+        throw new Exception('Could not initialize reception voting.');
+    }
+}
+
+function receptionVoteTokenHash($token) {
+    $token = trim((string)$token);
+    if (!preg_match('/^[A-Za-z0-9-]{16,128}$/', $token)) {
+        sendResponse(['success' => false, 'error' => 'Invalid voter token'], 400);
+    }
+    return hash('sha256', $token);
+}
+
+function receptionGetVoteCounts($mysqli, $tokenHash = null) {
+    $counts = ['bride' => 0, 'groom' => 0, 'total' => 0, 'myTeam' => null];
+    $result = $mysqli->query("
+        SELECT
+            SUM(CASE WHEN team = 'bride' THEN 1 ELSE 0 END) AS bride_count,
+            SUM(CASE WHEN team = 'groom' THEN 1 ELSE 0 END) AS groom_count,
+            COUNT(*) AS total_count
+        FROM reception_votes
+    ");
+
+    if ($result && ($row = $result->fetch_assoc())) {
+        $counts['bride'] = (int)($row['bride_count'] ?? 0);
+        $counts['groom'] = (int)($row['groom_count'] ?? 0);
+        $counts['total'] = (int)($row['total_count'] ?? 0);
+    }
+
+    if ($tokenHash !== null) {
+        $stmt = $mysqli->prepare("SELECT team FROM reception_votes WHERE voter_token = ? LIMIT 1");
+        $stmt->bind_param('s', $tokenHash);
+        $stmt->execute();
+        $teamResult = $stmt->get_result();
+        $teamRow = $teamResult ? $teamResult->fetch_assoc() : null;
+        $stmt->close();
+        $counts['myTeam'] = $teamRow['team'] ?? null;
+    }
+
+    return $counts;
+}
+
+function handleGetReceptionVotes() {
+    receptionRequireApiKey();
+
+    $tokenHash = receptionVoteTokenHash($_GET['voter_token'] ?? '');
+    $db = Database::getInstance();
+    $mysqli = $db->getConnection();
+    receptionEnsureVotesTable($mysqli);
+
+    sendResponse(['success' => true, 'data' => receptionGetVoteCounts($mysqli, $tokenHash)]);
+}
+
+function handleSubmitReceptionVote() {
+    receptionRequireApiKey();
+
+    $input = getRequestInput();
+    $team = strtolower(trim((string)($input['team'] ?? $_POST['team'] ?? '')));
+    if (!in_array($team, ['bride', 'groom'], true)) {
+        sendResponse(['success' => false, 'error' => 'Choose Team Bride or Team Groom'], 400);
+    }
+
+    $tokenHash = receptionVoteTokenHash($input['voter_token'] ?? $_POST['voter_token'] ?? '');
+    $db = Database::getInstance();
+    $mysqli = $db->getConnection();
+    receptionEnsureVotesTable($mysqli);
+
+    // INSERT IGNORE makes retries idempotent and preserves the first, locked vote.
+    $stmt = $mysqli->prepare("INSERT IGNORE INTO reception_votes (voter_token, team) VALUES (?, ?)");
+    $stmt->bind_param('ss', $tokenHash, $team);
+    if (!$stmt->execute()) {
+        $stmt->close();
+        sendResponse(['success' => false, 'error' => 'Could not save vote'], 500);
+    }
+    $created = $stmt->affected_rows > 0;
+    $stmt->close();
+
+    sendResponse([
+        'success' => true,
+        'data' => array_merge(receptionGetVoteCounts($mysqli, $tokenHash), [
+            'created' => $created,
+        ]),
+    ]);
+}
+
+function handleAdminGetReceptionVotes() {
+    requireAdminAuth();
+
+    $db = Database::getInstance();
+    $mysqli = $db->getConnection();
+    receptionEnsureVotesTable($mysqli);
+
+    sendResponse(['success' => true, 'data' => receptionGetVoteCounts($mysqli)]);
+}
+
+function handleAdminClearReceptionVotes() {
+    requireAdminAuth();
+
+    $input = getRequestInput();
+    if (($input['confirm'] ?? '') !== 'RESET') {
+        sendResponse(['success' => false, 'error' => 'Reset confirmation is required'], 400);
+    }
+
+    $db = Database::getInstance();
+    $mysqli = $db->getConnection();
+    receptionEnsureVotesTable($mysqli);
+
+    if (!$mysqli->query("DELETE FROM reception_votes")) {
+        sendResponse(['success' => false, 'error' => 'Could not reset votes'], 500);
+    }
+
+    sendResponse([
+        'success' => true,
+        'message' => 'All Team Bride / Team Groom votes were reset.',
+        'data' => ['deleted' => (int)$mysqli->affected_rows],
+    ]);
+}
+
 function receptionUploadRateLogFile() {
     $logDir = dirname(__DIR__) . '/logs';
     if (!is_dir($logDir)) {
@@ -873,8 +1003,10 @@ function handleUploadReceptionPhoto() {
     }
 
     $finfo = finfo_open(FILEINFO_MIME_TYPE);
-    $mime = finfo_file($finfo, $file['tmp_name']);
-    finfo_close($finfo);
+    $mime = $finfo ? finfo_file($finfo, $file['tmp_name']) : '';
+    if ($finfo) {
+        finfo_close($finfo);
+    }
 
     $allowed = [
         'image/jpeg' => 'jpg',
@@ -888,13 +1020,13 @@ function handleUploadReceptionPhoto() {
     ];
 
     if (!isset($allowed[$mime])) {
-        $ext = strtolower(pathinfo((string)($file['name'] ?? ''), PATHINFO_EXTENSION));
-        $extMap = ['jpg' => 'jpg', 'jpeg' => 'jpg', 'png' => 'png', 'webp' => 'webp', 'heic' => 'heic', 'heif' => 'heif'];
-        if (isset($extMap[$ext])) {
-            $mime = $ext === 'jpg' || $ext === 'jpeg' ? 'image/jpeg' : 'image/' . $extMap[$ext];
-        } else {
-            sendResponse(['success' => false, 'error' => 'Only JPEG, PNG, WebP, HEIC, or HEIF images are allowed'], 400);
-        }
+        sendResponse(['success' => false, 'error' => 'Only JPEG, PNG, WebP, HEIC, or HEIF images are allowed'], 400);
+    }
+
+    // Require a decodable image header — blocks polyglot/non-image files even if finfo mis-detects.
+    $imageInfo = @getimagesize($file['tmp_name']);
+    if ($imageInfo === false && !in_array($mime, ['image/heic', 'image/heif'], true)) {
+        sendResponse(['success' => false, 'error' => 'Uploaded file is not a valid image'], 400);
     }
 
     $uploadsDir = receptionUploadsDir();
@@ -902,18 +1034,6 @@ function handleUploadReceptionPhoto() {
     $storedMime = $mime;
     $usedGooglePhotos = false;
 
-    $directSaveMimes = [
-        'image/jpeg',
-        'image/jpg',
-        'image/pjpeg',
-        'image/png',
-        'image/webp',
-        'image/x-webp',
-        'image/heic',
-        'image/heif',
-    ];
-
-    $canDirectSave = in_array($mime, $directSaveMimes, true);
     $canConvert = receptionCanConvertToWebp();
 
     if ($useGooglePhotos) {
@@ -931,31 +1051,25 @@ function handleUploadReceptionPhoto() {
             $secLog = dirname(__DIR__) . '/logs/reception-upload-security.log';
             @file_put_contents($secLog, date('c') . " - google_upload_failed - " . json_encode(['file' => basename((string)$file['name']), 'mime' => $mime]) . PHP_EOL, FILE_APPEND | LOCK_EX);
 
-            if (!$canDirectSave && !$canConvert) {
+            if (!$canConvert) {
                 sendResponse(['success' => false, 'error' => 'Google Photos upload failed and local storage is unavailable'], 500);
             }
         }
     }
 
     if (!$usedGooglePhotos) {
-        $extension = $allowed[$mime] ?? 'webp';
-        $safeName = 'reception-' . date('Ymd-His') . '-' . bin2hex(random_bytes(4)) . '.' . $extension;
+        if (!$canConvert) {
+            sendResponse(['success' => false, 'error' => 'Image processing is not available on this server'], 500);
+        }
+
+        // Always re-encode to WebP so stored bytes are a fresh image, not a raw upload blob.
+        $safeName = 'reception-' . date('Ymd-His') . '-' . bin2hex(random_bytes(4)) . '.webp';
         $destPath = $uploadsDir . DIRECTORY_SEPARATOR . $safeName;
 
-        if ($canDirectSave) {
-            if (!move_uploaded_file($file['tmp_name'], $destPath)) {
-                if ($canConvert && receptionConvertToWebp($file['tmp_name'], $mime, $destPath)) {
-                    $storedMime = 'image/webp';
-                } else {
-                    sendResponse(['success' => false, 'error' => 'Failed to save uploaded image locally'], 500);
-                }
-            }
-        } else {
-            if (!receptionConvertToWebp($file['tmp_name'], $mime, $destPath)) {
-                sendResponse(['success' => false, 'error' => 'Could not convert image to WebP'], 500);
-            }
-            $storedMime = 'image/webp';
+        if (!receptionConvertToWebp($file['tmp_name'], $mime, $destPath)) {
+            sendResponse(['success' => false, 'error' => 'Could not process uploaded image'], 400);
         }
+        $storedMime = 'image/webp';
 
         @chmod($destPath, 0644);
 

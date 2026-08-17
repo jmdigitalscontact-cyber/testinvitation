@@ -100,7 +100,48 @@
     else if (tabName === "responses") loadResponses();
     else if (tabName === "tables") loadTableAssignments();
     else if (tabName === "photos") loadAdminPhotos();
-    else if (tabName === "reception") { /* QR tools only */ }
+    else if (tabName === "reception") loadReceptionVotes();
+  };
+
+  function renderReceptionVotes(data) {
+    if ($("reception-votes-bride")) $("reception-votes-bride").textContent = String(data?.bride ?? 0);
+    if ($("reception-votes-groom")) $("reception-votes-groom").textContent = String(data?.groom ?? 0);
+    if ($("reception-votes-total")) $("reception-votes-total").textContent = String(data?.total ?? 0);
+  }
+
+  window.loadReceptionVotes = function loadReceptionVotes() {
+    AdminAuth.apiCall("api.php?action=admin-get-reception-votes")
+      .then((res) => res.json())
+      .then((json) => {
+        if (!json.success) throw new Error(json.error || "Could not load votes.");
+        renderReceptionVotes(json.data);
+      })
+      .catch((err) => {
+        renderReceptionVotes({ bride: "—", groom: "—", total: "—" });
+        showFlash("reception-message", err.message || "Could not load votes.", "error");
+      });
+  };
+
+  window.resetReceptionVotes = function resetReceptionVotes() {
+    if (!confirm("Reset ALL Team Bride / Team Groom votes?\n\nUse this after testing. Every phone will be allowed to vote again.")) return;
+    const typed = prompt('Type RESET to confirm clearing all votes:');
+    if (typed !== "RESET") {
+      showFlash("reception-message", "Vote reset cancelled.", "info");
+      return;
+    }
+
+    AdminAuth.apiCall("api.php?action=admin-clear-reception-votes", {
+      method: "POST",
+      body: JSON.stringify({ confirm: "RESET" }),
+    })
+      .then((res) => res.json())
+      .then((json) => {
+        if (!json.success) throw new Error(json.error || "Could not reset votes.");
+        renderReceptionVotes({ bride: 0, groom: 0, total: 0 });
+        const deleted = json.data?.deleted ?? 0;
+        showFlash("reception-message", `Reset complete. Cleared ${deleted} vote(s).`, "success");
+      })
+      .catch((err) => showFlash("reception-message", err.message || "Could not reset votes.", "error"));
   };
 
   function renderAdminPhotoCard(p) {

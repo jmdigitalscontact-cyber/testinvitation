@@ -85,17 +85,51 @@
           <span class="rec-welcome-line"></span>
         </div>
         <p class="rec-welcome-text">We're so happy you're here to celebrate this special day with us.</p>
-        <p class="rec-welcome-text">
-          Please tap the button below to find your assigned table and seat. We hope you have a wonderful
-          time celebrating, dining, and making unforgettable memories with us.
-        </p>
+        <p class="rec-welcome-text">Before finding your seat, join the fun and choose your team for tonight's celebration.</p>
         <button type="button" class="reception-btn reception-btn--primary rec-welcome-cta" id="rec-welcome-cta">
-          <span>Find My Seat</span>
+          <span>Continue</span>
           <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M5 12h14M13 5l7 7-7 7"/>
           </svg>
         </button>
-        <p class="rec-welcome-hint">Celebrating, dining &amp; making memories together</p>
+        <p class="rec-welcome-hint" id="rec-welcome-hint">Celebrating, dining &amp; making memories together</p>
+      </div>
+    </div>
+
+    <!-- ===== TEAM BRIDE / TEAM GROOM VOTE ===== -->
+    <div class="rec-vote-overlay" id="rec-vote-overlay" role="dialog" aria-modal="true" aria-labelledby="rec-vote-heading" hidden>
+      <div class="rec-vote-card">
+        <p class="rec-welcome-eyebrow">Pick your side</p>
+        <h2 class="rec-welcome-heading" id="rec-vote-heading">Team Bride or Team Groom?</h2>
+        <p class="rec-vote-intro" id="rec-vote-intro">Choose carefully—your first vote is final on this phone.</p>
+
+        <div class="rec-vote-options" id="rec-vote-options">
+          <button type="button" class="rec-team-card rec-team-card--bride" data-vote-team="bride">
+            <span class="rec-team-card__icon" aria-hidden="true">👰</span>
+            <span class="rec-team-card__label">Team Bride</span>
+          </button>
+          <button type="button" class="rec-team-card rec-team-card--groom" data-vote-team="groom">
+            <span class="rec-team-card__icon" aria-hidden="true">🤵</span>
+            <span class="rec-team-card__label">Team Groom</span>
+          </button>
+        </div>
+
+        <p class="rec-vote-status" id="rec-vote-status" role="status" aria-live="polite"></p>
+
+        <div class="rec-vote-results" id="rec-vote-results" hidden>
+          <div class="rec-vote-score">
+            <span>Team Bride <strong id="rec-vote-bride-count">0</strong></span>
+            <span>Team Groom <strong id="rec-vote-groom-count">0</strong></span>
+          </div>
+          <div class="rec-vote-bar" aria-hidden="true">
+            <span class="rec-vote-bar__bride" id="rec-vote-bride-bar"></span>
+            <span class="rec-vote-bar__groom" id="rec-vote-groom-bar"></span>
+          </div>
+          <p class="rec-vote-total"><strong id="rec-vote-total">0</strong> total votes</p>
+          <button type="button" class="reception-btn reception-btn--primary rec-vote-continue" id="rec-vote-continue">
+            Find my seat
+          </button>
+        </div>
       </div>
     </div>
 
