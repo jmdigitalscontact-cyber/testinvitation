@@ -362,6 +362,12 @@ function handleVerifyInvitationQR() {
     $existing = $rsvp->getRSVPResponse($result['invitation_id']);
     $rsvp_submitted = !empty($existing);
     $rsvp_status = $existing ? ($existing['attending'] ?? '') : 'pending';
+    $rsvp_edit_available = $rsvp_submitted && empty($existing['edited_once']);
+    $rsvp_response = $existing ? [
+        'attending' => $existing['attending'] ?? 'pending',
+        'attendees' => $existing['attendees'] ?? [],
+        'dietary_restrictions' => $existing['dietary_restrictions'] ?? '',
+    ] : null;
 
     sendResponse([
         'success' => true,
@@ -373,7 +379,10 @@ function handleVerifyInvitationQR() {
             'invitation_id' => $result['invitation_id'],
             'invited_guest_names' => htmlDecode($result['invited_guest_names'] ?? []),
             'rsvp_submitted' => $rsvp_submitted,
-            'rsvp_status' => $rsvp_status
+            'rsvp_status' => $rsvp_status,
+            'rsvp_edit_available' => $rsvp_edit_available,
+            'rsvp_edit_used' => $rsvp_submitted && !$rsvp_edit_available,
+            'rsvp_response' => htmlDecode($rsvp_response),
         ]
     ]);
 }
@@ -397,6 +406,13 @@ function handleGetInvitationDetails() {
     $rsvp = new RSVPHandler();
     $existing = $rsvp->getRSVPResponse($invitation['invitation_id']);
     $invitation['rsvp_submitted'] = !empty($existing);
+    $invitation['rsvp_edit_available'] = !empty($existing) && empty($existing['edited_once']);
+    $invitation['rsvp_edit_used'] = !empty($existing) && !$invitation['rsvp_edit_available'];
+    $invitation['rsvp_response'] = $existing ? [
+        'attending' => $existing['attending'] ?? 'pending',
+        'attendees' => $existing['attendees'] ?? [],
+        'dietary_restrictions' => $existing['dietary_restrictions'] ?? '',
+    ] : null;
     if (empty($invitation['rsvp_status']) || $invitation['rsvp_status'] === 'pending') {
         $invitation['rsvp_status'] = $existing ? ($existing['attending'] ?? 'pending') : 'pending';
     }

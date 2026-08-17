@@ -2183,14 +2183,18 @@ body.reception-lightbox-open { overflow: hidden; }
 }
 
 /* ═══════════════════════════════════════════
-   LIVE MARQUEE PHOTO TICKER
+   LIVE POV PHOTO MARQUEE (multi-row grid track)
    ═══════════════════════════════════════════ */
-.rec-photo-marquee-wrap {
+.rec-photo-live-wrap {
+  /* Row count must stay in sync with LIVE_FEED_ROWS in reception.js */
+  --rec-live-rows: 2;
+  --rec-live-tile: 104px;
+  --rec-live-gap: 0.6rem;
   margin: 1.5rem 0 1.25rem;
   overflow: hidden;
 }
 
-.rec-marquee-title {
+.rec-live-title {
   font-family: var(--rec-font-accent);
   font-size: 0.95rem;
   color: var(--rec-gold);
@@ -2204,41 +2208,59 @@ body.reception-lightbox-open { overflow: hidden; }
   width: 100%;
   overflow: hidden;
   position: relative;
-  mask-image: linear-gradient(to right, transparent, black 10%, black 90%, transparent);
-  -webkit-mask-image: linear-gradient(to right, transparent, black 10%, black 90%, transparent);
+  mask-image: linear-gradient(to right, transparent, black 8%, black 92%, transparent);
+  -webkit-mask-image: linear-gradient(to right, transparent, black 8%, black 92%, transparent);
 }
 
 .rec-photo-marquee__track {
-  display: flex;
-  gap: 0.75rem;
+  display: grid;
+  grid-auto-flow: column;
+  grid-template-rows: repeat(var(--rec-live-rows), var(--rec-live-tile));
+  grid-auto-columns: var(--rec-live-tile);
+  gap: var(--rec-live-gap);
   width: max-content;
   animation: recMarqueeScroll 28s linear infinite;
 }
 
-.rec-photo-marquee__track:hover {
+.rec-photo-marquee__track:hover,
+.rec-photo-marquee__track:focus-within {
   animation-play-state: paused;
 }
 
-.rec-marquee-item {
+/* Too few photos to loop: show them centred and still */
+.rec-photo-marquee__track.is-static {
+  width: auto;
+  justify-content: center;
+  animation: none;
+}
+
+.rec-live-item {
   position: relative;
-  width: 110px;
-  height: 110px;
-  flex-shrink: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  padding: 0;
   border-radius: var(--rec-radius-sm);
   overflow: hidden;
   border: 1px solid var(--rec-border);
+  background: var(--rec-surface-1);
   box-shadow: 0 4px 12px rgba(0,0,0,0.25);
   cursor: pointer;
 }
 
-.rec-marquee-item img {
+.rec-live-item:focus-visible {
+  outline: 2px solid var(--rec-gold);
+  outline-offset: 2px;
+}
+
+.rec-live-item img {
   width: 100%;
   height: 100%;
   object-fit: cover;
   display: block;
 }
 
-.rec-marquee-tag {
+.rec-live-tag {
   position: absolute;
   bottom: 0;
   left: 0;
@@ -2254,9 +2276,34 @@ body.reception-lightbox-open { overflow: hidden; }
   text-overflow: ellipsis;
 }
 
+.rec-live-more {
+  margin: 0.6rem 0 0;
+  text-align: center;
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+  color: var(--rec-muted);
+}
+
+@media (min-width: 640px) {
+  .rec-photo-live-wrap {
+    --rec-live-tile: 124px;
+    --rec-live-gap: 0.75rem;
+  }
+}
+
+/* The trailing half-gap keeps the duplicated copy landing exactly on a column edge */
 @keyframes recMarqueeScroll {
   0% { transform: translateX(0); }
-  100% { transform: translateX(-50%); }
+  100% { transform: translateX(calc(-50% - (var(--rec-live-gap) / 2))); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rec-photo-marquee__track { animation: none; }
+  .rec-photo-marquee {
+    overflow-x: auto;
+    mask-image: none;
+    -webkit-mask-image: none;
+  }
 }
 
 /* ═══════════════════════════════════════════

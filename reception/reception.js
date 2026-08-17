@@ -15,6 +15,8 @@
   const VOTER_TOKEN_STORAGE = "reception_voter_token";
   const TEAM_VOTE_STORAGE = "reception_team_vote";
   const PHOTO_POLL_MS = 10000;
+  const LIVE_FEED_MAX = 24;
+  const LIVE_FEED_ROWS = 2;
 
   if (RECEPTION_KEY_PARAM) {
     localStorage.setItem(RECEPTION_KEY_STORAGE, RECEPTION_KEY_PARAM);
@@ -89,8 +91,9 @@
     els.photoGalleryWrap = document.getElementById("photo-gallery-wrap");
     els.photoGallery = document.getElementById("photo-gallery");
     els.photoStatus = document.getElementById("photo-gallery-status");
-    els.photoMarqueeWrap = document.getElementById("photo-marquee-wrap");
-    els.photoMarqueeTrack = document.getElementById("photo-marquee-track");
+    els.photoLiveWrap = document.getElementById("photo-live-wrap");
+    els.photoLiveTrack = document.getElementById("photo-live-track");
+    els.photoLiveMore = document.getElementById("photo-live-more");
     els.photoUploadCameraBtn = document.getElementById("photo-upload-camera-btn");
     els.photoUploadGalleryBtn = document.getElementById("photo-upload-gallery-btn");
     els.photoUploadCameraInput = document.getElementById("photo-upload-camera-input");
@@ -1188,6 +1191,9 @@
     if (!state.photos.length) {
       els.photoGallery.innerHTML = "";
       if (els.photoGalleryWrap) els.photoGalleryWrap.hidden = true;
+      if (els.photoLiveTrack) els.photoLiveTrack.innerHTML = "";
+      if (els.photoLiveWrap) els.photoLiveWrap.hidden = true;
+      if (els.photoLiveMore) els.photoLiveMore.hidden = true;
       return;
     }
 
@@ -1212,29 +1218,51 @@
 
     if (els.photoGalleryWrap) els.photoGalleryWrap.hidden = false;
 
-    // Render Live Marquee Ticker
-    if (els.photoMarqueeTrack && els.photoMarqueeWrap) {
-      els.photoMarqueeWrap.hidden = false;
-      const itemsHtml = state.photos.map((p, i) => {
-        const tag = p.uploaderName || (p.tableNumber ? `Table ${p.tableNumber}` : 'POV');
+    // Render the newest POVs as a scrolling marquee stacked over LIVE_FEED_ROWS rows
+    if (els.photoLiveTrack && els.photoLiveWrap) {
+      els.photoLiveWrap.hidden = false;
+
+      const livePhotos = state.photos.slice(0, LIVE_FEED_MAX);
+      const animate = livePhotos.length > LIVE_FEED_ROWS;
+
+      // The track flows top-to-bottom then across, so each copy must fill whole
+      // columns for the -50% scroll loop to land seamlessly on a column edge.
+      let sequence = livePhotos.map((photo, index) => ({ photo, index }));
+      if (animate && sequence.length % LIVE_FEED_ROWS !== 0) {
+        const padding = LIVE_FEED_ROWS - (sequence.length % LIVE_FEED_ROWS);
+        sequence = sequence.concat(sequence.slice(0, padding));
+      }
+
+      const sequenceHtml = sequence.map(({ photo, index }) => {
+        const tag = photo.uploaderName || (photo.tableNumber ? `Table ${photo.tableNumber}` : 'POV');
         return `
-          <div class="rec-marquee-item" data-photo-index="${i}">
-            <img src="${escapeHtml(p.url)}" alt="" loading="lazy" onerror="this.onerror=null;this.parentElement.style.display='none';" />
-            <div class="rec-marquee-tag">${escapeHtml(tag)}</div>
-          </div>
+          <button type="button" class="rec-live-item" data-photo-index="${index}" aria-label="View photo ${index + 1}">
+            <img src="${escapeHtml(photo.url)}" alt="" loading="lazy" decoding="async" onerror="this.onerror=null;this.parentElement.style.display='none';" />
+            <span class="rec-live-tag">${escapeHtml(tag)}</span>
+          </button>
         `;
       }).join("");
 
-      // Render all photos in track; duplicate sequence when >1 to allow seamless scrolling
-      els.photoMarqueeTrack.innerHTML = state.photos.length > 1 ? itemsHtml + itemsHtml : itemsHtml;
+      els.photoLiveTrack.innerHTML = animate ? sequenceHtml + sequenceHtml : sequenceHtml;
+      els.photoLiveTrack.classList.toggle("is-static", !animate);
+      els.photoLiveTrack.style.animationDuration = animate
+        ? `${Math.max(20, Math.round((sequence.length / LIVE_FEED_ROWS) * 3))}s`
+        : "";
 
-      // Add lightbox click event for marquee items
-      els.photoMarqueeTrack.querySelectorAll(".rec-marquee-item").forEach(item => {
+      els.photoLiveTrack.querySelectorAll(".rec-live-item").forEach(item => {
         item.addEventListener("click", () => {
           const idx = parseInt(item.dataset.photoIndex, 10);
           if (!Number.isNaN(idx)) openPhotoLightbox(idx);
         });
       });
+
+      if (els.photoLiveMore) {
+        const remaining = state.photos.length - livePhotos.length;
+        els.photoLiveMore.hidden = remaining <= 0;
+        els.photoLiveMore.textContent = remaining > 0
+          ? `+ ${remaining} more in the gallery below`
+          : "";
+      }
     }
 
     // Like buttons

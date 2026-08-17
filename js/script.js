@@ -287,29 +287,58 @@
     if (invitationInput) invitationInput.value = invitation.invitation_id || '';
     if (tokenInput) tokenInput.value = invitation.token || invitation.invitation_id || '';
 
-    // If this invitation has already submitted an RSVP, hide the tick form
-    // and show the "already done" state instead — no duplicate submission.
-    if (invitation.rsvp_submitted) {
+    var formEl = document.getElementById('rsvp-form');
+    var doneState = document.getElementById('rsvp-done-state');
+    var doneTitle = document.getElementById('rsvp-done-title');
+    var doneMessage = document.getElementById('rsvp-done-message');
+    var doneHelp = document.getElementById('rsvp-done-help');
+    var editWarning = document.getElementById('rsvp-edit-warning');
+    var submitButton = formEl ? formEl.querySelector('.btn-primary') : null;
+    var editMode = !!(invitation.rsvp_submitted && invitation.rsvp_edit_available);
+
+    if (doneState) doneState.hidden = true;
+    if (formEl) formEl.dataset.editMode = editMode ? 'true' : 'false';
+    if (editWarning) editWarning.hidden = !editMode;
+
+    // Once the single correction is consumed, only the couple/admin may edit.
+    if (invitation.rsvp_submitted && !editMode) {
       setInviteLoading(false);
-      var formEl = document.getElementById('rsvp-form');
       if (formEl) formEl.hidden = true;
-      var doneState = document.getElementById('rsvp-done-state');
       if (doneState) doneState.hidden = false;
       if (list) list.innerHTML = '';
-      var doneTitle = document.getElementById('rsvp-done-title');
-      if (doneTitle) {
-        doneTitle.textContent = (invitation.rsvp_status === 'yes' || invitation.rsvp_status === 'no')
-          ? "You're all set!"
-          : 'RSVP received';
-      }
+      if (doneTitle) doneTitle.textContent = 'Your RSVP is final';
+      if (doneMessage) doneMessage.textContent = 'The one allowed RSVP update for this invitation has already been used.';
+      if (doneHelp) doneHelp.textContent = 'For any further changes, please contact Jason & Rhona Mae directly.';
       if (meta) {
-        meta.textContent = 'We already have your RSVP on record. Thank you for responding!';
+        meta.textContent = 'We already have your final RSVP on record. Thank you for responding!';
       }
       return;
     }
 
     if (!list) return;
     list.innerHTML = '';
+
+    var currentResponse = invitation.rsvp_response || {};
+    var savedAttendees = Array.isArray(currentResponse.attendees) ? currentResponse.attendees : [];
+    var selectedNames = {};
+    savedAttendees.forEach(function (attendee) {
+      if (!attendee || typeof attendee !== 'object') return;
+      var savedName = String(attendee.name || attendee.attendee_name || '').trim().toLowerCase();
+      var rawGoing = attendee.attending !== undefined ? attendee.attending : attendee.going;
+      var isGoing = rawGoing === true || rawGoing === 1 || rawGoing === '1' || rawGoing === 'true' || rawGoing === 'yes';
+      if (savedName && isGoing) selectedNames[savedName] = true;
+    });
+
+    if (editMode) {
+      if (meta) {
+        meta.textContent = 'Update the whole family now. This is the only guest correction allowed for this invitation.';
+      }
+      if (submitButton) submitButton.textContent = 'Save Final RSVP Update';
+      var dietaryInput = document.getElementById('dietary');
+      if (dietaryInput) dietaryInput.value = currentResponse.dietary_restrictions || '';
+    } else if (submitButton) {
+      submitButton.textContent = 'Submit RSVP';
+    }
 
     invitedNames.forEach(function (name, index) {
       var row = document.createElement('label');
@@ -330,6 +359,8 @@
       checkbox.type = 'checkbox';
       checkbox.className = 'invite-party-toggle';
       checkbox.name = 'attendee-going';
+      checkbox.checked = !!selectedNames[String(name).trim().toLowerCase()];
+      row.classList.toggle('is-checked', checkbox.checked);
 
       person.appendChild(personName);
       person.appendChild(personNote);
@@ -415,6 +446,7 @@
       var token = document.getElementById('invitation-token').value.trim();
       var dietary = document.getElementById('dietary').value.trim();
       var attendeeRows = Array.from(document.querySelectorAll('.invite-party-row'));
+      var isFinalGuestEdit = form.dataset.editMode === 'true';
 
       if (!token) {
         showFeedback(fb, 'Your invitation could not be loaded. Please open the QR link again.', 'error');
@@ -450,7 +482,13 @@
         confirmLines.push('\nNot attending:');
         notGoingNames.forEach(function (name) { confirmLines.push('• ' + name); });
       }
-      confirmLines.push('\nThis cannot be changed after you submit. Continue?');
+      if (isFinalGuestEdit) {
+        confirmLines.push('\nIMPORTANT: This is the one and only guest update. After saving, only Jason & Rhona Mae can make further changes.');
+        confirmLines.push('\nHave you checked every family member? Save this final update?');
+      } else {
+        confirmLines.push('\nAfter submitting, your family may update this RSVP only once. After that, please contact Jason & Rhona Mae.');
+        confirmLines.push('\nContinue?');
+      }
 
       if (!window.confirm(confirmLines.join('\n'))) {
         return;
@@ -478,12 +516,26 @@
         if (!data || !data.success) {
           throw new Error(data && data.error ? data.error : 'RSVP submission failed');
         }
-        showFeedback(fb, 'Thank you! Your RSVP has been received.', 'success');
-        btn.textContent = 'RSVP Received';
+        var doneState = document.getElementById('rsvp-done-state');
+        var doneTitle = document.getElementById('rsvp-done-title');
+        var doneMessage = document.getElementById('rsvp-done-message');
+        var doneHelp = document.getElementById('rsvp-done-help');
+        form.hidden = true;
+        if (doneState) doneState.hidden = false;
+
+        if (data.updated || isFinalGuestEdit) {
+          if (doneTitle) doneTitle.textContent = 'Your final RSVP update is saved';
+          if (doneMessage) doneMessage.textContent = 'The one allowed guest update for this invitation has now been used.';
+          if (doneHelp) doneHelp.textContent = 'For any further changes, please contact Jason & Rhona Mae directly.';
+        } else {
+          if (doneTitle) doneTitle.textContent = 'RSVP received';
+          if (doneMessage) doneMessage.textContent = 'Thank you! Your family has one correction available if somebody was missed.';
+          if (doneHelp) doneHelp.textContent = 'Reopen this same QR to update once. After that, please contact Jason & Rhona Mae.';
+        }
       })
       .catch(function (error) {
         btn.disabled = false;
-        btn.textContent = 'Submit RSVP';
+        btn.textContent = isFinalGuestEdit ? 'Save Final RSVP Update' : 'Submit RSVP';
         showFeedback(fb, error.message || 'RSVP submission failed.', 'error');
       });
     });

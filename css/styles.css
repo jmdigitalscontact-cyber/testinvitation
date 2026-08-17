@@ -1638,6 +1638,25 @@ audio#wedding-audio { display: none; }
   font-size: 0.85rem;
   padding: 1rem 0 0.5rem;
 }
+.rsvp-edit-warning {
+  margin: 1rem 0;
+  padding: 0.9rem 1rem;
+  border: 1px solid rgba(179, 71, 106, 0.28);
+  border-radius: 12px;
+  background: rgba(232, 180, 196, 0.16);
+  color: #8e3150;
+  font-size: 0.84rem;
+  line-height: 1.6;
+  text-align: center;
+}
+.rsvp-edit-warning strong { display: block; margin-bottom: 0.15rem; }
+.rsvp-update-policy {
+  margin: 0 0 0.85rem;
+  color: var(--muted);
+  font-size: 0.78rem;
+  line-height: 1.55;
+  text-align: center;
+}
 .invite-party-card {
   margin: 1rem 0 1.25rem;
   padding: 1rem;

@@ -80,16 +80,79 @@ class RSVPHandler {
             $attendee_count = 0;
         }
 
-        // Check if RSVP already exists - ONE-TIME SUBMIT ONLY
+        // First submission may be corrected once by the guest.
         $existing = $this->getRSVPResponse($invitation_id);
 
         try {
             if ($existing) {
-                // RSVP already submitted - no edits allowed (one-time submit only)
-                return ['success' => false, 'error' => 'You have already confirmed your attendance. Changes are no longer allowed.', 'locked' => true];
+                if (!empty($existing['edited_once'])) {
+                    return [
+                        'success' => false,
+                        'error' => 'Your one allowed RSVP update has already been used. Please contact Jason & Rhona Mae for any further changes.',
+                        'locked' => true,
+                        'edit_used' => true,
+                    ];
+                }
+
+                $attendees_json = json_encode($normalizedAttendees);
+                $stmt = $this->mysqli->prepare("
+                    UPDATE rsvp_responses
+                    SET attending = ?, attendee_count = ?, attendees = ?,
+                        dietary_restrictions = ?, special_notes = ?, edited_once = TRUE
+                    WHERE invitation_id = ? AND COALESCE(edited_once, FALSE) = FALSE
+                ");
+                $stmt->bind_param(
+                    "sissss",
+                    $attending,
+                    $attendee_count,
+                    $attendees_json,
+                    $dietary_restrictions,
+                    $special_notes,
+                    $invitation_id
+                );
+                if (!$stmt->execute()) {
+                    throw new Exception("Failed to update RSVP: " . $stmt->error);
+                }
+                $updated = (int)$this->mysqli->affected_rows > 0;
+                $stmt->close();
+
+                // Atomic guard: only one concurrent request may consume the edit.
+                if (!$updated) {
+                    return [
+                        'success' => false,
+                        'error' => 'Your one allowed RSVP update has already been used. Please contact Jason & Rhona Mae for any further changes.',
+                        'locked' => true,
+                        'edit_used' => true,
+                    ];
+                }
+
+                $rsvp_id = (int)$existing['id'];
+                $new_status = ($attending === 'yes') ? 'responded' : (($attending === 'no') ? 'declined' : 'responded');
+                $stmt = $this->mysqli->prepare("UPDATE invitations SET status = ? WHERE invitation_id = ?");
+                $stmt->bind_param("ss", $new_status, $invitation_id);
+                $stmt->execute();
+                $stmt->close();
+
+                if (!empty($selectedAttendees) && $attending !== 'no') {
+                    $this->saveAttendeesList($rsvp_id, $invitation_id, $selectedAttendees);
+                } else {
+                    $stmt = $this->mysqli->prepare("DELETE FROM attendees WHERE rsvp_response_id = ?");
+                    $stmt->bind_param("i", $rsvp_id);
+                    $stmt->execute();
+                    $stmt->close();
+                }
+
+                return [
+                    'success' => true,
+                    'message' => 'RSVP updated successfully. Your one guest update has now been used.',
+                    'rsvp_id' => $rsvp_id,
+                    'invitation_id' => $invitation_id,
+                    'updated' => true,
+                    'edit_used' => true,
+                ];
             }
 
-            // Create new RSVP response (first and only submission)
+            // Create the first response; one guest correction remains available.
             $stmt = $this->mysqli->prepare("
                 INSERT INTO rsvp_responses 
                 (invitation_id, attending, attendee_count, attendees, dietary_restrictions, special_notes) 
@@ -124,7 +187,9 @@ class RSVPHandler {
                 'success' => true,
                 'message' => 'RSVP submitted successfully',
                 'rsvp_id' => $rsvp_id,
-                'invitation_id' => $invitation_id
+                'invitation_id' => $invitation_id,
+                'updated' => false,
+                'edit_available' => true,
             ];
         } catch (Exception $e) {
             return ['success' => false, 'error' => $e->getMessage()];
@@ -213,7 +278,7 @@ class RSVPHandler {
             if ($existing) {
                 $stmt = $this->mysqli->prepare("
                     UPDATE rsvp_responses
-                    SET attending = ?, attendee_count = ?, attendees = ?, dietary_restrictions = ?, special_notes = ?, edited_once = 1
+                    SET attending = ?, attendee_count = ?, attendees = ?, dietary_restrictions = ?, special_notes = ?
                     WHERE invitation_id = ?
                 ");
                 $stmt->bind_param("sissss", $attending, $attendee_count, $attendees_json, $dietary_restrictions, $special_notes, $invitation_id);
@@ -226,7 +291,7 @@ class RSVPHandler {
                 $stmt = $this->mysqli->prepare("
                     INSERT INTO rsvp_responses
                     (invitation_id, attending, attendee_count, attendees, dietary_restrictions, special_notes, edited_once)
-                    VALUES (?, ?, ?, ?, ?, ?, 1)
+                    VALUES (?, ?, ?, ?, ?, ?, 0)
                 ");
                 $stmt->bind_param("ssisss", $invitation_id, $attending, $attendee_count, $attendees_json, $dietary_restrictions, $special_notes);
                 if (!$stmt->execute()) {

@@ -516,6 +516,10 @@
         <form id="rsvp-form" hidden>
           <input type="hidden" id="invitation-id" name="invitation_id" value="">
           <input type="hidden" id="invitation-token" name="token" value="">
+          <div class="rsvp-edit-warning" id="rsvp-edit-warning" hidden>
+            <strong>This is your one and only RSVP update.</strong>
+            Please check every family member before saving. After this update, contact Jason &amp; Rhona Mae for any further changes.
+          </div>
           <div class="invite-party-card">
             <p class="invite-party-label">Tick the guests who will attend</p>
             <div class="invite-party-list" id="invited-party-list"></div>
@@ -524,6 +528,9 @@
             <label for="dietary">Dietary Restrictions / Notes</label>
             <textarea id="dietary" name="dietary" placeholder="Add any food restrictions or notes for us"></textarea>
           </div>
+          <p class="rsvp-update-policy" id="rsvp-update-policy">
+            After your first submission, this invitation may be updated only once. For later changes, please contact Jason &amp; Rhona Mae.
+          </p>
           <button type="submit" class="btn-primary">Submit RSVP</button>
           <div class="feedback" id="rsvp-feedback"></div>
         </form>
@@ -538,7 +545,7 @@
             </div>
             <h3 id="rsvp-done-title">You're all set!</h3>
             <p class="rsvp-sub" id="rsvp-done-message">We've already received your RSVP. Thank you for responding — we can't wait to celebrate with you!</p>
-            <p class="rsvp-help">If you need to make any changes, please contact Jason &amp; Rhona Mae directly.</p>
+            <p class="rsvp-help" id="rsvp-done-help">If you need to make any changes, please contact Jason &amp; Rhona Mae directly.</p>
           </div>
         </div>
       </div>
