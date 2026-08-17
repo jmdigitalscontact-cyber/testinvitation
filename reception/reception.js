@@ -445,14 +445,36 @@
     return true;
   }
 
+  function readStoredValue(key) {
+    try {
+      return localStorage.getItem(key) || "";
+    } catch {
+      return "";
+    }
+  }
+
+  function writeStoredValue(key, value) {
+    // Private browsing can throw on write; the vote must still work.
+    try {
+      if (value === null) localStorage.removeItem(key);
+      else localStorage.setItem(key, value);
+    } catch {
+      /* ignore */
+    }
+  }
+
+  let sessionVoterToken = "";
+  let welcomeVoteFailures = 0;
+
   function getVoterToken() {
-    let token = localStorage.getItem(VOTER_TOKEN_STORAGE) || "";
+    let token = sessionVoterToken || readStoredValue(VOTER_TOKEN_STORAGE);
     if (!/^[A-Za-z0-9-]{16,128}$/.test(token)) {
       token = window.crypto?.randomUUID
         ? window.crypto.randomUUID()
         : `${Date.now()}-${Math.random().toString(36).slice(2)}-${Math.random().toString(36).slice(2)}`;
-      localStorage.setItem(VOTER_TOKEN_STORAGE, token);
+      writeStoredValue(VOTER_TOKEN_STORAGE, token);
     }
+    sessionVoterToken = token;
     return token;
   }
 
@@ -487,6 +509,7 @@
     switchTab("search");
     const searchPanel = document.getElementById("panel-search");
     if (searchPanel) searchPanel.scrollTop = 0;
+    document.documentElement.classList.remove("reception-boot");
     revealApp();
     if (els.voteOverlay) els.voteOverlay.hidden = true;
     if (els.welcomeOverlay) {
@@ -501,6 +524,9 @@
       enterSeatSearch();
       return;
     }
+    // The boot guard pins the welcome overlay opaque at a higher layer, so it
+    // must be dropped before the vote screen can be seen or tapped.
+    document.documentElement.classList.remove("reception-boot");
     els.voteOverlay.hidden = false;
     setVoteButtonsDisabled(false);
     els.voteButtons?.forEach((button) => button.classList.remove("is-selected"));
@@ -519,17 +545,17 @@
 
     try {
       const data = await apiGet("get-reception-votes", { voter_token: getVoterToken() });
-      if (!data?.success) throw new Error(data?.error || "Could not check vote");
+      if (!data?.success) throw new Error(data?.error || "Could not load voting");
 
       const myTeam = data.data?.myTeam;
       if (myTeam === "bride" || myTeam === "groom") {
-        localStorage.setItem(TEAM_VOTE_STORAGE, myTeam);
+        writeStoredValue(TEAM_VOTE_STORAGE, myTeam);
         enterSeatSearch();
         return;
       }
 
       // An admin reset removes the server vote, so clear the local marker too.
-      localStorage.removeItem(TEAM_VOTE_STORAGE);
+      writeStoredValue(TEAM_VOTE_STORAGE, null);
       els.welcomeOverlay.classList.add("is-exiting");
       setTimeout(() => {
         els.welcomeOverlay.hidden = true;
@@ -537,8 +563,17 @@
         showVoteOverlay();
       }, 400);
     } catch (error) {
-      if (els.welcomeHint) els.welcomeHint.textContent = "Could not load voting. Check your connection and try again.";
+      welcomeVoteFailures += 1;
       if (els.welcomeCta) els.welcomeCta.disabled = false;
+
+      // Never trap a guest at the entrance if voting is unavailable.
+      if (welcomeVoteFailures >= 2) {
+        enterSeatSearch();
+        return;
+      }
+      if (els.welcomeHint) {
+        els.welcomeHint.textContent = `${error.message || "Voting is unavailable"}. Tap Continue again to go straight to your seat.`;
+      }
     }
   }
 
@@ -563,7 +598,7 @@
 
       const savedTeam = data.data?.myTeam;
       if (savedTeam === "bride" || savedTeam === "groom") {
-        localStorage.setItem(TEAM_VOTE_STORAGE, savedTeam);
+        writeStoredValue(TEAM_VOTE_STORAGE, savedTeam);
       }
       renderVoteResults(data.data);
       if (data.data?.created) fireConfetti();
@@ -599,6 +634,7 @@
       if (els.voteOverlay) els.voteOverlay.hidden = true;
       if (els.welcomeCta) els.welcomeCta.disabled = false;
       if (els.welcomeHint) els.welcomeHint.textContent = "Celebrating, dining & making memories together";
+      welcomeVoteFailures = 0;
     });
   }
 

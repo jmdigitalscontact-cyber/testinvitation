@@ -152,7 +152,8 @@ body {
 .confetti-canvas {
   position: fixed;
   inset: 0;
-  z-index: 9999;
+  /* Above the vote overlay so the celebration is visible when a vote lands. */
+  z-index: 10002;
   pointer-events: none;
 }
 
@@ -514,7 +515,8 @@ body {
 .rec-vote-overlay {
   position: fixed;
   inset: 0;
-  z-index: 9998;
+  /* Must sit above the welcome overlay, including its critical first-paint rule. */
+  z-index: 10001;
   display: flex;
   align-items: center;
   justify-content: center;

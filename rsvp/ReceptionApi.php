@@ -320,20 +320,38 @@ function handleGetReceptionPhotos() {
     sendResponse(['success' => true, 'data' => $photos]);
 }
 
-function receptionEnsureVotesTable($mysqli) {
-    $sql = "
-        CREATE TABLE IF NOT EXISTS reception_votes (
-            id BIGINT AUTO_INCREMENT PRIMARY KEY,
-            voter_token CHAR(64) NOT NULL,
-            team ENUM('bride', 'groom') NOT NULL,
-            voted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            UNIQUE KEY uq_reception_voter_token (voter_token),
-            INDEX idx_reception_votes_team (team)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
-    ";
+function receptionDbEngine() {
+    return defined('DB_ENGINE') ? DB_ENGINE : 'mysql';
+}
 
-    if (!$mysqli->query($sql)) {
-        throw new Exception('Could not initialize reception voting.');
+function receptionEnsureVotesTable($mysqli) {
+    if (receptionDbEngine() === 'pgsql') {
+        $statements = [
+            "CREATE TABLE IF NOT EXISTS reception_votes (
+                id BIGSERIAL PRIMARY KEY,
+                voter_token CHAR(64) NOT NULL UNIQUE,
+                team VARCHAR(5) NOT NULL CHECK (team IN ('bride', 'groom')),
+                voted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )",
+            "CREATE INDEX IF NOT EXISTS idx_reception_votes_team ON reception_votes(team)",
+        ];
+    } else {
+        $statements = [
+            "CREATE TABLE IF NOT EXISTS reception_votes (
+                id BIGINT AUTO_INCREMENT PRIMARY KEY,
+                voter_token CHAR(64) NOT NULL,
+                team ENUM('bride', 'groom') NOT NULL,
+                voted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE KEY uq_reception_voter_token (voter_token),
+                INDEX idx_reception_votes_team (team)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+        ];
+    }
+
+    foreach ($statements as $statement) {
+        if (!$mysqli->query($statement)) {
+            throw new Exception('Could not initialize reception voting.');
+        }
     }
 }
 
@@ -399,14 +417,19 @@ function handleSubmitReceptionVote() {
     $mysqli = $db->getConnection();
     receptionEnsureVotesTable($mysqli);
 
-    // INSERT IGNORE makes retries idempotent and preserves the first, locked vote.
-    $stmt = $mysqli->prepare("INSERT IGNORE INTO reception_votes (voter_token, team) VALUES (?, ?)");
+    // Ignoring duplicates keeps retries idempotent and preserves the first, locked vote.
+    $insertSql = receptionDbEngine() === 'pgsql'
+        ? "INSERT INTO reception_votes (voter_token, team) VALUES (?, ?) ON CONFLICT (voter_token) DO NOTHING"
+        : "INSERT IGNORE INTO reception_votes (voter_token, team) VALUES (?, ?)";
+
+    $stmt = $mysqli->prepare($insertSql);
     $stmt->bind_param('ss', $tokenHash, $team);
     if (!$stmt->execute()) {
         $stmt->close();
         sendResponse(['success' => false, 'error' => 'Could not save vote'], 500);
     }
-    $created = $stmt->affected_rows > 0;
+    // Row counts land on the connection adapter, not the statement.
+    $created = (int)$mysqli->affected_rows > 0;
     $stmt->close();
 
     sendResponse([
@@ -424,7 +447,102 @@ function handleAdminGetReceptionVotes() {
     $mysqli = $db->getConnection();
     receptionEnsureVotesTable($mysqli);
 
-    sendResponse(['success' => true, 'data' => receptionGetVoteCounts($mysqli)]);
+    $votes = [];
+    $result = $mysqli->query("
+        SELECT id, voter_token, team, voted_at
+        FROM reception_votes
+        ORDER BY voted_at DESC, id DESC
+        LIMIT 500
+    ");
+    if ($result) {
+        while ($row = $result->fetch_assoc()) {
+            $votes[] = [
+                'id' => (int)$row['id'],
+                'voter' => substr((string)$row['voter_token'], 0, 8),
+                'team' => $row['team'],
+                'votedAt' => $row['voted_at'],
+            ];
+        }
+    }
+
+    sendResponse([
+        'success' => true,
+        'data' => array_merge(receptionGetVoteCounts($mysqli), ['votes' => $votes]),
+    ]);
+}
+
+function handleAdminUpdateReceptionVote() {
+    requireAdminAuth();
+
+    $input = getRequestInput();
+    $voteId = (int)($input['vote_id'] ?? 0);
+    $team = strtolower(trim((string)($input['team'] ?? '')));
+    if ($voteId < 1 || !in_array($team, ['bride', 'groom'], true)) {
+        sendResponse(['success' => false, 'error' => 'Invalid vote or team'], 400);
+    }
+
+    $db = Database::getInstance();
+    $mysqli = $db->getConnection();
+    receptionEnsureVotesTable($mysqli);
+
+    $stmt = $mysqli->prepare("UPDATE reception_votes SET team = ? WHERE id = ?");
+    $stmt->bind_param('si', $team, $voteId);
+    if (!$stmt->execute()) {
+        $stmt->close();
+        sendResponse(['success' => false, 'error' => 'Could not update vote'], 500);
+    }
+    $changed = (int)$mysqli->affected_rows > 0;
+    $stmt->close();
+
+    if (!$changed) {
+        $check = $mysqli->prepare("SELECT id FROM reception_votes WHERE id = ? LIMIT 1");
+        $check->bind_param('i', $voteId);
+        $check->execute();
+        $exists = $check->get_result()->fetch_assoc();
+        $check->close();
+        if (!$exists) {
+            sendResponse(['success' => false, 'error' => 'Vote not found'], 404);
+        }
+    }
+
+    sendResponse([
+        'success' => true,
+        'message' => 'Vote updated.',
+        'data' => receptionGetVoteCounts($mysqli),
+    ]);
+}
+
+function handleAdminDeleteReceptionVote() {
+    requireAdminAuth();
+
+    $input = getRequestInput();
+    $voteId = (int)($input['vote_id'] ?? 0);
+    if ($voteId < 1) {
+        sendResponse(['success' => false, 'error' => 'Invalid vote ID'], 400);
+    }
+
+    $db = Database::getInstance();
+    $mysqli = $db->getConnection();
+    receptionEnsureVotesTable($mysqli);
+
+    $stmt = $mysqli->prepare("DELETE FROM reception_votes WHERE id = ?");
+    $stmt->bind_param('i', $voteId);
+    if (!$stmt->execute()) {
+        $stmt->close();
+        sendResponse(['success' => false, 'error' => 'Could not delete vote'], 500);
+    }
+    $deleted = (int)$mysqli->affected_rows > 0;
+    $stmt->close();
+
+    if (!$deleted) {
+        sendResponse(['success' => false, 'error' => 'Vote not found'], 404);
+    }
+
+    sendResponse([
+        'success' => true,
+        'message' => 'Vote deleted.',
+        'data' => receptionGetVoteCounts($mysqli),
+    ]);
 }
 
 function handleAdminClearReceptionVotes() {
@@ -1226,7 +1344,7 @@ function handleAdminHideReceptionPhoto() {
     $stmt = $mysqli->prepare("UPDATE reception_photos SET is_approved = 0 WHERE id = ?");
     $stmt->bind_param('i', $photoId);
     $stmt->execute();
-    $changed = $stmt->affected_rows > 0;
+    $changed = (int)$mysqli->affected_rows > 0;
     $stmt->close();
 
     if (!$changed) {

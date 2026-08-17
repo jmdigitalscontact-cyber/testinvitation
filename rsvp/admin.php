@@ -354,6 +354,22 @@
                         <button type="button" class="admin-btn admin-btn-secondary" onclick="loadReceptionVotes()">Refresh votes</button>
                         <button type="button" class="admin-btn admin-btn-secondary admin-btn-danger-text" onclick="resetReceptionVotes()">Reset votes for testing</button>
                     </div>
+                    <div class="admin-table-wrap" style="margin-top:1rem">
+                        <table class="admin-table">
+                            <thead>
+                                <tr>
+                                    <th>Vote</th>
+                                    <th>Anonymous device</th>
+                                    <th>Team</th>
+                                    <th>Voted</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody id="reception-votes-tbody">
+                                <tr><td colspan="5" class="admin-empty">Open this tab to load votes.</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
 
                 <div class="admin-card">

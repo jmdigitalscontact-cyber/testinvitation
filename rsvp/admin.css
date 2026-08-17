@@ -305,6 +305,23 @@ body.admin-app {
   box-shadow: 0 0 0 3px rgba(154, 182, 157, 0.22);
 }
 
+.admin-select {
+  min-width: 125px;
+  padding: 0.45rem 0.55rem;
+  border: 1px solid var(--admin-border);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--admin-text);
+  font: inherit;
+  font-size: 0.82rem;
+}
+
+.admin-select:focus {
+  outline: none;
+  border-color: var(--admin-sage);
+  box-shadow: 0 0 0 3px rgba(154, 182, 157, 0.22);
+}
+
 .admin-actions {
   display: flex;
   flex-wrap: wrap;

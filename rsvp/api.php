@@ -272,6 +272,14 @@ try {
             handleAdminGetReceptionVotes();
             break;
 
+        case 'admin-update-reception-vote':
+            handleAdminUpdateReceptionVote();
+            break;
+
+        case 'admin-delete-reception-vote':
+            handleAdminDeleteReceptionVote();
+            break;
+
         case 'admin-clear-reception-votes':
             handleAdminClearReceptionVotes();
             break;

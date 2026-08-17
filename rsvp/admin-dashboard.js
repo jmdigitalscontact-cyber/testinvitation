@@ -107,9 +107,39 @@
     if ($("reception-votes-bride")) $("reception-votes-bride").textContent = String(data?.bride ?? 0);
     if ($("reception-votes-groom")) $("reception-votes-groom").textContent = String(data?.groom ?? 0);
     if ($("reception-votes-total")) $("reception-votes-total").textContent = String(data?.total ?? 0);
+
+    const tbody = $("reception-votes-tbody");
+    if (!tbody) return;
+    const votes = Array.isArray(data?.votes) ? data.votes : [];
+    if (!votes.length) {
+      tbody.innerHTML = '<tr><td colspan="5" class="admin-empty">No votes yet.</td></tr>';
+      return;
+    }
+
+    tbody.innerHTML = votes.map((vote) => {
+      const id = Number(vote.id || 0);
+      const votedAt = vote.votedAt ? new Date(vote.votedAt) : null;
+      const dateLabel = votedAt && !Number.isNaN(votedAt.getTime()) ? votedAt.toLocaleString() : "—";
+      return `
+        <tr>
+          <td>#${id}</td>
+          <td><code>${escapeHtml(vote.voter || "anonymous")}</code></td>
+          <td>
+            <select class="admin-select" aria-label="Change vote #${id}" onchange="updateReceptionVote(${id}, this.value)">
+              <option value="bride"${vote.team === "bride" ? " selected" : ""}>Team Bride</option>
+              <option value="groom"${vote.team === "groom" ? " selected" : ""}>Team Groom</option>
+            </select>
+          </td>
+          <td>${escapeHtml(dateLabel)}</td>
+          <td><button type="button" class="admin-btn admin-btn-secondary admin-btn-sm admin-btn-danger-text" onclick="deleteReceptionVote(${id})">Delete</button></td>
+        </tr>
+      `;
+    }).join("");
   }
 
   window.loadReceptionVotes = function loadReceptionVotes() {
+    const tbody = $("reception-votes-tbody");
+    if (tbody) tbody.innerHTML = '<tr><td colspan="5" class="admin-empty">Loading votes…</td></tr>';
     AdminAuth.apiCall("api.php?action=admin-get-reception-votes")
       .then((res) => res.json())
       .then((json) => {
@@ -120,6 +150,38 @@
         renderReceptionVotes({ bride: "—", groom: "—", total: "—" });
         showFlash("reception-message", err.message || "Could not load votes.", "error");
       });
+  };
+
+  window.updateReceptionVote = function updateReceptionVote(voteId, team) {
+    AdminAuth.apiCall("api.php?action=admin-update-reception-vote", {
+      method: "POST",
+      body: JSON.stringify({ vote_id: voteId, team }),
+    })
+      .then((res) => res.json())
+      .then((json) => {
+        if (!json.success) throw new Error(json.error || "Could not update vote.");
+        showFlash("reception-message", `Vote #${voteId} changed to Team ${team === "bride" ? "Bride" : "Groom"}.`, "success");
+        loadReceptionVotes();
+      })
+      .catch((err) => {
+        showFlash("reception-message", err.message || "Could not update vote.", "error");
+        loadReceptionVotes();
+      });
+  };
+
+  window.deleteReceptionVote = function deleteReceptionVote(voteId) {
+    if (!confirm(`Delete vote #${voteId}? This phone will be allowed to vote again.`)) return;
+    AdminAuth.apiCall("api.php?action=admin-delete-reception-vote", {
+      method: "POST",
+      body: JSON.stringify({ vote_id: voteId }),
+    })
+      .then((res) => res.json())
+      .then((json) => {
+        if (!json.success) throw new Error(json.error || "Could not delete vote.");
+        showFlash("reception-message", `Vote #${voteId} deleted.`, "success");
+        loadReceptionVotes();
+      })
+      .catch((err) => showFlash("reception-message", err.message || "Could not delete vote.", "error"));
   };
 
   window.resetReceptionVotes = function resetReceptionVotes() {
@@ -137,7 +199,7 @@
       .then((res) => res.json())
       .then((json) => {
         if (!json.success) throw new Error(json.error || "Could not reset votes.");
-        renderReceptionVotes({ bride: 0, groom: 0, total: 0 });
+        renderReceptionVotes({ bride: 0, groom: 0, total: 0, votes: [] });
         const deleted = json.data?.deleted ?? 0;
         showFlash("reception-message", `Reset complete. Cleared ${deleted} vote(s).`, "success");
       })
