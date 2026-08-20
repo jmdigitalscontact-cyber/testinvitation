@@ -202,7 +202,7 @@
                                     <th>Guest</th>
                                 <th>Attending</th>
                                     <th>Count</th>
-                                    <th>Submitted</th>
+                                    <th>Latest</th>
                                     <th>Names</th>
                                     <th></th>
                             </tr>

@@ -1123,7 +1123,9 @@
           return;
         }
 
-        allResponses = (data.data || []).filter((item) => item.attending !== null);
+        allResponses = (data.data || [])
+          .filter((item) => item.attending !== null)
+          .sort((a, b) => responseActivityTime(b) - responseActivityTime(a));
         applyResponsesSearchFromInput();
         renderResponsesTable();
       })
@@ -1132,6 +1134,12 @@
           '<tr><td colspan="6" class="admin-empty">Failed to load responses.</td></tr>';
       });
   };
+
+  function responseActivityTime(item) {
+    const raw = item.updated_at || item.submitted_at || 0;
+    const time = new Date(raw).getTime();
+    return Number.isFinite(time) ? time : 0;
+  }
 
   function responseAttendeeNames(item) {
     if (Array.isArray(item.attendees) && item.attendees.length > 0) {
@@ -1181,7 +1189,9 @@
       return;
     }
 
-    filteredResponses = allResponses.filter((item) => responseMatchesSearch(item, responsesSearchTerm));
+    filteredResponses = allResponses
+      .filter((item) => responseMatchesSearch(item, responsesSearchTerm))
+      .sort((a, b) => responseActivityTime(b) - responseActivityTime(a));
   }
 
   window.filterResponses = function filterResponses() {
@@ -1212,8 +1222,8 @@
     }
 
     responsesToShow.forEach((item) => {
-      const submittedAt = item.submitted_at
-        ? new Date(item.submitted_at).toLocaleString()
+      const submittedAt = item.updated_at || item.submitted_at
+        ? new Date(item.updated_at || item.submitted_at).toLocaleString()
         : "—";
       const tr = document.createElement("tr");
       tr.innerHTML = `

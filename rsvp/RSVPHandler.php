@@ -98,7 +98,8 @@ class RSVPHandler {
                 $stmt = $this->mysqli->prepare("
                     UPDATE rsvp_responses
                     SET attending = ?, attendee_count = ?, attendees = ?,
-                        dietary_restrictions = ?, special_notes = ?, edited_once = TRUE
+                        dietary_restrictions = ?, special_notes = ?, edited_once = TRUE,
+                        updated_at = CURRENT_TIMESTAMP
                     WHERE invitation_id = ? AND COALESCE(edited_once, FALSE) = FALSE
                 ");
                 $stmt->bind_param(
@@ -278,7 +279,8 @@ class RSVPHandler {
             if ($existing) {
                 $stmt = $this->mysqli->prepare("
                     UPDATE rsvp_responses
-                    SET attending = ?, attendee_count = ?, attendees = ?, dietary_restrictions = ?, special_notes = ?
+                    SET attending = ?, attendee_count = ?, attendees = ?, dietary_restrictions = ?, special_notes = ?,
+                        updated_at = CURRENT_TIMESTAMP
                     WHERE invitation_id = ?
                 ");
                 $stmt->bind_param("sissss", $attending, $attendee_count, $attendees_json, $dietary_restrictions, $special_notes, $invitation_id);

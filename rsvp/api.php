@@ -1007,11 +1007,11 @@ function handleGetRSVPSummary() {
     $result = $mysqli->query("
         SELECT i.guest_name, i.max_guests, i.invitation_id,
                r.attending, r.attendee_count, r.attendees, r.special_notes,
-               r.submitted_at
+               r.submitted_at, r.updated_at
         FROM invitations i
         LEFT JOIN rsvp_responses r ON i.invitation_id = r.invitation_id
         WHERE r.attending IS NOT NULL
-        ORDER BY i.guest_name
+        ORDER BY COALESCE(r.updated_at, r.submitted_at) DESC, r.id DESC
     ");
 
     $data = [];
