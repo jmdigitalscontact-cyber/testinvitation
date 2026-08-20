@@ -100,7 +100,10 @@
     else if (tabName === "responses") loadResponses();
     else if (tabName === "tables") loadTableAssignments();
     else if (tabName === "photos") loadAdminPhotos();
-    else if (tabName === "reception") loadReceptionVotes();
+    else if (tabName === "reception") {
+      loadReceptionVotes();
+      loadReceptionMessages();
+    }
   };
 
   function renderReceptionVotes(data) {
@@ -204,6 +207,112 @@
         showFlash("reception-message", `Reset complete. Cleared ${deleted} vote(s).`, "success");
       })
       .catch((err) => showFlash("reception-message", err.message || "Could not reset votes.", "error"));
+  };
+
+  function renderReceptionMessages(data) {
+    const totalEl = $("reception-messages-total");
+    const messages = Array.isArray(data?.messages) ? data.messages : [];
+    if (totalEl) totalEl.textContent = data?.total ?? messages.length;
+
+    const tbody = $("reception-messages-tbody");
+    if (!tbody) return;
+    if (!messages.length) {
+      tbody.innerHTML = '<tr><td colspan="5" class="admin-empty">No messages yet.</td></tr>';
+      return;
+    }
+
+    tbody.innerHTML = messages.map((item) => {
+      const id = Number(item.id || 0);
+      const createdAt = item.createdAt ? new Date(item.createdAt) : null;
+      const dateLabel = createdAt && !Number.isNaN(createdAt.getTime()) ? createdAt.toLocaleString() : "—";
+      const preview = String(item.message || "").replace(/\s+/g, " ").trim();
+      return `
+        <tr>
+          <td>#${id}</td>
+          <td>${escapeHtml(item.guestName || "—")}</td>
+          <td style="max-width:28rem;white-space:pre-wrap;word-break:break-word">${escapeHtml(preview)}</td>
+          <td>${escapeHtml(dateLabel)}</td>
+          <td><button type="button" class="admin-btn admin-btn-secondary admin-btn-sm admin-btn-danger-text" onclick="deleteReceptionMessage(${id})">Delete</button></td>
+        </tr>
+      `;
+    }).join("");
+  }
+
+  window.loadReceptionMessages = function loadReceptionMessages() {
+    const tbody = $("reception-messages-tbody");
+    if (tbody) tbody.innerHTML = '<tr><td colspan="5" class="admin-empty">Loading messages…</td></tr>';
+    AdminAuth.apiCall("api.php?action=admin-get-reception-messages")
+      .then((res) => res.json())
+      .then((json) => {
+        if (!json.success) throw new Error(json.error || "Could not load messages.");
+        renderReceptionMessages(json.data);
+      })
+      .catch((err) => {
+        renderReceptionMessages({ total: "—", messages: [] });
+        showFlash("reception-message", err.message || "Could not load messages.", "error");
+      });
+  };
+
+  window.deleteReceptionMessage = function deleteReceptionMessage(messageId) {
+    if (!confirm(`Delete message #${messageId}?`)) return;
+    AdminAuth.apiCall("api.php?action=admin-delete-reception-message", {
+      method: "POST",
+      body: JSON.stringify({ message_id: messageId }),
+    })
+      .then((res) => res.json())
+      .then((json) => {
+        if (!json.success) throw new Error(json.error || "Could not delete message.");
+        showFlash("reception-message", `Message #${messageId} deleted.`, "success");
+        loadReceptionMessages();
+      })
+      .catch((err) => showFlash("reception-message", err.message || "Could not delete message.", "error"));
+  };
+
+  window.clearReceptionMessages = function clearReceptionMessages() {
+    if (!confirm("Clear ALL guest messages for the couple?\n\nThis cannot be undone.")) return;
+    const typed = prompt("Type DELETE to confirm clearing all messages:");
+    if (typed !== "DELETE") {
+      showFlash("reception-message", "Clear all cancelled.", "info");
+      return;
+    }
+
+    AdminAuth.apiCall("api.php?action=admin-clear-reception-messages", {
+      method: "POST",
+      body: JSON.stringify({ confirm: "DELETE" }),
+    })
+      .then((res) => res.json())
+      .then((json) => {
+        if (!json.success) throw new Error(json.error || "Could not clear messages.");
+        renderReceptionMessages({ total: 0, messages: [] });
+        const deleted = json.data?.deleted ?? 0;
+        showFlash("reception-message", `Cleared ${deleted} message(s).`, "success");
+      })
+      .catch((err) => showFlash("reception-message", err.message || "Could not clear messages.", "error"));
+  };
+
+  window.exportReceptionMessagesCsv = function exportReceptionMessagesCsv() {
+    hideFlash("reception-message");
+    AdminAuth.apiCall("api.php?action=admin-export-reception-messages-csv")
+      .then((res) => {
+        if (!res.ok) {
+          return res.json().then((j) => {
+            throw new Error(j.error || "CSV export failed");
+          });
+        }
+        return res.blob();
+      })
+      .then((blob) => {
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `couple-messages-${Date.now()}.csv`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.URL.revokeObjectURL(url);
+        showFlash("reception-message", "CSV export downloaded.", "success");
+      })
+      .catch((err) => showFlash("reception-message", err.message || "Failed to export CSV.", "error"));
   };
 
   function renderAdminPhotoCard(p) {

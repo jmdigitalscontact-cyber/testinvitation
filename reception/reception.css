@@ -2038,6 +2038,73 @@ body.reception-lightbox-open { overflow: hidden; }
 }
 
 /* ═══════════════════════════════════════════
+   PRIVATE MESSAGE FOR THE COUPLE
+   ═══════════════════════════════════════════ */
+.rec-message-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  margin-top: 0.35rem;
+}
+
+.rec-message-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  color: var(--rec-text);
+  font-size: 0.82rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.rec-message-field input,
+.rec-message-field textarea {
+  width: 100%;
+  border: 1px solid var(--rec-border);
+  border-radius: var(--rec-radius-sm);
+  background: var(--rec-surface-1);
+  color: var(--rec-text);
+  padding: 0.7rem 0.8rem;
+  font: inherit;
+  font-weight: 400;
+  resize: vertical;
+  outline: none;
+}
+
+.rec-message-field textarea {
+  min-height: 7.5rem;
+  line-height: 1.55;
+}
+
+.rec-message-field input:focus,
+.rec-message-field textarea:focus {
+  border-color: var(--rec-gold);
+}
+
+.rec-message-field input::placeholder,
+.rec-message-field textarea::placeholder {
+  color: var(--rec-muted);
+}
+
+.rec-message-hint {
+  margin: -0.35rem 0 0;
+  text-align: right;
+  color: var(--rec-muted);
+  font-size: 0.72rem;
+}
+
+.rec-message-form .reception-btn {
+  width: 100%;
+  justify-content: center;
+}
+
+.rec-message-form .reception-status {
+  margin: 0;
+  text-align: center;
+  min-height: 1.2em;
+}
+
+/* ═══════════════════════════════════════════
    TAB BAR — Animated
    ═══════════════════════════════════════════ */
 .reception-tabs {
@@ -2048,7 +2115,7 @@ body.reception-lightbox-open { overflow: hidden; }
   width: 100%;
   max-width: 560px;
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(6, 1fr);
   gap: 0.25rem;
   padding: 0.4rem 0.45rem calc(0.4rem + env(safe-area-inset-bottom, 0px));
   background: rgba(22, 40, 30, 0.72);

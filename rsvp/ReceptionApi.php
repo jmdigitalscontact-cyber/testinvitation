@@ -568,6 +568,276 @@ function handleAdminClearReceptionVotes() {
     ]);
 }
 
+function receptionEnsureMessagesTable($mysqli) {
+    if (receptionDbEngine() === 'pgsql') {
+        $statements = [
+            "CREATE TABLE IF NOT EXISTS reception_messages (
+                id BIGSERIAL PRIMARY KEY,
+                guest_name VARCHAR(128) NOT NULL,
+                message TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )",
+            "CREATE INDEX IF NOT EXISTS idx_reception_messages_created ON reception_messages(created_at)",
+        ];
+    } else {
+        $statements = [
+            "CREATE TABLE IF NOT EXISTS reception_messages (
+                id BIGINT AUTO_INCREMENT PRIMARY KEY,
+                guest_name VARCHAR(128) NOT NULL,
+                message TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                INDEX idx_reception_messages_created (created_at)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+        ];
+    }
+
+    foreach ($statements as $statement) {
+        if (!$mysqli->query($statement)) {
+            throw new Exception('Could not initialize reception messages.');
+        }
+    }
+}
+
+function receptionMessageRateLogFile() {
+    $logDir = dirname(__DIR__) . '/logs';
+    if (!is_dir($logDir)) {
+        mkdir($logDir, 0755, true);
+    }
+    return $logDir . '/reception-message-rate.json';
+}
+
+function receptionAssertMessageRateLimit() {
+    $maxPerHour = (int)EnvironmentLoader::get('RECEPTION_MESSAGE_MAX_PER_HOUR', 30);
+    if ($maxPerHour < 1) {
+        $maxPerHour = 30;
+    }
+
+    $ip = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
+    $logFile = receptionMessageRateLogFile();
+    $now = time();
+    $window = 3600;
+    $data = [];
+
+    if (is_file($logFile)) {
+        $decoded = json_decode((string)file_get_contents($logFile), true);
+        if (is_array($decoded)) {
+            $data = $decoded;
+        }
+    }
+
+    foreach ($data as $key => $timestamps) {
+        if (!is_array($timestamps)) {
+            unset($data[$key]);
+            continue;
+        }
+        $data[$key] = array_values(array_filter($timestamps, function ($ts) use ($now, $window) {
+            return ($now - (int)$ts) < $window;
+        }));
+    }
+
+    if (!isset($data[$ip]) || !is_array($data[$ip])) {
+        $data[$ip] = [];
+    }
+
+    if (count($data[$ip]) >= $maxPerHour) {
+        sendResponse([
+            'success' => false,
+            'error' => 'Message limit reached for now. Please try again later.',
+            'code' => 'rate_limited',
+        ], 429);
+    }
+
+    return [$ip, $data, $logFile];
+}
+
+function receptionRecordSuccessfulMessage($ip, array $data, $logFile) {
+    if (!isset($data[$ip]) || !is_array($data[$ip])) {
+        $data[$ip] = [];
+    }
+    $data[$ip][] = time();
+    file_put_contents($logFile, json_encode($data), LOCK_EX);
+}
+
+function handleSubmitReceptionMessage() {
+    receptionRequireApiKey();
+    [$rateIp, $rateData, $rateFile] = receptionAssertMessageRateLimit();
+
+    $input = getRequestInput();
+    $guestName = trim(sanitize($input['guest_name'] ?? $_POST['guest_name'] ?? ''));
+    $message = trim(sanitize($input['message'] ?? $_POST['message'] ?? ''));
+
+    if ($guestName === '') {
+        sendResponse(['success' => false, 'error' => 'Please enter your name'], 400);
+    }
+    if (strlen($guestName) > 128) {
+        sendResponse(['success' => false, 'error' => 'Name is too long (max 128 characters)'], 400);
+    }
+    if ($message === '') {
+        sendResponse(['success' => false, 'error' => 'Please write a message for the couple'], 400);
+    }
+    if (strlen($message) > 1000) {
+        sendResponse(['success' => false, 'error' => 'Message is too long (max 1000 characters)'], 400);
+    }
+
+    $db = Database::getInstance();
+    $mysqli = $db->getConnection();
+    receptionEnsureMessagesTable($mysqli);
+
+    $stmt = $mysqli->prepare("
+        INSERT INTO reception_messages (guest_name, message)
+        VALUES (?, ?)
+    ");
+    $stmt->bind_param('ss', $guestName, $message);
+    if (!$stmt->execute()) {
+        $stmt->close();
+        sendResponse(['success' => false, 'error' => 'Could not save message'], 500);
+    }
+    $id = (int)$db->lastInsertId();
+    if ($id < 1) {
+        $engine = receptionDbEngine();
+        $lastValSql = ($engine === 'mysql') ? 'SELECT LAST_INSERT_ID() AS id' : 'SELECT LASTVAL() AS id';
+        $idResult = $mysqli->query($lastValSql);
+        if ($idResult) {
+            $idRow = $idResult->fetch_assoc();
+            $id = (int)($idRow['id'] ?? 0);
+        }
+    }
+    $stmt->close();
+
+    receptionRecordSuccessfulMessage($rateIp, $rateData, $rateFile);
+
+    sendResponse([
+        'success' => true,
+        'message' => 'Your message was saved for Jason & Rhona Mae.',
+        'data' => ['id' => $id],
+    ]);
+}
+
+function handleAdminGetReceptionMessages() {
+    requireAdminAuth();
+
+    $db = Database::getInstance();
+    $mysqli = $db->getConnection();
+    receptionEnsureMessagesTable($mysqli);
+
+    $messages = [];
+    $result = $mysqli->query("
+        SELECT id, guest_name, message, created_at
+        FROM reception_messages
+        ORDER BY created_at DESC, id DESC
+        LIMIT 2000
+    ");
+    if ($result) {
+        while ($row = $result->fetch_assoc()) {
+            $messages[] = [
+                'id' => (int)$row['id'],
+                'guestName' => $row['guest_name'],
+                'message' => $row['message'],
+                'createdAt' => $row['created_at'],
+            ];
+        }
+    }
+
+    sendResponse([
+        'success' => true,
+        'data' => [
+            'total' => count($messages),
+            'messages' => $messages,
+        ],
+    ]);
+}
+
+function handleAdminDeleteReceptionMessage() {
+    requireAdminAuth();
+
+    $input = getRequestInput();
+    $messageId = (int)($input['message_id'] ?? 0);
+    if ($messageId < 1) {
+        sendResponse(['success' => false, 'error' => 'Invalid message ID'], 400);
+    }
+
+    $db = Database::getInstance();
+    $mysqli = $db->getConnection();
+    receptionEnsureMessagesTable($mysqli);
+
+    $stmt = $mysqli->prepare("DELETE FROM reception_messages WHERE id = ?");
+    $stmt->bind_param('i', $messageId);
+    if (!$stmt->execute()) {
+        $stmt->close();
+        sendResponse(['success' => false, 'error' => 'Could not delete message'], 500);
+    }
+    $deleted = (int)$mysqli->affected_rows > 0;
+    $stmt->close();
+
+    if (!$deleted) {
+        sendResponse(['success' => false, 'error' => 'Message not found'], 404);
+    }
+
+    sendResponse(['success' => true, 'message' => 'Message deleted.']);
+}
+
+function handleAdminClearReceptionMessages() {
+    requireAdminAuth();
+
+    $input = getRequestInput();
+    if (($input['confirm'] ?? '') !== 'DELETE') {
+        sendResponse(['success' => false, 'error' => 'Clear confirmation is required'], 400);
+    }
+
+    $db = Database::getInstance();
+    $mysqli = $db->getConnection();
+    receptionEnsureMessagesTable($mysqli);
+
+    if (!$mysqli->query("DELETE FROM reception_messages")) {
+        sendResponse(['success' => false, 'error' => 'Could not clear messages'], 500);
+    }
+
+    sendResponse([
+        'success' => true,
+        'message' => 'All guest messages were cleared.',
+        'data' => ['deleted' => (int)$mysqli->affected_rows],
+    ]);
+}
+
+function handleAdminExportReceptionMessagesCsv() {
+    requireAdminAuth();
+
+    $db = Database::getInstance();
+    $mysqli = $db->getConnection();
+    receptionEnsureMessagesTable($mysqli);
+
+    $result = $mysqli->query("
+        SELECT id, guest_name, message, created_at
+        FROM reception_messages
+        ORDER BY created_at ASC, id ASC
+    ");
+
+    $filename = 'couple-messages-' . date('Ymd-His') . '.csv';
+    header('Content-Type: text/csv; charset=utf-8');
+    header('Content-Disposition: attachment; filename="' . $filename . '"');
+    header('Pragma: no-cache');
+    header('Expires: 0');
+
+    $out = fopen('php://output', 'w');
+    // UTF-8 BOM helps Excel open accented names correctly.
+    fwrite($out, "\xEF\xBB\xBF");
+    fputcsv($out, ['id', 'guest_name', 'message', 'created_at']);
+
+    if ($result) {
+        while ($row = $result->fetch_assoc()) {
+            fputcsv($out, [
+                (int)$row['id'],
+                $row['guest_name'],
+                $row['message'],
+                $row['created_at'],
+            ]);
+        }
+    }
+
+    fclose($out);
+    exit;
+}
+
 function receptionUploadRateLogFile() {
     $logDir = dirname(__DIR__) . '/logs';
     if (!is_dir($logDir)) {

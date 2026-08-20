@@ -248,6 +248,10 @@ try {
             handleLikeReceptionPhoto();
             break;
 
+        case 'submit-reception-message':
+            handleSubmitReceptionMessage();
+            break;
+
         case 'admin-get-reception-photos':
             handleAdminGetReceptionPhotos();
             break;
@@ -282,6 +286,22 @@ try {
 
         case 'admin-clear-reception-votes':
             handleAdminClearReceptionVotes();
+            break;
+
+        case 'admin-get-reception-messages':
+            handleAdminGetReceptionMessages();
+            break;
+
+        case 'admin-delete-reception-message':
+            handleAdminDeleteReceptionMessage();
+            break;
+
+        case 'admin-clear-reception-messages':
+            handleAdminClearReceptionMessages();
+            break;
+
+        case 'admin-export-reception-messages-csv':
+            handleAdminExportReceptionMessagesCsv();
             break;
 
         default:

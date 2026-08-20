@@ -318,6 +318,45 @@
           </div>
         </section>
 
+        <!-- ===== TAB: Messages (private notes for the couple) ===== -->
+        <section class="reception-panel" id="panel-messages" data-panel="messages" hidden aria-labelledby="tab-messages">
+          <div class="reception-panel__inner">
+            <h2 class="reception-panel__heading">Message for the couple</h2>
+            <p class="reception-panel__lead">Leave a private note for Jason &amp; Rhona Mae. Only they can read it.</p>
+
+            <form class="rec-message-form" id="couple-message-form" novalidate>
+              <label class="rec-message-field" for="couple-message-name">
+                <span>Your name</span>
+                <input
+                  type="text"
+                  id="couple-message-name"
+                  name="guest_name"
+                  maxlength="128"
+                  autocomplete="name"
+                  required
+                  placeholder="e.g. Maria Santos"
+                />
+              </label>
+              <label class="rec-message-field" for="couple-message-body">
+                <span>Your message</span>
+                <textarea
+                  id="couple-message-body"
+                  name="message"
+                  maxlength="1000"
+                  rows="5"
+                  required
+                  placeholder="Write your wishes for the newlyweds…"
+                ></textarea>
+              </label>
+              <p class="rec-message-hint" id="couple-message-count" aria-live="polite">0 / 1000</p>
+              <button type="submit" class="reception-btn reception-btn--primary" id="couple-message-submit">
+                Send to the couple
+              </button>
+              <p class="reception-status" id="couple-message-status" role="status" aria-live="polite"></p>
+            </form>
+          </div>
+        </section>
+
         <!-- ===== TAB: Gifts ===== -->
         <section class="reception-panel" id="panel-gifts" data-panel="gifts" hidden aria-labelledby="tab-gifts">
           <div class="reception-panel__inner">
@@ -490,6 +529,14 @@
             </svg>
           </span>
           <span>Photos</span>
+        </button>
+        <button type="button" class="reception-tabs__btn" id="tab-messages" data-tab="messages">
+          <span class="reception-tabs__icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+            </svg>
+          </span>
+          <span>Notes</span>
         </button>
         <button type="button" class="reception-tabs__btn" id="tab-gifts" data-tab="gifts">
           <span class="reception-tabs__icon" aria-hidden="true">

@@ -373,6 +373,38 @@
                 </div>
 
                 <div class="admin-card">
+                    <h2>Messages for the couple</h2>
+                    <p class="admin-card-lead">Private notes guests leave in the reception app. Only admins can read these — guests cannot browse other messages.</p>
+                    <div class="admin-kpi-grid">
+                        <div class="admin-kpi">
+                            <div class="admin-kpi-label">Total messages</div>
+                            <div class="admin-kpi-value" id="reception-messages-total">—</div>
+                        </div>
+                    </div>
+                    <div class="admin-actions admin-actions--wrap">
+                        <button type="button" class="admin-btn admin-btn-primary" onclick="exportReceptionMessagesCsv()">Export CSV</button>
+                        <button type="button" class="admin-btn admin-btn-secondary" onclick="loadReceptionMessages()">Refresh</button>
+                        <button type="button" class="admin-btn admin-btn-secondary admin-btn-danger-text" onclick="clearReceptionMessages()">Clear all messages</button>
+                    </div>
+                    <div class="admin-table-wrap" style="margin-top:1rem">
+                        <table class="admin-table">
+                            <thead>
+                                <tr>
+                                    <th>#</th>
+                                    <th>Name</th>
+                                    <th>Message</th>
+                                    <th>Sent</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody id="reception-messages-tbody">
+                                <tr><td colspan="5" class="admin-empty">Open this tab to load messages.</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="admin-card">
                     <h2>Reception access QR</h2>
                     <p class="admin-card-lead">Guests scan this QR code to unlock the reception app (seating, menu, gallery, gifts). The code embeds your <code>RECEPTION_API_KEY</code> from <code>.env</code>, so the main content stays hidden until the correct key is scanned.</p>
 

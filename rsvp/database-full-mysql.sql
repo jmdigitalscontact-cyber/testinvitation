@@ -214,6 +214,14 @@ CREATE TABLE IF NOT EXISTS reception_votes (
     INDEX idx_reception_votes_team (team)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+CREATE TABLE IF NOT EXISTS reception_messages (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    guest_name VARCHAR(128) NOT NULL,
+    message TEXT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_reception_messages_created (created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 SET FOREIGN_KEY_CHECKS = 1;
 
 -- ============================================================

@@ -716,7 +716,7 @@
     });
 
     const hash = (window.location.hash || "").replace("#", "");
-    if (["search", "floor", "menu", "photos", "gifts"].includes(hash)) {
+    if (["search", "floor", "menu", "photos", "messages", "gifts"].includes(hash)) {
       switchTab(hash);
     }
 
@@ -738,7 +738,7 @@
         const dy = e.touches[0].clientY - touchStartY;
         if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy) * 1.5) {
           isSwiping = true;
-          const tabs = ["search", "floor", "menu", "photos", "gifts"];
+          const tabs = ["search", "floor", "menu", "photos", "messages", "gifts"];
           const idx = tabs.indexOf(state.activeTab);
           if (dx < 0 && idx < tabs.length - 1) switchTab(tabs[idx + 1]);
           else if (dx > 0 && idx > 0) switchTab(tabs[idx - 1]);
@@ -1745,6 +1745,76 @@
   }
 
   /* ───────────────────────────────────────────
+     PRIVATE MESSAGE FOR THE COUPLE
+     ─────────────────────────────────────────── */
+  function initCoupleMessageForm() {
+    const form = document.getElementById("couple-message-form");
+    const nameInput = document.getElementById("couple-message-name");
+    const bodyInput = document.getElementById("couple-message-body");
+    const countEl = document.getElementById("couple-message-count");
+    const statusEl = document.getElementById("couple-message-status");
+    const submitBtn = document.getElementById("couple-message-submit");
+    if (!form || !nameInput || !bodyInput || !submitBtn) return;
+
+    const updateCount = () => {
+      if (countEl) countEl.textContent = `${bodyInput.value.length} / 1000`;
+    };
+    bodyInput.addEventListener("input", updateCount);
+    updateCount();
+
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const guestName = nameInput.value.trim();
+      const message = bodyInput.value.trim();
+
+      if (!guestName) {
+        if (statusEl) statusEl.textContent = "Please enter your name.";
+        nameInput.focus();
+        return;
+      }
+      if (!message) {
+        if (statusEl) statusEl.textContent = "Please write a message.";
+        bodyInput.focus();
+        return;
+      }
+
+      submitBtn.disabled = true;
+      const previousLabel = submitBtn.textContent;
+      submitBtn.textContent = "Sending…";
+      if (statusEl) statusEl.textContent = "";
+
+      try {
+        const response = await fetch(apiUrl("submit-reception-message"), {
+          method: "POST",
+          headers: apiHeaders(true),
+          body: JSON.stringify({ guest_name: guestName, message }),
+        });
+        const raw = await response.text();
+        let result = null;
+        try {
+          result = raw ? JSON.parse(raw) : null;
+        } catch {
+          throw new Error(response.ok ? "Invalid server response" : `Send failed (${response.status})`);
+        }
+        if (!response.ok || !result || result.success === false) {
+          throw new Error((result && result.error) || `Send failed (${response.status})`);
+        }
+
+        form.reset();
+        updateCount();
+        if (statusEl) statusEl.textContent = "Sent privately to Jason & Rhona Mae. Thank you!";
+        showToast("Message sent to the couple 💌");
+      } catch (error) {
+        if (statusEl) statusEl.textContent = error?.message || "Could not send message.";
+        showToast(error?.message || "Could not send message.");
+      } finally {
+        submitBtn.disabled = false;
+        submitBtn.textContent = previousLabel || "Send to the couple";
+      }
+    });
+  }
+
+  /* ───────────────────────────────────────────
      GIFT BOX
      ─────────────────────────────────────────── */
   function initGiftBox() {
@@ -1780,6 +1850,7 @@
     initFloorPlan();
     initPhotoGallery();
     initPhotoUpload();
+    initCoupleMessageForm();
     initGiftBox();
     initWelcome();
     loadGuests();
