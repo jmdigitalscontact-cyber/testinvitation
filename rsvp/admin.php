@@ -211,7 +211,12 @@
                                 <tr><td colspan="6" class="admin-empty">Loading…</td></tr>
                         </tbody>
                     </table>
-                </div>
+                    </div>
+                    <div class="admin-pagination">
+                        <button type="button" class="admin-btn admin-btn-secondary admin-btn-sm" id="responses-prev" onclick="responsesPrevPage()" disabled aria-label="Previous page">← Prev</button>
+                        <span id="responses-page-info" class="admin-pagination-info">Page 1 of 1</span>
+                        <button type="button" class="admin-btn admin-btn-secondary admin-btn-sm" id="responses-next" onclick="responsesNextPage()" aria-label="Next page">Next →</button>
+                    </div>
                     <button type="button" class="admin-btn admin-btn-secondary" onclick="loadResponses()">Refresh</button>
             </div>
             </section>

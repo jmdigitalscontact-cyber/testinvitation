@@ -22,6 +22,8 @@
   let allResponses = [];
   let filteredResponses = [];
   let responsesSearchTerm = "";
+  let currentResponsesPage = 1;
+  const RESPONSES_PER_PAGE = 5;
   let editRsvpCurrentResponse = null;
 
   function $(id) {
@@ -1120,18 +1122,25 @@
         if (!data.success) {
           $("responses-tbody").innerHTML =
             '<tr><td colspan="6" class="admin-empty">Failed to load responses.</td></tr>';
+          if ($("responses-page-info")) $("responses-page-info").textContent = "Page 1 of 1";
+          if ($("responses-prev")) $("responses-prev").disabled = true;
+          if ($("responses-next")) $("responses-next").disabled = true;
           return;
         }
 
         allResponses = (data.data || [])
           .filter((item) => item.attending !== null)
           .sort((a, b) => responseActivityTime(b) - responseActivityTime(a));
+        currentResponsesPage = 1;
         applyResponsesSearchFromInput();
         renderResponsesTable();
       })
       .catch(() => {
         $("responses-tbody").innerHTML =
           '<tr><td colspan="6" class="admin-empty">Failed to load responses.</td></tr>';
+        if ($("responses-page-info")) $("responses-page-info").textContent = "Page 1 of 1";
+        if ($("responses-prev")) $("responses-prev").disabled = true;
+        if ($("responses-next")) $("responses-next").disabled = true;
       });
   };
 
@@ -1196,8 +1205,13 @@
 
   window.filterResponses = function filterResponses() {
     applyResponsesSearchFromInput();
+    currentResponsesPage = 1;
     renderResponsesTable();
   };
+
+  function getResponsesToShow() {
+    return responsesSearchTerm ? filteredResponses : allResponses;
+  }
 
   function renderGuestNamesCell(item) {
     const names = responseAttendeeNames(item);
@@ -1209,40 +1223,75 @@
 
   function renderResponsesTable() {
     const tbody = $("responses-tbody");
+    if (!tbody) return;
     tbody.innerHTML = "";
 
-    const responsesToShow = responsesSearchTerm ? filteredResponses : allResponses;
+    const responsesToShow = getResponsesToShow();
+    const totalPages = Math.max(1, Math.ceil(responsesToShow.length / RESPONSES_PER_PAGE));
+    if (currentResponsesPage > totalPages) currentResponsesPage = totalPages;
 
-    if (!responsesToShow.length) {
+    const startIndex = (currentResponsesPage - 1) * RESPONSES_PER_PAGE;
+    const pageResponses = responsesToShow.slice(startIndex, startIndex + RESPONSES_PER_PAGE);
+
+    if (!pageResponses.length) {
       const emptyMsg = responsesSearchTerm
         ? `No responses found matching "${escapeHtml(responsesSearchTerm)}".`
         : "No responses yet.";
       tbody.innerHTML = `<tr><td colspan="6" class="admin-empty">${emptyMsg}</td></tr>`;
-      return;
+    } else {
+      pageResponses.forEach((item) => {
+        const submittedAt = item.updated_at || item.submitted_at
+          ? new Date(item.updated_at || item.submitted_at).toLocaleString()
+          : "—";
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td>${escapeHtml(item.guest_name)}</td>
+          <td>${attendanceBadge(item.attending)}</td>
+          <td>${escapeHtml(String(item.attendee_count || 0))}</td>
+          <td>${escapeHtml(submittedAt)}</td>
+          <td>${renderGuestNamesCell(item)}</td>
+          <td></td>
+        `;
+        const detailsBtn = document.createElement("button");
+        detailsBtn.type = "button";
+        detailsBtn.className = "admin-btn admin-btn-secondary admin-btn-sm";
+        detailsBtn.textContent = "View";
+        detailsBtn.dataset.action = "details";
+        detailsBtn.dataset.id = item.invitation_id;
+        tr.lastElementChild.appendChild(detailsBtn);
+        tbody.appendChild(tr);
+      });
     }
 
-    responsesToShow.forEach((item) => {
-      const submittedAt = item.updated_at || item.submitted_at
-        ? new Date(item.updated_at || item.submitted_at).toLocaleString()
-        : "—";
-      const tr = document.createElement("tr");
-      tr.innerHTML = `
-        <td>${escapeHtml(item.guest_name)}</td>
-        <td>${attendanceBadge(item.attending)}</td>
-        <td>${escapeHtml(String(item.attendee_count || 0))}</td>
-        <td>${escapeHtml(submittedAt)}</td>
-        <td>${renderGuestNamesCell(item)}</td>
-        <td></td>
-      `;
-      const detailsBtn = document.createElement("button");
-      detailsBtn.type = "button";
-      detailsBtn.className = "admin-btn admin-btn-secondary admin-btn-sm";
-      detailsBtn.textContent = "View";
-      detailsBtn.dataset.action = "details";
-      detailsBtn.dataset.id = item.invitation_id;
-      tr.lastElementChild.appendChild(detailsBtn);
-      tbody.appendChild(tr);
-    });
+    const total = responsesToShow.length;
+    const from = total === 0 ? 0 : startIndex + 1;
+    const to = Math.min(startIndex + RESPONSES_PER_PAGE, total);
+    const pageInfo = $("responses-page-info");
+    if (pageInfo) {
+      pageInfo.textContent = total
+        ? `Page ${currentResponsesPage} of ${totalPages} · ${from}–${to} of ${total}`
+        : `Page ${currentResponsesPage} of ${totalPages}`;
+    }
+
+    const prevBtn = $("responses-prev");
+    const nextBtn = $("responses-next");
+    if (prevBtn) prevBtn.disabled = currentResponsesPage <= 1;
+    if (nextBtn) nextBtn.disabled = currentResponsesPage >= totalPages || total === 0;
+  }
+
+  window.responsesPrevPage = function responsesPrevPage() {
+    if (currentResponsesPage > 1) {
+      currentResponsesPage -= 1;
+      renderResponsesTable();
+    }
+  };
+
+  window.responsesNextPage = function responsesNextPage() {
+    const totalPages = Math.max(1, Math.ceil(getResponsesToShow().length / RESPONSES_PER_PAGE));
+    if (currentResponsesPage < totalPages) {
+      currentResponsesPage += 1;
+      renderResponsesTable();
+    }
   };
 
   window.showQRCode = function showQRCode(invitationId) {
