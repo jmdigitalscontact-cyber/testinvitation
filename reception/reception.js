@@ -1151,7 +1151,6 @@
   let googleMomentsTimer = null;
   let googleMomentsItems = [];
   let googleMomentsAlbumUrl = GOOGLE_PHOTOS_ALBUM_URL;
-  const momentsMarqueeQuery = window.matchMedia("(min-width: 640px)");
 
   function googlePhotoSrcAllowed(src) {
     try {
@@ -1159,6 +1158,36 @@
       return host === "lh3.googleusercontent.com";
     } catch {
       return false;
+    }
+  }
+
+  function uniqueGooglePhotos(items) {
+    const seen = new Set();
+    return (Array.isArray(items) ? items : []).filter((item) => {
+      if (!item || !googlePhotoSrcAllowed(item.src)) return false;
+      const key = String(item.id || item.src);
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    }).slice(0, GOOGLE_PHOTOS_FEED_MAX);
+  }
+
+  function syncGoogleMomentsMarqueeMotion() {
+    const track = els.momentsMarquee;
+    const scroller = track && track.closest(".rec-photo-marquee");
+    if (!track || !scroller) return;
+
+    track.classList.remove("is-panning", "is-static");
+    track.style.removeProperty("--marquee-shift");
+    track.style.removeProperty("--marquee-duration");
+
+    const overflow = track.scrollWidth - scroller.clientWidth;
+    if (overflow > 8) {
+      track.classList.add("is-panning");
+      track.style.setProperty("--marquee-shift", `-${overflow}px`);
+      track.style.setProperty("--marquee-duration", `${Math.max(18, Math.round(overflow / 18))}s`);
+    } else {
+      track.classList.add("is-static");
     }
   }
 
@@ -1184,46 +1213,56 @@
     if (!els.momentsMarquee || !els.momentsLive) return;
     els.momentsMarquee.replaceChildren();
 
-    if (!photos.length || !momentsMarqueeQuery.matches) {
+    if (!photos.length) {
       els.momentsLive.hidden = true;
-      els.momentsMarquee.classList.remove("is-static");
-      els.momentsMarquee.style.animationDuration = "";
+      els.momentsMarquee.classList.remove("is-static", "is-panning");
+      els.momentsMarquee.style.removeProperty("--marquee-shift");
+      els.momentsMarquee.style.removeProperty("--marquee-duration");
       return;
     }
 
     els.momentsLive.hidden = false;
-    const animate = photos.length > LIVE_FEED_ROWS;
-    let sequence = photos.map((photo, index) => ({ photo, index }));
-    if (animate && sequence.length % LIVE_FEED_ROWS !== 0) {
-      const padding = LIVE_FEED_ROWS - (sequence.length % LIVE_FEED_ROWS);
-      sequence = sequence.concat(sequence.slice(0, padding));
-    }
 
     const fragment = document.createDocumentFragment();
-    const copies = animate ? 2 : 1;
-    for (let copy = 0; copy < copies; copy += 1) {
-      sequence.forEach(({ photo, index }) => {
-        fragment.appendChild(createGooglePhotoLink(
-          photo,
-          href,
-          index,
-          "rec-live-item",
-          `Guest photo ${index + 1}, opens the shared album`
-        ));
-      });
-    }
+    photos.forEach((photo, index) => {
+      fragment.appendChild(createGooglePhotoLink(
+        photo,
+        href,
+        index,
+        "rec-live-item",
+        `Guest photo ${index + 1}, opens the shared album`
+      ));
+    });
     els.momentsMarquee.appendChild(fragment);
-    els.momentsMarquee.classList.toggle("is-static", !animate);
-    els.momentsMarquee.style.animationDuration = animate
-      ? `${Math.max(20, Math.round((sequence.length / LIVE_FEED_ROWS) * 3))}s`
-      : "";
+
+    const finishMotion = () => syncGoogleMomentsMarqueeMotion();
+    const images = [...els.momentsMarquee.querySelectorAll("img")];
+    if (!images.length) {
+      finishMotion();
+      return;
+    }
+    let pending = images.length;
+    images.forEach((img) => {
+      if (img.complete) {
+        pending -= 1;
+        return;
+      }
+      img.addEventListener("load", () => {
+        pending -= 1;
+        if (pending <= 0) finishMotion();
+      }, { once: true });
+      img.addEventListener("error", () => {
+        pending -= 1;
+        if (pending <= 0) finishMotion();
+      }, { once: true });
+    });
+    if (pending <= 0) finishMotion();
+    else requestAnimationFrame(finishMotion);
   }
 
   function renderGoogleMoments(items, albumUrl) {
     if (!els.momentsGrid) return;
-    const photos = (Array.isArray(items) ? items : [])
-      .filter((item) => item && googlePhotoSrcAllowed(item.src))
-      .slice(0, GOOGLE_PHOTOS_FEED_MAX);
+    const photos = uniqueGooglePhotos(items);
     const href = albumUrl || GOOGLE_PHOTOS_ALBUM_URL;
     googleMomentsItems = photos;
     googleMomentsAlbumUrl = href;
@@ -1962,8 +2001,8 @@
     loadGuests();
     loadMenu();
     loadGoogleMoments();
-    momentsMarqueeQuery.addEventListener("change", () => {
-      renderGoogleMoments(googleMomentsItems, googleMomentsAlbumUrl);
+    window.addEventListener("resize", () => {
+      if (els.momentsLive && !els.momentsLive.hidden) syncGoogleMomentsMarqueeMotion();
     });
 
     els.searchInput?.addEventListener("input", onSearchInput);

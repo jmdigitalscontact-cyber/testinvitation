@@ -1195,7 +1195,8 @@ body {
   }
 
   .rec-moments__live {
-    display: none;
+    --rec-live-tile: 88px;
+    --rec-live-gap: 0.45rem;
   }
 }
 
@@ -1216,6 +1217,21 @@ body {
 
 .rec-moments__marquee {
   margin: 0;
+  overflow: hidden;
+  touch-action: pan-y;
+}
+
+.rec-moments .rec-photo-marquee__track {
+  animation: none;
+}
+
+.rec-moments .rec-photo-marquee__track.is-panning {
+  animation: recMomentsMarqueePan var(--marquee-duration, 28s) linear infinite alternate;
+}
+
+@keyframes recMomentsMarqueePan {
+  from { transform: translateX(0); }
+  to { transform: translateX(var(--marquee-shift, 0px)); }
 }
 
 .rec-moments .rec-live-item {
