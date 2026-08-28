@@ -454,12 +454,12 @@ function receptionSendGoogleAlbumResponse($items, $source, $limit) {
 function handleGetGooglePhotosAlbum() {
     receptionRequireApiKey();
 
-    $limit = (int)($_GET['limit'] ?? 5);
+    $limit = (int)($_GET['limit'] ?? 200);
     if ($limit < 1) {
-        $limit = 5;
+        $limit = 200;
     }
-    if ($limit > 12) {
-        $limit = 12;
+    if ($limit > 200) {
+        $limit = 200;
     }
 
     $cacheTtl = 300;

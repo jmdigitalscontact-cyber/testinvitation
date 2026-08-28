@@ -1110,17 +1110,14 @@ body {
 }
 
 .rec-moments__grid {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 0.55rem;
-  overflow-x: auto;
-  padding-bottom: 0.15rem;
-  scrollbar-width: thin;
+  overflow: hidden;
 }
 
 .rec-moments__item {
-  flex: 1 1 0;
-  min-width: 4.6rem;
-  max-width: calc((100% - 2.2rem) / 5);
+  min-width: 0;
   aspect-ratio: 3 / 4;
   border-radius: 1.05rem;
   overflow: hidden;
@@ -1193,11 +1190,44 @@ body {
 }
 
 @media (max-width: 639px) {
-  .rec-moments__item {
-    flex: 0 0 38%;
-    min-width: 7.5rem;
-    max-width: none;
+  .rec-moments__grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
+
+  .rec-moments__live {
+    display: none;
+  }
+}
+
+.rec-moments__live {
+  --rec-live-rows: 2;
+  --rec-live-tile: 104px;
+  --rec-live-gap: 0.6rem;
+  margin: 1.15rem 0 0;
+  overflow: hidden;
+}
+
+@media (min-width: 640px) {
+  .rec-moments__live {
+    --rec-live-tile: 124px;
+    --rec-live-gap: 0.75rem;
+  }
+}
+
+.rec-moments__marquee {
+  margin: 0;
+}
+
+.rec-moments .rec-live-item {
+  border: none;
+  border-radius: 0.85rem;
+  background: rgba(45, 66, 57, 0.08);
+  box-shadow: none;
+}
+
+.rec-moments .rec-live-item:focus-visible {
+  outline: 2px solid var(--album-ink);
+  outline-offset: 2px;
 }
 
 /* ═══════════════════════════════════════════
@@ -2674,6 +2704,10 @@ body.reception-lightbox-open { overflow: hidden; }
     overflow-x: auto;
     mask-image: none;
     -webkit-mask-image: none;
+  }
+
+  .rec-moments .rec-photo-marquee {
+    overflow: hidden;
   }
 }
 

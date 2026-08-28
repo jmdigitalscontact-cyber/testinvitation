@@ -19,6 +19,7 @@
   const LIVE_FEED_ROWS = 2;
   const GOOGLE_PHOTOS_ALBUM_URL = "https://photos.app.goo.gl/LyebvyWMcerYSJmR6";
   const GOOGLE_MOMENTS_LIMIT = 5;
+  const GOOGLE_PHOTOS_FEED_MAX = 200;
   const GOOGLE_MOMENTS_POLL_MS = 60000;
 
   if (RECEPTION_KEY_PARAM) {
@@ -140,6 +141,8 @@
     els.voteGroomBar = document.getElementById("rec-vote-groom-bar");
     els.voteContinue = document.getElementById("rec-vote-continue");
     els.momentsGrid = document.getElementById("rec-moments-grid");
+    els.momentsLive = document.getElementById("rec-moments-live");
+    els.momentsMarquee = document.getElementById("rec-moments-marquee");
     els.momentsEmpty = document.getElementById("rec-moments-empty");
     els.momentsStatus = document.getElementById("rec-moments-status");
   }
@@ -713,10 +716,6 @@
     else stopGoogleMomentsPolling();
   }
 
-  let touchStartX = 0;
-  let touchStartY = 0;
-  let isSwiping = false;
-
   function initTabs() {
     els.tabButtons.forEach(btn => {
       btn.addEventListener("click", () => switchTab(btn.dataset.tab));
@@ -729,29 +728,6 @@
 
     updateTabIndicator();
     window.addEventListener("resize", updateTabIndicator);
-
-    // Swipe gestures
-    const main = els.receptionMain;
-    if (main) {
-      main.addEventListener("touchstart", e => {
-        touchStartX = e.touches[0].clientX;
-        touchStartY = e.touches[0].clientY;
-        isSwiping = false;
-      }, { passive: true });
-
-      main.addEventListener("touchmove", e => {
-        if (isSwiping) return;
-        const dx = e.touches[0].clientX - touchStartX;
-        const dy = e.touches[0].clientY - touchStartY;
-        if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy) * 1.5) {
-          isSwiping = true;
-          const tabs = ["search", "floor", "menu", "photos", "messages", "gifts"];
-          const idx = tabs.indexOf(state.activeTab);
-          if (dx < 0 && idx < tabs.length - 1) switchTab(tabs[idx + 1]);
-          else if (dx > 0 && idx > 0) switchTab(tabs[idx - 1]);
-        }
-      }, { passive: true });
-    }
   }
 
   /* ───────────────────────────────────────────
@@ -1173,6 +1149,9 @@
      GOOGLE PHOTOS — latest guest moments
      ─────────────────────────────────────────── */
   let googleMomentsTimer = null;
+  let googleMomentsItems = [];
+  let googleMomentsAlbumUrl = GOOGLE_PHOTOS_ALBUM_URL;
+  const momentsMarqueeQuery = window.matchMedia("(min-width: 640px)");
 
   function googlePhotoSrcAllowed(src) {
     try {
@@ -1183,31 +1162,85 @@
     }
   }
 
+  function createGooglePhotoLink(item, href, index, className, label) {
+    const link = document.createElement("a");
+    link.className = className;
+    link.href = href;
+    link.target = "_blank";
+    link.rel = "noopener noreferrer";
+    link.setAttribute("aria-label", label);
+
+    const img = document.createElement("img");
+    img.src = item.src;
+    img.alt = "";
+    img.loading = index < 4 ? "eager" : "lazy";
+    img.decoding = "async";
+    img.referrerPolicy = "no-referrer";
+    link.appendChild(img);
+    return link;
+  }
+
+  function renderGoogleMomentsMarquee(photos, href) {
+    if (!els.momentsMarquee || !els.momentsLive) return;
+    els.momentsMarquee.replaceChildren();
+
+    if (!photos.length || !momentsMarqueeQuery.matches) {
+      els.momentsLive.hidden = true;
+      els.momentsMarquee.classList.remove("is-static");
+      els.momentsMarquee.style.animationDuration = "";
+      return;
+    }
+
+    els.momentsLive.hidden = false;
+    const animate = photos.length > LIVE_FEED_ROWS;
+    let sequence = photos.map((photo, index) => ({ photo, index }));
+    if (animate && sequence.length % LIVE_FEED_ROWS !== 0) {
+      const padding = LIVE_FEED_ROWS - (sequence.length % LIVE_FEED_ROWS);
+      sequence = sequence.concat(sequence.slice(0, padding));
+    }
+
+    const fragment = document.createDocumentFragment();
+    const copies = animate ? 2 : 1;
+    for (let copy = 0; copy < copies; copy += 1) {
+      sequence.forEach(({ photo, index }) => {
+        fragment.appendChild(createGooglePhotoLink(
+          photo,
+          href,
+          index,
+          "rec-live-item",
+          `Guest photo ${index + 1}, opens the shared album`
+        ));
+      });
+    }
+    els.momentsMarquee.appendChild(fragment);
+    els.momentsMarquee.classList.toggle("is-static", !animate);
+    els.momentsMarquee.style.animationDuration = animate
+      ? `${Math.max(20, Math.round((sequence.length / LIVE_FEED_ROWS) * 3))}s`
+      : "";
+  }
+
   function renderGoogleMoments(items, albumUrl) {
     if (!els.momentsGrid) return;
     const photos = (Array.isArray(items) ? items : [])
       .filter((item) => item && googlePhotoSrcAllowed(item.src))
-      .slice(0, GOOGLE_MOMENTS_LIMIT);
+      .slice(0, GOOGLE_PHOTOS_FEED_MAX);
     const href = albumUrl || GOOGLE_PHOTOS_ALBUM_URL;
+    googleMomentsItems = photos;
+    googleMomentsAlbumUrl = href;
+    const featured = photos.slice(0, GOOGLE_MOMENTS_LIMIT);
 
     els.momentsGrid.replaceChildren();
-    photos.forEach((item, index) => {
-      const link = document.createElement("a");
-      link.className = "rec-moments__item";
-      link.href = href;
-      link.target = "_blank";
-      link.rel = "noopener noreferrer";
-      link.setAttribute("aria-label", `Latest guest photo ${index + 1}, opens the shared album`);
-
-      const img = document.createElement("img");
-      img.src = item.src;
-      img.alt = "";
-      img.loading = index < 2 ? "eager" : "lazy";
-      img.decoding = "async";
-      img.referrerPolicy = "no-referrer";
-      link.appendChild(img);
-      els.momentsGrid.appendChild(link);
+    featured.forEach((item, index) => {
+      els.momentsGrid.appendChild(createGooglePhotoLink(
+        item,
+        href,
+        index,
+        "rec-moments__item",
+        `Latest guest photo ${index + 1}, opens the shared album`
+      ));
     });
+
+    renderGoogleMomentsMarquee(photos, href);
 
     if (els.momentsEmpty) els.momentsEmpty.hidden = photos.length > 0;
     if (els.momentsStatus) els.momentsStatus.hidden = photos.length === 0;
@@ -1216,7 +1249,7 @@
   async function loadGoogleMoments() {
     if (!els.momentsGrid || !RECEPTION_KEY) return;
     try {
-      const result = await apiGet("get-google-photos-album", { limit: String(GOOGLE_MOMENTS_LIMIT) });
+      const result = await apiGet("get-google-photos-album", { limit: String(GOOGLE_PHOTOS_FEED_MAX) });
       const items = result && Array.isArray(result.items) ? result.items : [];
       renderGoogleMoments(items, result && result.albumUrl);
     } catch {
@@ -1929,6 +1962,9 @@
     loadGuests();
     loadMenu();
     loadGoogleMoments();
+    momentsMarqueeQuery.addEventListener("change", () => {
+      renderGoogleMoments(googleMomentsItems, googleMomentsAlbumUrl);
+    });
 
     els.searchInput?.addEventListener("input", onSearchInput);
     els.themeToggle?.addEventListener("click", toggleTheme);
