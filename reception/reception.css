@@ -897,6 +897,162 @@ body {
 }
 
 /* ═══════════════════════════════════════════
+   PHOTOS TAB — Google Photos shared album
+   ═══════════════════════════════════════════ */
+.reception-panel__inner--album {
+  --album-ink: #2d4239;
+  --album-muted: #5d6f66;
+  --album-line: rgba(45, 66, 57, 0.14);
+  --album-cream: #faf8f4;
+  background: var(--album-cream);
+  border: 1px solid rgba(45, 66, 57, 0.08);
+  color: var(--album-ink);
+  box-shadow: 0 12px 40px rgba(15, 31, 23, 0.18);
+}
+
+[data-theme="light"] .reception-panel__inner--album {
+  background: var(--album-cream);
+}
+
+.reception-panel__inner--album::before {
+  display: none;
+}
+
+.rec-album {
+  display: grid;
+  gap: 1.6rem;
+}
+
+.rec-album__kicker {
+  margin: 0 0 0.55rem;
+  font-family: var(--rec-font-body);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--album-ink);
+}
+
+.rec-album__title {
+  margin: 0 0 0.7rem;
+  font-family: var(--rec-font-display);
+  font-size: clamp(1.7rem, 6vw, 2.35rem);
+  font-weight: 600;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+  color: var(--album-ink);
+}
+
+.rec-album__lead {
+  margin: 0 0 1.35rem;
+  font-size: 0.95rem;
+  line-height: 1.55;
+  color: var(--album-muted);
+}
+
+.rec-album__steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.rec-album__steps li {
+  display: grid;
+  grid-template-columns: 2.1rem 1fr;
+  gap: 0.65rem;
+  padding: 0.85rem 0;
+  border-top: 1px solid var(--album-line);
+}
+
+.rec-album__steps li:last-child {
+  border-bottom: 1px solid var(--album-line);
+}
+
+.rec-album__step-num {
+  font-family: var(--rec-font-body);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: var(--album-muted);
+  padding-top: 0.2rem;
+}
+
+.rec-album__step-title {
+  margin: 0 0 0.15rem;
+  font-family: var(--rec-font-display);
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--album-ink);
+}
+
+.rec-album__step-text {
+  margin: 0;
+  font-size: 0.86rem;
+  line-height: 1.45;
+  color: var(--album-muted);
+}
+
+.rec-album__card {
+  background: #fff;
+  border-radius: 1.15rem;
+  padding: 1.35rem 1.2rem 1.4rem;
+  text-align: center;
+  box-shadow: 0 18px 48px rgba(45, 66, 57, 0.12);
+}
+
+.rec-album__qr {
+  display: block;
+  width: min(100%, 15.5rem);
+  height: auto;
+  margin: 0 auto 1rem;
+  background: #fff;
+}
+
+.rec-album__scan-title {
+  margin: 0 0 0.2rem;
+  font-family: var(--rec-font-display);
+  font-size: 1.35rem;
+  font-weight: 600;
+  color: var(--album-ink);
+}
+
+.rec-album__scan-hint {
+  margin: 0 0 1.15rem;
+  font-size: 0.82rem;
+  color: var(--album-muted);
+}
+
+.rec-album__open {
+  display: inline-block;
+  font-family: var(--rec-font-display);
+  font-size: 0.82rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--album-ink);
+  text-decoration: underline;
+  text-underline-offset: 0.28em;
+}
+
+.rec-album__open:focus-visible {
+  outline: 2px solid var(--album-ink);
+  outline-offset: 4px;
+}
+
+@media (min-width: 720px) {
+  .rec-album {
+    grid-template-columns: minmax(0, 1.15fr) minmax(16rem, 0.85fr);
+    align-items: start;
+    gap: 2rem;
+  }
+
+  .rec-album__card {
+    position: sticky;
+    top: 0.75rem;
+  }
+}
+
+/* ═══════════════════════════════════════════
    SEARCH TAB
    ═══════════════════════════════════════════ */
 .reception-suggestion-pills {

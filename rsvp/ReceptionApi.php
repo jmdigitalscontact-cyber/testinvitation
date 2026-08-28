@@ -1392,12 +1392,22 @@ function receptionParseIniBytes($value) {
     }
 }
 
-function handleUploadReceptionPhoto() {
+function handleUploadReceptionPhoto($asAdmin = false) {
     @ini_set('memory_limit', '512M');
-    receptionRequireApiKey();
-    [$rateIp, $rateData] = receptionAssertUploadRateLimit();
+    $rateIp = '';
+    $rateData = [];
 
-    $useGooglePhotos = receptionGooglePhotosEnabled();
+    if ($asAdmin) {
+        requireAdminAuth();
+    } else {
+        receptionRequireApiKey();
+        [$rateIp, $rateData] = receptionAssertUploadRateLimit();
+    }
+
+    // Admin failover always stores locally. Do not enable the Google-replace path.
+    $useGooglePhotos = $asAdmin ? false : receptionGooglePhotosEnabled();
+    $safeName = 'photo.webp';
+    $destPath = '';
 
     // When the request body exceeds post_max_size, PHP empties $_POST/$_FILES.
     $contentLength = (int)($_SERVER['CONTENT_LENGTH'] ?? 0);
@@ -1566,7 +1576,9 @@ function handleUploadReceptionPhoto() {
     }
     $stmt->close();
 
-    receptionRecordSuccessfulUpload($rateIp, $rateData);
+    if (!$asAdmin) {
+        receptionRecordSuccessfulUpload($rateIp, $rateData);
+    }
 
     sendResponse([
         'success' => true,
@@ -1580,6 +1592,7 @@ function handleUploadReceptionPhoto() {
             'likesCount' => 0,
             'uploadedAt' => date('c'),
             'useGooglePhotos' => $usedGooglePhotos,
+            'failover' => $asAdmin,
         ],
     ]);
 }

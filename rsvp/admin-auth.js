@@ -29,7 +29,8 @@ this.hideDashboard();
     const headers = { ...(options.headers || {}) };
     headers.Authorization = `Bearer ${this.token}`;
     headers["X-CSRF-Token"] = this.csrfToken;
-    if (!headers["Content-Type"] && options.body) {
+    const isFormData = typeof FormData !== "undefined" && options.body instanceof FormData;
+    if (!headers["Content-Type"] && options.body && !isFormData) {
       headers["Content-Type"] = "application/json";
     }
 

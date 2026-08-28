@@ -338,6 +338,8 @@ body.admin-app {
   font-size: 0.84rem;
   font-weight: 600;
   cursor: pointer;
+  text-decoration: none;
+  display: inline-block;
   transition: background 180ms ease, border-color 180ms ease, transform 180ms ease;
 }
 
@@ -836,6 +838,43 @@ body.admin-app {
 
 .admin-photo-badge {
   font-size: 0.72rem;
+}
+
+.admin-failover-card {
+  border: 1px solid #ead9a8;
+  background: linear-gradient(180deg, #fffdf6, #fff);
+}
+
+.admin-failover-kicker {
+  margin: 0 0 0.35rem;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--admin-warn-text);
+}
+
+.admin-failover-upload {
+  margin-top: 1rem;
+}
+
+.admin-failover-drop {
+  display: block;
+  cursor: pointer;
+  padding: 1rem 1.1rem;
+  border: 1px dashed var(--admin-sage);
+  border-radius: 10px;
+  background: var(--admin-ok-bg);
+}
+
+.admin-failover-drop strong {
+  display: block;
+  margin-bottom: 0.2rem;
+}
+
+.admin-failover-drop span {
+  color: var(--admin-muted);
+  font-size: 0.84rem;
 }
 
 .admin-photo-badge--hidden {

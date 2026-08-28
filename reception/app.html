@@ -245,75 +245,55 @@
           </div>
         </section>
 
-        <!-- ===== TAB: Photos ===== -->
+        <!-- ===== TAB: Photos (Google Photos album — local failover lives in admin) ===== -->
         <section class="reception-panel" id="panel-photos" data-panel="photos" hidden aria-labelledby="tab-photos">
-          <div class="reception-panel__inner">
-            <h2 class="reception-panel__heading">Live gallery</h2>
-            <p class="reception-panel__lead">Share a moment from our celebration.</p>
-            
-            <div class="reception-upload-zone" id="upload-zone">
-              <div class="reception-upload-zone__icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="1.5">
-                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                  <polyline points="17 8 12 3 7 8"/>
-                  <line x1="12" y1="3" x2="12" y2="15"/>
-                </svg>
+          <div class="reception-panel__inner reception-panel__inner--album">
+            <div class="rec-album">
+              <div class="rec-album__copy">
+                <p class="rec-album__kicker">Our shared album</p>
+                <h2 class="rec-album__title">Every angle tells our story</h2>
+                <p class="rec-album__lead">Whether it&rsquo;s a candid laugh, a dance-floor favorite, or a quiet moment in between, we&rsquo;d love to see the day through your eyes.</p>
+                <ol class="rec-album__steps">
+                  <li>
+                    <span class="rec-album__step-num">01</span>
+                    <div>
+                      <p class="rec-album__step-title">Open the album</p>
+                      <p class="rec-album__step-text">Tap the button or scan the QR code.</p>
+                    </div>
+                  </li>
+                  <li>
+                    <span class="rec-album__step-num">02</span>
+                    <div>
+                      <p class="rec-album__step-title">Join in Google Photos</p>
+                      <p class="rec-album__step-text">Sign in and select &ldquo;Join&rdquo; if prompted.</p>
+                    </div>
+                  </li>
+                  <li>
+                    <span class="rec-album__step-num">03</span>
+                    <div>
+                      <p class="rec-album__step-title">Add your favorites</p>
+                      <p class="rec-album__step-text">Choose the photos and videos you&rsquo;d like to share.</p>
+                    </div>
+                  </li>
+                </ol>
               </div>
-              <p class="reception-upload-zone__text">Drop photos here or tap to upload</p>
-              <p class="reception-upload-zone__hint">JPEG, PNG, WebP, HEIC/HEIF · max 10MB each</p>
-              
-              <div class="rec-upload-tags-wrap" onclick="event.stopPropagation()">
-                <input type="text" id="photo-tag-name" class="rec-upload-tag-input" placeholder="Your name (optional)" />
-                <input type="number" id="photo-tag-table" class="rec-upload-tag-input rec-upload-tag-input--sm" placeholder="Table #" min="1" max="99" />
-              </div>
-
-              <input
-                type="file"
-                id="photo-upload-camera-input"
-                name="photo"
-                class="reception-upload__input reception-upload__input--camera"
-                accept="image/*"
-                capture="environment"
-              />
-              <input
-                type="file"
-                id="photo-upload-gallery-input"
-                name="photo"
-                class="reception-upload__input reception-upload__input--gallery visually-hidden"
-                accept="image/*"
-                multiple
-              />
-              <div class="reception-upload-actions" id="photo-upload-actions">
-                <button type="button" class="reception-btn reception-btn--primary" id="photo-upload-camera-btn">
-                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                    <circle cx="12" cy="13" r="4"/>
-                    <path d="M5 7h2l2-3h6l2 3h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2z"/>
-                  </svg>
-                  <span class="rec-upload-btn-label">Snap your POV</span>
-                </button>
-                <label class="reception-btn reception-btn--secondary" id="photo-upload-gallery-btn" for="photo-upload-gallery-input">
-                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
-                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
-                    <circle cx="8.5" cy="8.5" r="1.5"/>
-                    <polyline points="21 15 16 10 5 21"/>
-                  </svg>
-                  Choose from gallery
-                </label>
-              </div>
-            </div>
-
-            <!-- Live multi-row marquee of the newest uploaded POVs -->
-            <div class="rec-photo-live-wrap" id="photo-live-wrap" hidden>
-              <h3 class="rec-live-title"><span>✨ Real-Time POV Feed</span></h3>
-              <div class="rec-photo-marquee">
-                <div class="rec-photo-marquee__track" id="photo-live-track"></div>
-              </div>
-              <p class="rec-live-more" id="photo-live-more" hidden></p>
-            </div>
-
-            <p class="reception-status" id="photo-gallery-status" role="status" aria-live="polite"></p>
-            <div class="reception-gallery-viewport" id="photo-gallery-wrap" hidden>
-              <div class="reception-gallery-masonry" id="photo-gallery" aria-label="Guest photos"></div>
+              <aside class="rec-album__card">
+                <img
+                  class="rec-album__qr"
+                  src="./assets/google-photos-album-qr.png"
+                  width="480"
+                  height="480"
+                  alt="QR code for the Berbers Wedding Google Photos album"
+                />
+                <p class="rec-album__scan-title">Scan to share</p>
+                <p class="rec-album__scan-hint">Point your phone&rsquo;s camera at the code</p>
+                <a
+                  class="rec-album__open"
+                  href="https://photos.app.goo.gl/LyebvyWMcerYSJmR6"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >Open album instead</a>
+              </aside>
             </div>
           </div>
         </section>
@@ -551,58 +531,6 @@
           <span>Gifts</span>
         </button>
       </nav>
-    </div>
-
-    <!-- ===== Lightbox ===== -->
-    <div
-      class="reception-photo-lightbox"
-      id="photo-lightbox"
-      hidden
-      role="dialog"
-      aria-modal="true"
-      aria-label="Photo viewer"
-    >
-      <div class="reception-photo-lightbox__backdrop" data-photo-lightbox-close tabindex="-1" aria-hidden="true"></div>
-      <div class="reception-photo-lightbox__panel">
-        <button type="button" class="reception-photo-lightbox__close" data-photo-lightbox-close aria-label="Close">
-          <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2">
-            <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-          </svg>
-        </button>
-        <button
-          type="button"
-          class="reception-photo-lightbox__nav reception-photo-lightbox__nav--prev"
-          data-photo-lightbox-prev
-          aria-label="Previous photo"
-        >
-          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
-            <polyline points="15 18 9 12 15 6"/>
-          </svg>
-        </button>
-        <figure class="reception-photo-lightbox__figure">
-          <div class="reception-photo-lightbox__img-wrap">
-            <img class="reception-photo-lightbox__img" alt="Guest photo" decoding="async" />
-          </div>
-          <div class="reception-photo-lightbox__reactions">
-            <button type="button" class="rec-photo-like-btn" id="photo-like-btn" aria-label="Like this photo">
-              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
-              </svg>
-            </button>
-          </div>
-        </figure>
-        <p class="reception-photo-lightbox__count" id="photo-lightbox-count" aria-live="polite"></p>
-      </div>
-      <button
-        type="button"
-        class="reception-photo-lightbox__nav reception-photo-lightbox__nav--next"
-        data-photo-lightbox-next
-        aria-label="Next photo"
-      >
-        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
-          <polyline points="9 18 15 12 9 6"/>
-        </svg>
-      </button>
     </div>
 
     <!-- ===== Toast ===== -->

@@ -350,7 +350,7 @@
   window.loadAdminPhotos = function loadAdminPhotos() {
     const grid = document.getElementById("admin-photos-grid");
     if (!grid) return;
-    grid.innerHTML = '<p class="admin-empty">Loading guest photos…</p>';
+    grid.innerHTML = '<p class="admin-empty">Loading failover photos…</p>';
 
     AdminAuth.apiCall("api.php?action=admin-get-reception-photos")
       .then((res) => res.json())
@@ -358,7 +358,7 @@
         if (json.success && Array.isArray(json.data)) {
           updateAdminPhotosCount(json.data.length);
           if (json.data.length === 0) {
-            grid.innerHTML = '<p class="admin-empty">No guest POV photos uploaded yet.</p>';
+            grid.innerHTML = '<p class="admin-empty">No failover photos stored locally yet.</p>';
             return;
           }
           grid.innerHTML = json.data.map(renderAdminPhotoCard).join("");
@@ -374,7 +374,7 @@
   };
 
   window.hideAdminPhoto = function hideAdminPhoto(photoId) {
-    if (!confirm("Hide this photo from the live guest gallery?")) return;
+    if (!confirm("Hide this photo from the admin failover gallery and venue wall?")) return;
 
     AdminAuth.apiCall("api.php?action=admin-hide-reception-photo", {
       method: "POST",
@@ -384,7 +384,7 @@
       .then((json) => {
         if (json.success) {
           loadAdminPhotos();
-          showFlash("photos-message", "Photo hidden from live gallery.", "success");
+          showFlash("photos-message", "Photo hidden from failover gallery.", "success");
         } else {
           showFlash("photos-message", json.error || "Failed to hide photo.", "error");
         }
@@ -2051,8 +2051,57 @@
     });
   }
 
+  function initAdminFailoverUpload() {
+    const input = $("admin-failover-photo-input");
+    if (!input) return;
+
+    input.addEventListener("change", async () => {
+      const files = [...(input.files || [])];
+      if (!files.length) return;
+
+      hideFlash("photos-message");
+      let uploaded = 0;
+      let failed = 0;
+      let lastError = "";
+
+      for (const file of files) {
+        const form = new FormData();
+        form.append("photo", file, file.name || "photo.jpg");
+        form.append("uploader_name", "Admin failover");
+        try {
+          const res = await AdminAuth.apiCall("api.php?action=admin-upload-reception-photo", {
+            method: "POST",
+            body: form,
+          });
+          const json = await res.json();
+          if (json && json.success) {
+            uploaded += 1;
+          } else {
+            failed += 1;
+            lastError = (json && json.error) || "Upload failed";
+          }
+        } catch (err) {
+          failed += 1;
+          lastError = err.message || "Upload failed";
+        }
+      }
+
+      input.value = "";
+      loadAdminPhotos();
+
+      if (uploaded && !failed) {
+        showFlash("photos-message", `Saved ${uploaded} failover photo(s) locally.`, "success");
+      } else if (uploaded) {
+        showFlash("photos-message", `Saved ${uploaded}; ${failed} failed. ${lastError}`, "error");
+      } else {
+        showFlash("photos-message", lastError || "Failover upload failed.", "error");
+      }
+    });
+  }
+
   window.initAdminDashboard = function initAdminDashboard() {
     bindDelegatedActions();
+    initAdminFailoverUpload();
     const rsvpStatusEl = $("edit-rsvp-status");
     if (rsvpStatusEl) {
       rsvpStatusEl.addEventListener("change", () => {

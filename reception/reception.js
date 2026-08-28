@@ -703,7 +703,7 @@
 
     updateTabIndicator();
 
-    if (tabId === "photos" && !state.photos.length) loadPhotos();
+    // Guest Photos tab is the Google Photos album. Local failover lives in admin only.
   }
 
   let touchStartX = 0;
@@ -1848,8 +1848,6 @@
     initParticles();
     initTabs();
     initFloorPlan();
-    initPhotoGallery();
-    initPhotoUpload();
     initCoupleMessageForm();
     initGiftBox();
     initWelcome();

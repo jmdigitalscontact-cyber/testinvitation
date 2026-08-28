@@ -252,6 +252,10 @@ try {
             handleSubmitReceptionMessage();
             break;
 
+        case 'admin-upload-reception-photo':
+            handleUploadReceptionPhoto(true);
+            break;
+
         case 'admin-get-reception-photos':
             handleAdminGetReceptionPhotos();
             break;

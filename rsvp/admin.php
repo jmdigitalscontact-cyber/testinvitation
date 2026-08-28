@@ -306,15 +306,32 @@
                 </div>
             </section>
 
-            <!-- POV Photos -->
+            <!-- POV Photos (local failover — not shown on the guest Photos tab) -->
             <section id="photos" class="admin-panel" aria-label="POV Photos">
                 <div id="photos-message" class="admin-flash" role="status"></div>
+
+                <div class="admin-card admin-failover-card">
+                    <p class="admin-failover-kicker">Failover only</p>
+                    <h2>Local photo backup</h2>
+                    <p class="admin-card-lead">Guests share in Google Photos from the reception Photos tab. This gallery is hidden from guests. Use it only if the shared album is unavailable, then export the ZIP into Google Photos later.</p>
+                    <div class="admin-actions admin-actions--wrap">
+                        <a class="admin-btn admin-btn-primary" href="https://photos.app.goo.gl/LyebvyWMcerYSJmR6" target="_blank" rel="noopener noreferrer">Open Google Photos album</a>
+                    </div>
+
+                    <div class="admin-failover-upload">
+                        <label class="admin-failover-drop" for="admin-failover-photo-input">
+                            <strong>Upload failover photos</strong>
+                            <span>JPEG, PNG, WebP, HEIC · max 10MB. Stored locally, not shown on reception.</span>
+                        </label>
+                        <input id="admin-failover-photo-input" type="file" accept="image/*" multiple hidden>
+                    </div>
+                </div>
 
                 <div class="admin-card">
                     <div class="admin-photos-head">
                         <div>
-                            <h2>Guest POV gallery</h2>
-                            <p class="admin-card-lead">All guest-uploaded reception photos in one place. Export everything or clear the gallery for testing.</p>
+                            <h2>Failover gallery</h2>
+                            <p class="admin-card-lead">Local copies collected here if Google Photos is down. Export everything or clear the gallery for testing.</p>
                         </div>
                         <div class="admin-kpi admin-kpi--compact">
                             <div class="admin-kpi-label">Total photos</div>
