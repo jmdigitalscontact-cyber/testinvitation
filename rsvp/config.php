@@ -72,6 +72,10 @@ define('GOOGLE_PHOTOS_CLIENT_ID', EnvironmentLoader::get('GOOGLE_PHOTOS_CLIENT_I
 define('GOOGLE_PHOTOS_CLIENT_SECRET', EnvironmentLoader::get('GOOGLE_PHOTOS_CLIENT_SECRET', ''));
 define('GOOGLE_PHOTOS_REFRESH_TOKEN', EnvironmentLoader::get('GOOGLE_PHOTOS_REFRESH_TOKEN', ''));
 define('GOOGLE_PHOTOS_ALBUM_ID', EnvironmentLoader::get('GOOGLE_PHOTOS_ALBUM_ID', ''));
+define('GOOGLE_PHOTOS_SHARE_URL', EnvironmentLoader::get(
+    'GOOGLE_PHOTOS_SHARE_URL',
+    'https://photos.app.goo.gl/LyebvyWMcerYSJmR6'
+));
 
 // Security headers
 $allowed_origins_env = EnvironmentLoader::get('ALLOWED_ORIGINS', 'http://localhost,http://127.0.0.1,https://yourdomain.com');

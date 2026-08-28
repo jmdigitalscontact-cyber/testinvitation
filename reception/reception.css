@@ -1052,6 +1052,154 @@ body {
   }
 }
 
+.rec-moments {
+  margin-top: 1.85rem;
+  padding-top: 1.75rem;
+  border-top: 1px solid var(--album-line);
+}
+
+.rec-moments__header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 0.75rem 1.25rem;
+  margin-bottom: 1.15rem;
+}
+
+.rec-moments__kicker {
+  margin: 0 0 0.4rem;
+  font-family: var(--rec-font-body);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--album-ink);
+}
+
+.rec-moments__title {
+  margin: 0;
+  font-family: var(--rec-font-display);
+  font-size: clamp(1.85rem, 6vw, 2.55rem);
+  font-weight: 600;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  color: var(--album-ink);
+}
+
+.rec-moments__status {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin: 0;
+  max-width: 16rem;
+  font-family: var(--rec-font-body);
+  font-size: 0.72rem;
+  font-weight: 500;
+  line-height: 1.45;
+  color: var(--album-ink);
+}
+
+.rec-moments__dot {
+  flex: 0 0 auto;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: #3d7a4a;
+  box-shadow: 0 0 0 4px rgba(61, 122, 74, 0.16);
+}
+
+.rec-moments__grid {
+  display: flex;
+  gap: 0.55rem;
+  overflow-x: auto;
+  padding-bottom: 0.15rem;
+  scrollbar-width: thin;
+}
+
+.rec-moments__item {
+  flex: 1 1 0;
+  min-width: 4.6rem;
+  max-width: calc((100% - 2.2rem) / 5);
+  aspect-ratio: 3 / 4;
+  border-radius: 1.05rem;
+  overflow: hidden;
+  background: rgba(45, 66, 57, 0.08);
+}
+
+.rec-moments__item img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.rec-moments__empty {
+  margin: 0 0 1.15rem;
+  font-size: 0.88rem;
+  line-height: 1.5;
+  color: var(--album-muted);
+}
+
+.rec-moments__empty[hidden],
+.rec-moments__status[hidden] {
+  display: none;
+}
+
+.rec-moments__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem 1.35rem;
+  margin-top: 1.2rem;
+}
+
+.rec-moments__album {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.72rem 1.35rem;
+  border-radius: 999px;
+  background: var(--album-ink);
+  color: #fff;
+  font-family: var(--rec-font-body);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  text-decoration: none;
+}
+
+.rec-moments__album:focus-visible {
+  outline: 2px solid var(--album-ink);
+  outline-offset: 3px;
+}
+
+.rec-moments__add {
+  font-family: var(--rec-font-body);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--album-ink);
+  text-decoration: underline;
+  text-underline-offset: 0.28em;
+}
+
+.rec-moments__add:focus-visible {
+  outline: 2px solid var(--album-ink);
+  outline-offset: 4px;
+}
+
+@media (max-width: 639px) {
+  .rec-moments__item {
+    flex: 0 0 38%;
+    min-width: 7.5rem;
+    max-width: none;
+  }
+}
+
 /* ═══════════════════════════════════════════
    SEARCH TAB
    ═══════════════════════════════════════════ */

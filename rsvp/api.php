@@ -232,6 +232,10 @@ try {
             handleGetReceptionPhotos();
             break;
 
+        case 'get-google-photos-album':
+            handleGetGooglePhotosAlbum();
+            break;
+
         case 'get-reception-votes':
             handleGetReceptionVotes();
             break;

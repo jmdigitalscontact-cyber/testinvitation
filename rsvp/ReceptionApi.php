@@ -320,6 +320,181 @@ function handleGetReceptionPhotos() {
     sendResponse(['success' => true, 'data' => $photos]);
 }
 
+function receptionGooglePhotosShareUrl() {
+    $url = defined('GOOGLE_PHOTOS_SHARE_URL') ? trim((string)GOOGLE_PHOTOS_SHARE_URL) : '';
+    return $url !== '' ? $url : 'https://photos.app.goo.gl/LyebvyWMcerYSJmR6';
+}
+
+function receptionHttpGetLimited($url, $maxBytes = 5242880) {
+    $headers = [
+        'User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept: text/html,application/xhtml+xml',
+    ];
+
+    if (function_exists('curl_init')) {
+        $ch = curl_init($url);
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_FOLLOWLOCATION => true,
+            CURLOPT_MAXREDIRS => 5,
+            CURLOPT_TIMEOUT => 18,
+            CURLOPT_HTTPHEADER => $headers,
+            CURLOPT_SSL_VERIFYPEER => false,
+            CURLOPT_BUFFERSIZE => 256000,
+        ]);
+        $body = curl_exec($ch);
+        $httpCode = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $finalUrl = (string)curl_getinfo($ch, CURLINFO_EFFECTIVE_URL);
+        curl_close($ch);
+        if ($httpCode < 200 || $httpCode >= 300 || $body === false) {
+            return false;
+        }
+        if (strlen($body) > $maxBytes) {
+            return false;
+        }
+        return ['body' => $body, 'url' => $finalUrl];
+    }
+
+    $ctx = stream_context_create([
+        'http' => [
+            'timeout' => 18,
+            'header' => implode("\r\n", $headers),
+            'follow_location' => 1,
+            'max_redirects' => 5,
+        ],
+        'ssl' => [
+            'verify_peer' => false,
+            'verify_peer_name' => false,
+        ],
+    ]);
+    $body = @file_get_contents($url, false, $ctx);
+    if ($body === false || strlen($body) > $maxBytes) {
+        return false;
+    }
+    $finalUrl = $url;
+    if (!empty($http_response_header) && is_array($http_response_header)) {
+        foreach ($http_response_header as $line) {
+            if (stripos($line, 'Location:') === 0) {
+                $finalUrl = trim(substr($line, 9));
+            }
+        }
+    }
+    return ['body' => $body, 'url' => $finalUrl];
+}
+
+function receptionGooglePhotoHostAllowed($url) {
+    $host = strtolower((string)(parse_url($url, PHP_URL_HOST) ?: ''));
+    return in_array($host, ['photos.app.goo.gl', 'photos.google.com', 'lh3.googleusercontent.com'], true);
+}
+
+function receptionGooglePhotoDisplayUrl($src) {
+    $base = preg_replace('/=.+$/', '', (string)$src);
+    return $base . '=w1200-no';
+}
+
+function receptionParseGooglePhotosAlbum($html) {
+    $items = [];
+    $pattern = '/\["(AF1Qip[A-Za-z0-9_-]+)",\["(https:\/\/lh3\.googleusercontent\.com\/pw\/[^"]+)",(\d+),(\d+)[\s\S]{0,500}?\],(\d{13}),"[^"]*",\d+,(\d{13})/';
+    if (!preg_match_all($pattern, (string)$html, $matches, PREG_SET_ORDER)) {
+        return $items;
+    }
+
+    $seen = [];
+    foreach ($matches as $match) {
+        $id = $match[1];
+        if (isset($seen[$id])) {
+            continue;
+        }
+        $seen[$id] = true;
+        $src = receptionGooglePhotoDisplayUrl($match[2]);
+        $items[] = [
+            'id' => $id,
+            'src' => $src,
+            'width' => (int)$match[3],
+            'height' => (int)$match[4],
+            'createdAt' => (int)$match[5],
+            'addedAt' => (int)$match[6],
+        ];
+    }
+
+    usort($items, static function ($a, $b) {
+        return ($b['addedAt'] <=> $a['addedAt']) ?: ($b['createdAt'] <=> $a['createdAt']);
+    });
+
+    return $items;
+}
+
+function receptionGoogleAlbumCachePath() {
+    return sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'berbers-google-photos-album.json';
+}
+
+function receptionGoogleAlbumReadCache() {
+    $path = receptionGoogleAlbumCachePath();
+    if (!is_file($path)) {
+        return null;
+    }
+    $cached = json_decode((string)file_get_contents($path), true);
+    if (!is_array($cached) || !isset($cached['items']) || !is_array($cached['items'])) {
+        return null;
+    }
+    $cached['_mtime'] = (int)filemtime($path);
+    return $cached;
+}
+
+function receptionSendGoogleAlbumResponse($items, $source, $limit) {
+    header('Cache-Control: public, max-age=60, s-maxage=300, stale-while-revalidate=86400');
+    sendResponse([
+        'success' => true,
+        'source' => $source,
+        'albumUrl' => receptionGooglePhotosShareUrl(),
+        'items' => array_slice(array_values($items), 0, $limit),
+    ]);
+}
+
+function handleGetGooglePhotosAlbum() {
+    receptionRequireApiKey();
+
+    $limit = (int)($_GET['limit'] ?? 5);
+    if ($limit < 1) {
+        $limit = 5;
+    }
+    if ($limit > 12) {
+        $limit = 12;
+    }
+
+    $cacheTtl = 300;
+    $cached = receptionGoogleAlbumReadCache();
+    if ($cached && (time() - (int)$cached['_mtime']) < $cacheTtl) {
+        receptionSendGoogleAlbumResponse($cached['items'], 'google-photos-cache', $limit);
+    }
+
+    $fetched = receptionHttpGetLimited(receptionGooglePhotosShareUrl());
+    $finalUrl = is_array($fetched) ? (string)($fetched['url'] ?? '') : '';
+    $body = is_array($fetched) ? (string)($fetched['body'] ?? '') : '';
+    $hostOk = $finalUrl === '' || receptionGooglePhotoHostAllowed($finalUrl);
+
+    if ($body === '' || !$hostOk) {
+        if ($cached) {
+            receptionSendGoogleAlbumResponse($cached['items'], 'google-photos-stale', $limit);
+        }
+        header('Cache-Control: public, max-age=30');
+        sendResponse([
+            'success' => true,
+            'source' => 'google-photos-unavailable',
+            'albumUrl' => receptionGooglePhotosShareUrl(),
+            'items' => [],
+        ]);
+    }
+
+    $items = receptionParseGooglePhotosAlbum($body);
+    @file_put_contents(
+        receptionGoogleAlbumCachePath(),
+        json_encode(['items' => $items, 'fetchedAt' => time()], JSON_UNESCAPED_SLASHES)
+    );
+
+    receptionSendGoogleAlbumResponse($items, 'google-photos', $limit);
+}
+
 function receptionDbEngine() {
     return defined('DB_ENGINE') ? DB_ENGINE : 'mysql';
 }
