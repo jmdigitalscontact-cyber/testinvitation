@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Playfair+Display:wght@600&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="admin.css">
+    <link rel="stylesheet" href="admin.css?v=<?= (int) @filemtime(__DIR__ . '/admin.css') ?>">
 </head>
 <body class="admin-app">
     <div class="admin-shell">
@@ -250,7 +250,7 @@
             <section id="tables" class="admin-panel" aria-label="Seating">
                 <div class="admin-card">
                     <h2>Reception floor plan</h2>
-                    <p class="admin-card-lead">The guest Floor tab uses this layout. Drag tables and labels to match the venue. You can save a working plan now and adjust it again after you see the room next week.</p>
+                    <p class="admin-card-lead">The floor below is the reception room. Green circles are tables. Beige boxes are Stage, Entrance, and Buffet. Drag any of them to place them, then save.</p>
                     <div id="floor-plan-message" class="admin-flash" role="status"></div>
                     <div class="admin-floor-toolbar">
                         <button type="button" class="admin-btn admin-btn-secondary admin-btn-sm" id="floor-add-table-btn">Add table</button>
@@ -261,10 +261,15 @@
                         </label>
                         <button type="button" class="admin-btn admin-btn-primary admin-btn-sm" id="floor-save-btn">Save floor plan</button>
                     </div>
+                    <div class="admin-floor-key" aria-hidden="true">
+                        <span><i class="admin-floor-key__table"></i> Tables</span>
+                        <span><i class="admin-floor-key__marker"></i> Stage / Entrance / Buffet</span>
+                        <span>Drag anything on the floor to edit</span>
+                    </div>
                     <div class="admin-floor-editor" id="floor-plan-editor" aria-label="Editable reception floor plan">
                         <div class="admin-floor-room" id="admin-floor-room"></div>
                     </div>
-                    <p class="admin-muted" id="floor-plan-hint">Click a table or label, then drag. Saved changes show on the reception Floor tab.</p>
+                    <p class="admin-muted" id="floor-plan-hint">Green circles are tables. Beige boxes are Stage, Entrance, and Buffet. Drag them on the floor, then save.</p>
                 </div>
 
                 <div class="admin-card">

@@ -1634,7 +1634,7 @@
   }
 
   function selectedFloorHint() {
-    if (!floorPlanSelected) return "Click a table or label, then drag. Saved changes show on the reception Floor tab.";
+    if (!floorPlanSelected) return "Green circles are tables. Beige boxes are Stage, Entrance, and Buffet. Drag them on the floor, then save.";
     if (floorPlanSelected.type === "table") return `Selected Table ${floorPlanSelected.number}. Drag to move, or remove it.`;
     return `Selected ${floorPlanSelected.id}. Drag to move, or edit the label.`;
   }
@@ -1656,24 +1656,77 @@
     if (hint) hint.textContent = selectedFloorHint();
   }
 
+  function prepareAdminFloorRoom(room) {
+    const parentWidth = room.parentElement ? room.parentElement.clientWidth : 800;
+    const width = Math.max(320, Math.min(parentWidth, 800));
+    const height = Math.max(420, Math.round(width * 0.625));
+    room.style.position = "relative";
+    room.style.width = `${width}px`;
+    room.style.height = `${height}px`;
+    room.style.minHeight = `${height}px`;
+    room.style.paddingBottom = "0";
+    room.style.overflow = "hidden";
+    room.style.touchAction = "none";
+    room.style.userSelect = "none";
+
+    if (!room.querySelector(".admin-floor-grid")) {
+      const grid = document.createElement("div");
+      grid.className = "admin-floor-grid";
+      grid.setAttribute("aria-hidden", "true");
+      room.appendChild(grid);
+    }
+    if (!room.querySelector(".admin-floor-wall--top")) {
+      [
+        ["admin-floor-wall admin-floor-wall--top", "Stage wall"],
+        ["admin-floor-wall admin-floor-wall--bottom", "Entrance wall"],
+        ["admin-floor-wall admin-floor-wall--left", "Buffet side"],
+      ].forEach(([className, text]) => {
+        const wall = document.createElement("div");
+        wall.className = className;
+        wall.setAttribute("aria-hidden", "true");
+        wall.textContent = text;
+        room.appendChild(wall);
+      });
+    }
+  }
+
+  function placeAdminFloorPiece(el, box, isTable) {
+    el.style.position = "absolute";
+    el.style.left = `${box.left}%`;
+    el.style.top = `${box.top}%`;
+    el.style.margin = "0";
+    el.style.zIndex = isTable ? "4" : "3";
+    if (isTable) {
+      el.style.width = "auto";
+      el.style.height = "auto";
+      el.style.transform = "translate(-50%, -50%)";
+    } else {
+      el.style.width = `${box.width}%`;
+      el.style.height = `${box.height}%`;
+      el.style.transform = "none";
+    }
+  }
+
   function renderAdminFloorPlan() {
     const room = $("admin-floor-room");
     if (!room || !floorPlanDraft) return;
-    room.innerHTML = "";
+    prepareAdminFloorRoom(room);
+    room.querySelectorAll("[data-kind]").forEach((el) => el.remove());
 
     const markers = floorPlanDraft.markers || {};
     ["stage", "entrance", "bar"].forEach((id) => {
       const marker = markers[id];
       if (!marker) return;
-      const el = document.createElement("div");
-      el.className = `admin-floor-marker admin-floor-marker--${id}`;
+      const el = document.createElement("button");
+      el.type = "button";
+      el.className = `admin-floor-piece admin-floor-piece--marker admin-floor-piece--${id}`;
       el.dataset.kind = "marker";
       el.dataset.id = id;
-      el.style.left = `${marker.left}%`;
-      el.style.top = `${marker.top}%`;
-      el.style.width = `${marker.width}%`;
-      el.style.height = `${marker.height}%`;
-      el.textContent = marker.label || id;
+      el.innerHTML = `
+        <span class="admin-floor-marker-box"><span class="admin-floor-piece__title">${escapeHtml(marker.label || id)}</span></span>
+        <span class="admin-floor-piece__caption">Drag to move</span>
+      `;
+      placeAdminFloorPiece(el, marker, false);
       if (floorPlanSelected && floorPlanSelected.type === "marker" && floorPlanSelected.id === id) {
         el.classList.add("is-selected");
       }
@@ -1683,12 +1736,14 @@
     (floorPlanDraft.tables || []).forEach((table) => {
       const el = document.createElement("button");
       el.type = "button";
-      el.className = "admin-floor-table";
+      el.className = "admin-floor-piece admin-floor-piece--table";
       el.dataset.kind = "table";
       el.dataset.number = String(table.number);
-      el.style.left = `${table.left}%`;
-      el.style.top = `${table.top}%`;
-      el.textContent = String(table.number);
+      el.innerHTML = `
+        <span class="admin-floor-table-dot">${table.number}</span>
+        <span class="admin-floor-piece__caption">Table ${table.number} · drag</span>
+      `;
+      placeAdminFloorPiece(el, table, true);
       if (floorPlanSelected && floorPlanSelected.type === "table" && floorPlanSelected.number === table.number) {
         el.classList.add("is-selected");
       }
@@ -1821,11 +1876,14 @@
       if (!marker) return;
       marker.label = String(event.target.value || "").slice(0, 32);
       floorPlanDirty = true;
-      const node = document.querySelector(`.admin-floor-marker[data-id="${floorPlanSelected.id}"]`);
-      if (node) node.textContent = marker.label || floorPlanSelected.id;
+      const title = document.querySelector(`.admin-floor-piece[data-id="${floorPlanSelected.id}"] .admin-floor-piece__title`);
+      if (title) title.textContent = marker.label || floorPlanSelected.id;
     });
 
     $("floor-save-btn")?.addEventListener("click", saveFloorPlanEditor);
+    window.addEventListener("resize", () => {
+      if (floorPlanDraft && $("admin-floor-room")) renderAdminFloorPlan();
+    });
   }
 
   function loadFloorPlanEditor() {
