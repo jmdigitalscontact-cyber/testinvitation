@@ -34,7 +34,9 @@
     guestsLoaded: false,
     photos: [],
     activeTab: "search",
-    floorTransform: { scale: 1, x: 0, y: 0 },
+    markedSeatTable: null,
+    markedSeatName: "",
+    seatPreviewTimer: 0,
     theme: localStorage.getItem(THEME_STORAGE) || "dark",
     likedPhotos: loadLikedPhotoIds(),
     giftBoxOpened: false,
@@ -86,7 +88,7 @@
     els.floorTables = document.getElementById("floor-tables");
     els.floorRoom = document.getElementById("floor-room");
     els.floorContainer = document.getElementById("floor-3d-container");
-    els.floorResetBtn = document.getElementById("floor-reset-btn");
+    els.floorSeatPin = document.getElementById("floor-seat-pin");
     els.tablePopup = document.getElementById("table-popup");
     els.tablePopupTitle = document.getElementById("table-popup-title");
     els.tablePopupList = document.getElementById("table-popup-list");
@@ -796,10 +798,12 @@
     if (!query.length) {
       showSearchIdleStatus();
       clearSearchResults();
+      clearSeatMarker();
       return;
     }
 
     if (query.length < MIN_SEARCH_CHARS) {
+      window.clearTimeout(state.seatPreviewTimer);
       if (els.searchStatus) els.searchStatus.textContent = `Type at least ${MIN_SEARCH_CHARS} letters of your name.`;
       clearSearchResults();
       return;
@@ -807,14 +811,19 @@
 
     const filtered = state.guests.filter(g => guestMatches(g, query));
     renderSearchResults(filtered);
+    scheduleSeatPreview(filtered);
 
     if (!els.searchStatus) return;
     if (filtered.length === 0) {
       els.searchStatus.textContent = "No matches — try another spelling";
+      clearSeatMarker();
     } else if (filtered.length === 1) {
-      els.searchStatus.textContent = "1 match";
+      const assigned = filtered[0].tableNumber != null && filtered[0].tableNumber >= 1;
+      els.searchStatus.textContent = assigned
+        ? "1 match — showing your seat"
+        : "1 match";
     } else {
-      els.searchStatus.textContent = `${filtered.length} matches`;
+      els.searchStatus.textContent = `${filtered.length} matches — tap a name to see your seat`;
     }
   }
 
@@ -836,17 +845,18 @@
       const table = formatTableLabel(guest);
       const initials = getInitials(guest.name);
       const avatarColor = getAvatarColor(guest.name);
+      const canShowSeat = guest.tableNumber != null && guest.tableNumber >= 1;
 
       li.innerHTML = `
-        <div class="reception-result-card" style="animation-delay:${Math.min(index, 8) * 50}ms">
+        <div class="reception-result-card ${canShowSeat ? "is-clickable" : ""}" style="animation-delay:${Math.min(index, 8) * 50}ms">
           <div class="rec-result-avatar" style="background:${avatarColor}">${initials}</div>
           <div class="reception-result-card__info">
             <p class="reception-result-card__name">${escapeHtml(guest.name)}</p>
             <p class="reception-result-card__table ${table.unassigned ? "is-unassigned" : ""}">${escapeHtml(table.text)}</p>
           </div>
-          ${guest.tableNumber ? `
+          ${canShowSeat ? `
             <div class="reception-result-card__actions">
-              <button type="button" class="reception-btn reception-btn--secondary" data-view-table="${guest.tableNumber}">
+              <button type="button" class="reception-btn reception-btn--secondary" data-show-seat>
                 View
               </button>
             </div>
@@ -854,15 +864,30 @@
         </div>
       `;
       els.searchResults.appendChild(li);
-    });
 
-    els.searchResults.querySelectorAll("[data-view-table]").forEach(btn => {
-      btn.addEventListener("click", () => {
-        const tableNum = parseInt(btn.getAttribute("data-view-table"), 10);
-        switchTab("floor");
-        setTimeout(() => highlightTable(tableNum), 100);
-      });
+      if (!canShowSeat) return;
+      const card = li.querySelector(".reception-result-card");
+      const openSeat = (event) => {
+        event.preventDefault();
+        showGuestSeat(guest);
+      };
+      card.addEventListener("click", openSeat);
     });
+  }
+
+  function scheduleSeatPreview(matches) {
+    window.clearTimeout(state.seatPreviewTimer);
+    if (matches.length !== 1 || matches[0].tableNumber == null || matches[0].tableNumber < 1) {
+      return;
+    }
+    state.seatPreviewTimer = window.setTimeout(() => showGuestSeat(matches[0]), 550);
+  }
+
+  function showGuestSeat(guest) {
+    if (!guest || guest.tableNumber == null || guest.tableNumber < 1) return;
+    window.clearTimeout(state.seatPreviewTimer);
+    switchTab("floor");
+    window.setTimeout(() => highlightTable(guest.tableNumber, guest.name), 80);
   }
 
   /* ───────────────────────────────────────────
@@ -898,8 +923,6 @@
   async function initFloorPlan() {
     await loadFloorPlanLayout();
     renderFloorLayout();
-    initFloorPlanGestures();
-    initFloorTilt();
   }
 
   async function loadFloorPlanLayout() {
@@ -960,6 +983,10 @@
         showTablePopup(tableNum);
       });
     });
+
+    if (state.markedSeatTable) {
+      highlightTable(state.markedSeatTable);
+    }
   }
 
   function showTablePopup(tableNum) {
@@ -980,150 +1007,54 @@
     });
   }
 
-  function highlightTable(tableNumber) {
-    els.floorTables?.querySelectorAll(".rec-floor-table").forEach(el => {
-      const num = parseInt(el.dataset.table, 10);
-      el.classList.toggle("is-highlighted", num === tableNumber);
+  function highlightTable(tableNumber, guestName) {
+    const num = Number(tableNumber);
+    if (!Number.isFinite(num) || num < 1) {
+      clearSeatMarker();
+      return;
+    }
+
+    state.markedSeatTable = num;
+    if (guestName) state.markedSeatName = guestName;
+
+    els.floorTables?.querySelectorAll(".rec-floor-table").forEach((el) => {
+      el.classList.toggle("is-highlighted", parseInt(el.dataset.table, 10) === num);
     });
+    placeSeatPin(num);
+
     if (els.floorHint) {
       els.floorHint.hidden = false;
-      els.floorHint.textContent = `Table ${tableNumber} highlighted`;
-    }
-    resetFloorView();
-  }
-
-  function resetFloorView() {
-    state.floorTransform = { scale: 1, x: 0, y: 0 };
-    applyFloorTransform();
-  }
-
-  function applyFloorTransform() {
-    const { scale, x, y } = state.floorTransform;
-    if (els.floorStage) {
-      els.floorStage.style.transform = `translate(calc(-50% + ${x}px), calc(-50% + ${y}px)) scale(${scale})`;
+      els.floorHint.textContent = state.markedSeatName
+        ? `${state.markedSeatName} — Your seat is here · Table ${num}`
+        : `Your seat is here · Table ${num}`;
     }
   }
 
-  function initFloorPlanGestures() {
-    const viewport = els.floorViewport;
-    const stage = els.floorStage;
-    if (!viewport || !stage) return;
-
-    let pointers = new Map();
-    let lastPinchDist = 0;
-    let isDragging = false;
-    let dragStart = { x: 0, y: 0 };
-    let transformStart = { x: 0, y: 0 };
-
-    function getPinchDist() {
-      const pts = [...pointers.values()];
-      if (pts.length < 2) return 0;
-      return Math.hypot(pts[1].x - pts[0].x, pts[1].y - pts[0].y);
+  function placeSeatPin(tableNumber) {
+    const pin = els.floorSeatPin;
+    if (!pin) return;
+    const tables = Array.isArray(floorPlanLayout?.tables) ? floorPlanLayout.tables : DEFAULT_FLOOR_PLAN.tables;
+    const table = tables.find((item) => Number(item.number) === Number(tableNumber));
+    if (!table) {
+      pin.hidden = true;
+      return;
     }
-
-    viewport.addEventListener("pointerdown", e => {
-      viewport.setPointerCapture(e.pointerId);
-      pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
-      if (pointers.size === 1) {
-        isDragging = true;
-        dragStart = { x: e.clientX, y: e.clientY };
-        transformStart = { x: state.floorTransform.x, y: state.floorTransform.y };
-        viewport.classList.add("is-dragging");
-      } else if (pointers.size === 2) {
-        lastPinchDist = getPinchDist();
-      }
-    }, { passive: true });
-
-    viewport.addEventListener("pointermove", e => {
-      if (!pointers.has(e.pointerId)) return;
-      pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
-
-      if (pointers.size >= 2) {
-        const dist = getPinchDist();
-        if (lastPinchDist > 0) {
-          state.floorTransform.scale = Math.min(4, Math.max(0.5, state.floorTransform.scale * (dist / lastPinchDist)));
-          applyFloorTransform();
-        }
-        lastPinchDist = dist;
-        isDragging = false;
-      } else if (isDragging) {
-        state.floorTransform.x = transformStart.x + (e.clientX - dragStart.x);
-        state.floorTransform.y = transformStart.y + (e.clientY - dragStart.y);
-        applyFloorTransform();
-      }
-    }, { passive: true });
-
-    function endPointer(e) {
-      pointers.delete(e.pointerId);
-      if (pointers.size < 2) lastPinchDist = 0;
-      if (pointers.size === 0) { isDragging = false; viewport.classList.remove("is-dragging"); }
-    }
-
-    viewport.addEventListener("pointerup", endPointer);
-    viewport.addEventListener("pointercancel", endPointer);
-
-    viewport.addEventListener("wheel", e => {
-      e.preventDefault();
-      const delta = e.deltaY > 0 ? 0.92 : 1.08;
-      state.floorTransform.scale = Math.min(4, Math.max(0.5, state.floorTransform.scale * delta));
-      applyFloorTransform();
-    }, { passive: false });
-
-    stage.style.position = "absolute";
-    stage.style.top = "50%";
-    stage.style.left = "50%";
-    applyFloorTransform();
+    pin.style.left = `${table.left}%`;
+    pin.style.top = `${table.top}%`;
+    pin.hidden = false;
   }
 
-  function initFloorTilt() {
-    const container = els.floorContainer;
-    if (!container || !window.DeviceOrientationEvent) return;
-
-    let tiltActive = false;
-    let tiltX = 0, tiltY = 0;
-
-    function onDeviceOrientation(e) {
-      if (e.gamma == null || e.beta == null) return;
-      tiltY = Math.max(-15, Math.min(15, (e.gamma || 0) * 0.5));
-      tiltX = Math.max(-10, Math.min(10, (e.beta || 0) * 0.3));
-      tiltActive = true;
-      updateTilt();
-    }
-
-    function updateTilt() {
-      if (els.floorViewport) {
-        const rx = tiltActive ? tiltX : 5;
-        const ry = tiltActive ? tiltY : 0;
-        els.floorViewport.style.setProperty("--rec-floor-rotate-x", `${rx}deg`);
-        els.floorViewport.style.setProperty("--rec-floor-rotate-y", `${ry}deg`);
-      }
-    }
-
-    // Try to request permission on iOS
-    if (typeof DeviceOrientationEvent !== "undefined" && typeof DeviceOrientationEvent.requestPermission === "function") {
-      // Will be activated on user gesture
-    } else {
-      window.addEventListener("deviceorientation", onDeviceOrientation);
-    }
-
-    // Fallback: gentle auto-rotation
-    let autoAngle = 0;
-    function autoTilt() {
-      if (!tiltActive) {
-        autoAngle += 0.002;
-        const rx = 5 + Math.sin(autoAngle) * 2;
-        const ry = Math.cos(autoAngle * 0.7) * 3;
-        if (els.floorViewport) {
-          els.floorViewport.style.setProperty("--rec-floor-rotate-x", `${rx}deg`);
-          els.floorViewport.style.setProperty("--rec-floor-rotate-y", `${ry}deg`);
-        }
-      }
-      requestAnimationFrame(autoTilt);
-    }
-    autoTilt();
-
-    if (els.floorResetBtn) {
-      els.floorResetBtn.addEventListener("click", resetFloorView);
+  function clearSeatMarker() {
+    window.clearTimeout(state.seatPreviewTimer);
+    state.markedSeatTable = null;
+    state.markedSeatName = "";
+    els.floorTables?.querySelectorAll(".rec-floor-table").forEach((el) => {
+      el.classList.remove("is-highlighted");
+    });
+    if (els.floorSeatPin) els.floorSeatPin.hidden = true;
+    if (els.floorHint) {
+      els.floorHint.hidden = true;
+      els.floorHint.textContent = "";
     }
   }
 

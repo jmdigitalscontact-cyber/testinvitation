@@ -25,7 +25,7 @@
       href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=Manrope:wght@400;500;600;700&family=Playfair+Display:wght@500;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="./reception.css" />
+    <link rel="stylesheet" href="./reception.css?v=seat-pin-1" />
   </head>
   <body>
     <!-- ===== REAL PHOTO BACKGROUND ===== -->
@@ -184,14 +184,8 @@
           <div class="reception-panel__inner reception-panel__inner--floor">
             <div class="reception-floor-top">
               <h2 class="reception-panel__heading">Floor plan</h2>
-              <button type="button" class="reception-floor-reset-btn" id="floor-reset-btn" aria-label="Reset view">
-                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
-                  <path d="M3 3v5h5"/>
-                </svg>
-              </button>
             </div>
-            <p class="reception-panel__lead">Pinch to zoom. Drag to pan. Tap a table for details.</p>
+            <p class="reception-panel__lead">Search your name to find your seat. Tap a table to see who is sitting there.</p>
             <div class="reception-legend" id="floor-legend"></div>
             <div class="reception-floor-3d" id="floor-3d-container">
               <div class="reception-floor-wrap" id="floor-plan-viewport">
@@ -199,6 +193,10 @@
                   <div class="reception-floor__img-wrap">
                     <div class="reception-floor__room" id="floor-room">
                       <div class="rec-floor-tables" id="floor-tables"></div>
+                      <div class="rec-floor-seat-pin" id="floor-seat-pin" hidden>
+                        <span class="rec-floor-seat-pin__label">Your seat is here</span>
+                        <span class="rec-floor-seat-pin__arrow" aria-hidden="true"></span>
+                      </div>
                     </div>
                   </div>
                   <div class="reception-floor__hotspots" id="floor-plan-hotspots" aria-hidden="true"></div>
@@ -566,6 +564,6 @@
     <!-- ===== Confetti Canvas ===== -->
     <canvas id="confetti-canvas" class="confetti-canvas" aria-hidden="true" hidden></canvas>
 
-    <script src="./reception.js"></script>
+    <script src="./reception.js?v=seat-pin-1"></script>
   </body>
 </html>
