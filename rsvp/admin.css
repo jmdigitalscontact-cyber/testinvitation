@@ -885,3 +885,105 @@ body.admin-app {
   color: var(--admin-danger);
 }
 
+.admin-floor-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.65rem 0.75rem;
+  margin-bottom: 0.85rem;
+}
+
+.admin-floor-label-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-width: 10rem;
+}
+
+.admin-floor-label-field span {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--admin-muted);
+}
+
+.admin-floor-editor {
+  overflow: auto;
+}
+
+.admin-floor-room {
+  position: relative;
+  width: min(100%, 800px);
+  aspect-ratio: 800 / 500;
+  margin: 0 auto;
+  background: #f7f3ee;
+  border: 1px solid var(--admin-border);
+  border-radius: 12px;
+  overflow: hidden;
+  user-select: none;
+  touch-action: none;
+}
+
+.admin-floor-marker,
+.admin-floor-table {
+  position: absolute;
+  box-sizing: border-box;
+  cursor: grab;
+}
+
+.admin-floor-marker {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.2rem;
+  border-radius: 8px;
+  background: #e8dfd0;
+  border: 1px solid #c9b896;
+  color: #5c5348;
+  font-family: var(--admin-serif);
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  text-align: center;
+}
+
+.admin-floor-marker.is-selected,
+.admin-floor-table.is-selected {
+  outline: 2px solid var(--admin-sage-deep);
+  outline-offset: 2px;
+  z-index: 4;
+}
+
+.admin-floor-marker--stage {
+  background: #efe4c8;
+  border-color: #d4af47;
+}
+
+.admin-floor-table {
+  width: 9%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: var(--admin-sage-deep);
+  border: 2px solid #fff;
+  color: #fff;
+  font-family: var(--admin-serif);
+  font-weight: 700;
+  transform: translate(-50%, -50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 8px rgba(47, 61, 49, 0.18);
+  z-index: 3;
+}
+
+.admin-floor-table:active,
+.admin-floor-marker:active {
+  cursor: grabbing;
+}
+
+.admin-muted {
+  margin: 0.75rem 0 0;
+  color: var(--admin-muted);
+  font-size: 0.84rem;
+}
+

@@ -100,7 +100,10 @@
     if (tabName === "dashboard") loadStats();
     else if (tabName === "invitations") loadInvitations();
     else if (tabName === "responses") loadResponses();
-    else if (tabName === "tables") loadTableAssignments();
+    else if (tabName === "tables") {
+      loadTableAssignments();
+      loadFloorPlanEditor();
+    }
     else if (tabName === "photos") loadAdminPhotos();
     else if (tabName === "reception") {
       loadReceptionVotes();
@@ -1620,6 +1623,250 @@
       .then((data) => downloadCSV(data.data, "wedding-invitations"))
       .catch((error) => showFlash("export-message", error.message, "error"));
   };
+
+  let floorPlanDraft = null;
+  let floorPlanSelected = null;
+  let floorPlanDirty = false;
+  let floorEditorBound = false;
+
+  function cloneFloorPlan(plan) {
+    return JSON.parse(JSON.stringify(plan || {}));
+  }
+
+  function selectedFloorHint() {
+    if (!floorPlanSelected) return "Click a table or label, then drag. Saved changes show on the reception Floor tab.";
+    if (floorPlanSelected.type === "table") return `Selected Table ${floorPlanSelected.number}. Drag to move, or remove it.`;
+    return `Selected ${floorPlanSelected.id}. Drag to move, or edit the label.`;
+  }
+
+  function updateFloorPlanToolbar() {
+    const removeBtn = $("floor-remove-table-btn");
+    const labelInput = $("floor-marker-label");
+    if (removeBtn) removeBtn.disabled = !(floorPlanSelected && floorPlanSelected.type === "table");
+    if (labelInput) {
+      if (floorPlanSelected && floorPlanSelected.type === "marker" && floorPlanDraft?.markers?.[floorPlanSelected.id]) {
+        labelInput.disabled = false;
+        labelInput.value = floorPlanDraft.markers[floorPlanSelected.id].label || "";
+      } else {
+        labelInput.disabled = true;
+        labelInput.value = "";
+      }
+    }
+    const hint = $("floor-plan-hint");
+    if (hint) hint.textContent = selectedFloorHint();
+  }
+
+  function renderAdminFloorPlan() {
+    const room = $("admin-floor-room");
+    if (!room || !floorPlanDraft) return;
+    room.innerHTML = "";
+
+    const markers = floorPlanDraft.markers || {};
+    ["stage", "entrance", "bar"].forEach((id) => {
+      const marker = markers[id];
+      if (!marker) return;
+      const el = document.createElement("div");
+      el.className = `admin-floor-marker admin-floor-marker--${id}`;
+      el.dataset.kind = "marker";
+      el.dataset.id = id;
+      el.style.left = `${marker.left}%`;
+      el.style.top = `${marker.top}%`;
+      el.style.width = `${marker.width}%`;
+      el.style.height = `${marker.height}%`;
+      el.textContent = marker.label || id;
+      if (floorPlanSelected && floorPlanSelected.type === "marker" && floorPlanSelected.id === id) {
+        el.classList.add("is-selected");
+      }
+      room.appendChild(el);
+    });
+
+    (floorPlanDraft.tables || []).forEach((table) => {
+      const el = document.createElement("button");
+      el.type = "button";
+      el.className = "admin-floor-table";
+      el.dataset.kind = "table";
+      el.dataset.number = String(table.number);
+      el.style.left = `${table.left}%`;
+      el.style.top = `${table.top}%`;
+      el.textContent = String(table.number);
+      if (floorPlanSelected && floorPlanSelected.type === "table" && floorPlanSelected.number === table.number) {
+        el.classList.add("is-selected");
+      }
+      room.appendChild(el);
+    });
+
+    updateFloorPlanToolbar();
+  }
+
+  function selectFloorItem(selection, shouldRender) {
+    floorPlanSelected = selection;
+    if (shouldRender !== false) renderAdminFloorPlan();
+    else updateFloorPlanToolbar();
+  }
+
+  function percentFromPointer(event, room) {
+    const rect = room.getBoundingClientRect();
+    const x = ((event.clientX - rect.left) / rect.width) * 100;
+    const y = ((event.clientY - rect.top) / rect.height) * 100;
+    return {
+      left: Math.max(2, Math.min(98, x)),
+      top: Math.max(4, Math.min(96, y)),
+    };
+  }
+
+  function bindFloorPlanEditor() {
+    if (floorEditorBound) return;
+    const room = $("admin-floor-room");
+    if (!room) return;
+    floorEditorBound = true;
+
+    let drag = null;
+
+    room.addEventListener("pointerdown", (event) => {
+      const target = event.target.closest("[data-kind]");
+      if (!target || !floorPlanDraft) return;
+      event.preventDefault();
+      room.setPointerCapture(event.pointerId);
+      room.querySelectorAll(".is-selected").forEach((el) => el.classList.remove("is-selected"));
+      target.classList.add("is-selected");
+      if (target.dataset.kind === "table") {
+        selectFloorItem({ type: "table", number: parseInt(target.dataset.number, 10) }, false);
+      } else {
+        selectFloorItem({ type: "marker", id: target.dataset.id }, false);
+      }
+      const point = percentFromPointer(event, room);
+      drag = {
+        target,
+        kind: target.dataset.kind,
+        number: parseInt(target.dataset.number || "0", 10),
+        id: target.dataset.id || "",
+        offsetX: 0,
+        offsetY: 0,
+      };
+      if (drag.kind === "table") {
+        const table = floorPlanDraft.tables.find((item) => item.number === drag.number);
+        drag.offsetX = point.left - (table?.left || point.left);
+        drag.offsetY = point.top - (table?.top || point.top);
+      } else {
+        const marker = floorPlanDraft.markers[drag.id];
+        drag.offsetX = point.left - (marker?.left || point.left);
+        drag.offsetY = point.top - (marker?.top || point.top);
+      }
+    });
+
+    room.addEventListener("pointermove", (event) => {
+      if (!drag || !floorPlanDraft) return;
+      const point = percentFromPointer(event, room);
+      const left = Math.round(Math.max(4, Math.min(96, point.left - drag.offsetX)) * 10) / 10;
+      const top = Math.round(Math.max(6, Math.min(94, point.top - drag.offsetY)) * 10) / 10;
+      if (drag.kind === "table") {
+        const table = floorPlanDraft.tables.find((item) => item.number === drag.number);
+        if (!table) return;
+        table.left = left;
+        table.top = top;
+      } else {
+        const marker = floorPlanDraft.markers[drag.id];
+        if (!marker) return;
+        marker.left = Math.round(Math.max(0, Math.min(92, left)) * 10) / 10;
+        marker.top = Math.round(Math.max(0, Math.min(92, top)) * 10) / 10;
+      }
+      drag.target.style.left = `${left}%`;
+      drag.target.style.top = `${top}%`;
+      floorPlanDirty = true;
+    });
+
+    function endDrag() {
+      drag = null;
+    }
+    room.addEventListener("pointerup", endDrag);
+    room.addEventListener("pointercancel", endDrag);
+
+    $("floor-add-table-btn")?.addEventListener("click", () => {
+      if (!floorPlanDraft) return;
+      const used = new Set(floorPlanDraft.tables.map((table) => table.number));
+      let number = 1;
+      while (used.has(number) && number < 40) number += 1;
+      if (used.has(number)) {
+        showFlash("floor-plan-message", "You already have 40 tables on the plan.", "error");
+        return;
+      }
+      const col = floorPlanDraft.tables.length % 5;
+      const row = Math.floor(floorPlanDraft.tables.length / 5);
+      floorPlanDraft.tables.push({
+        number,
+        left: Math.min(90, 18 + col * 14),
+        top: Math.min(88, 42 + row * 14),
+      });
+      floorPlanDraft.tables.sort((a, b) => a.number - b.number);
+      floorPlanDirty = true;
+      selectFloorItem({ type: "table", number });
+      hideFlash("floor-plan-message");
+    });
+
+    $("floor-remove-table-btn")?.addEventListener("click", () => {
+      if (!floorPlanDraft || !floorPlanSelected || floorPlanSelected.type !== "table") return;
+      if (floorPlanDraft.tables.length <= 1) {
+        showFlash("floor-plan-message", "Keep at least one table on the plan.", "error");
+        return;
+      }
+      floorPlanDraft.tables = floorPlanDraft.tables.filter((table) => table.number !== floorPlanSelected.number);
+      floorPlanDirty = true;
+      floorPlanSelected = null;
+      renderAdminFloorPlan();
+    });
+
+    $("floor-marker-label")?.addEventListener("input", (event) => {
+      if (!floorPlanDraft || !floorPlanSelected || floorPlanSelected.type !== "marker") return;
+      const marker = floorPlanDraft.markers[floorPlanSelected.id];
+      if (!marker) return;
+      marker.label = String(event.target.value || "").slice(0, 32);
+      floorPlanDirty = true;
+      const node = document.querySelector(`.admin-floor-marker[data-id="${floorPlanSelected.id}"]`);
+      if (node) node.textContent = marker.label || floorPlanSelected.id;
+    });
+
+    $("floor-save-btn")?.addEventListener("click", saveFloorPlanEditor);
+  }
+
+  function loadFloorPlanEditor() {
+    bindFloorPlanEditor();
+    AdminAuth.apiCall("api.php?action=admin-get-floor-plan")
+      .then((res) => res.json())
+      .then((payload) => {
+        if (!payload || !payload.success) throw new Error(payload?.error || "Could not load floor plan");
+        floorPlanDraft = cloneFloorPlan(payload.data);
+        floorPlanSelected = null;
+        floorPlanDirty = false;
+        renderAdminFloorPlan();
+      })
+      .catch((error) => {
+        showFlash("floor-plan-message", error.message || "Could not load the floor plan.", "error");
+      });
+  }
+
+  function saveFloorPlanEditor() {
+    if (!floorPlanDraft) return;
+    const saveBtn = $("floor-save-btn");
+    if (saveBtn) saveBtn.disabled = true;
+    AdminAuth.apiCall("api.php?action=admin-save-floor-plan", {
+      method: "POST",
+      body: JSON.stringify({ plan: floorPlanDraft }),
+    })
+      .then((res) => res.json())
+      .then((payload) => {
+        if (!payload || !payload.success) throw new Error(payload?.error || "Save failed");
+        floorPlanDraft = cloneFloorPlan(payload.data);
+        floorPlanDirty = false;
+        renderAdminFloorPlan();
+        showFlash("floor-plan-message", "Floor plan saved. Guests will see this layout on the reception Floor tab.", "success");
+      })
+      .catch((error) => {
+        showFlash("floor-plan-message", error.message || "Could not save the floor plan.", "error");
+      })
+      .finally(() => {
+        if (saveBtn) saveBtn.disabled = false;
+      });
+  }
 
   window.loadTableAssignments = function loadTableAssignments() {
     Promise.all([

@@ -1983,3 +1983,152 @@ function handleAdminDownloadPhotosZip() {
         sendResponse(['success' => false, 'error' => 'PHP ZipArchive extension is not enabled on server'], 500);
     }
 }
+
+function receptionFloorPlanPath() {
+    return __DIR__ . '/../reception/data/floor-plan.json';
+}
+
+function receptionDefaultFloorPlan() {
+    return [
+        'legend' => [
+            ['id' => 'stage', 'label' => 'Stage'],
+            ['id' => 'entrance', 'label' => 'Entrance'],
+            ['id' => 'bar', 'label' => 'Buffet / Bar'],
+        ],
+        'tables' => [
+            ['number' => 1, 'left' => 22.5, 'top' => 56],
+            ['number' => 2, 'left' => 35, 'top' => 56],
+            ['number' => 3, 'left' => 47.5, 'top' => 56],
+            ['number' => 4, 'left' => 60, 'top' => 56],
+            ['number' => 5, 'left' => 72.5, 'top' => 56],
+            ['number' => 6, 'left' => 22.5, 'top' => 72],
+            ['number' => 7, 'left' => 35, 'top' => 72],
+            ['number' => 8, 'left' => 47.5, 'top' => 72],
+            ['number' => 9, 'left' => 60, 'top' => 72],
+            ['number' => 10, 'left' => 72.5, 'top' => 72],
+        ],
+        'markers' => [
+            'stage' => ['left' => 37.5, 'top' => 12, 'width' => 25, 'height' => 14, 'label' => 'Stage'],
+            'entrance' => ['left' => 40, 'top' => 80, 'width' => 20, 'height' => 8, 'label' => 'Entrance'],
+            'bar' => ['left' => 7.5, 'top' => 32, 'width' => 12.5, 'height' => 24, 'label' => 'Buffet / Bar'],
+        ],
+    ];
+}
+
+function receptionClampPercent($value, $min = 0, $max = 100) {
+    $number = is_numeric($value) ? (float)$value : $min;
+    if ($number < $min) {
+        return $min;
+    }
+    if ($number > $max) {
+        return $max;
+    }
+    return round($number, 2);
+}
+
+function receptionNormalizeFloorPlan($raw) {
+    $defaults = receptionDefaultFloorPlan();
+    $plan = is_array($raw) ? $raw : [];
+    $tables = [];
+    $seen = [];
+    $sourceTables = isset($plan['tables']) && is_array($plan['tables']) ? $plan['tables'] : $defaults['tables'];
+
+    foreach ($sourceTables as $table) {
+        if (!is_array($table)) {
+            continue;
+        }
+        $number = (int)($table['number'] ?? 0);
+        if ($number < 1 || $number > 40 || isset($seen[$number])) {
+            continue;
+        }
+        $seen[$number] = true;
+        $tables[] = [
+            'number' => $number,
+            'left' => receptionClampPercent($table['left'] ?? 50, 4, 96),
+            'top' => receptionClampPercent($table['top'] ?? 50, 8, 94),
+        ];
+        if (count($tables) >= 40) {
+            break;
+        }
+    }
+
+    usort($tables, static function ($a, $b) {
+        return $a['number'] <=> $b['number'];
+    });
+    if (!$tables) {
+        $tables = $defaults['tables'];
+    }
+
+    $markers = [];
+    $sourceMarkers = isset($plan['markers']) && is_array($plan['markers']) ? $plan['markers'] : [];
+    foreach ($defaults['markers'] as $id => $defaultMarker) {
+        $marker = isset($sourceMarkers[$id]) && is_array($sourceMarkers[$id]) ? $sourceMarkers[$id] : $defaultMarker;
+        $label = trim((string)($marker['label'] ?? $defaultMarker['label']));
+        if ($label === '') {
+            $label = $defaultMarker['label'];
+        }
+        $markers[$id] = [
+            'left' => receptionClampPercent($marker['left'] ?? $defaultMarker['left'], 0, 92),
+            'top' => receptionClampPercent($marker['top'] ?? $defaultMarker['top'], 0, 92),
+            'width' => receptionClampPercent($marker['width'] ?? $defaultMarker['width'], 8, 60),
+            'height' => receptionClampPercent($marker['height'] ?? $defaultMarker['height'], 6, 50),
+            'label' => substr($label, 0, 32),
+        ];
+    }
+
+    $legend = [];
+    foreach ($markers as $id => $marker) {
+        $legend[] = ['id' => $id, 'label' => $marker['label']];
+    }
+
+    return [
+        'legend' => $legend,
+        'tables' => $tables,
+        'markers' => $markers,
+    ];
+}
+
+function receptionReadFloorPlan() {
+    $path = receptionFloorPlanPath();
+    if (!is_file($path)) {
+        return receptionDefaultFloorPlan();
+    }
+    $decoded = json_decode((string)file_get_contents($path), true);
+    return receptionNormalizeFloorPlan($decoded);
+}
+
+function handleGetFloorPlan() {
+    receptionRequireApiKey();
+    header('Cache-Control: no-store');
+    sendResponse([
+        'success' => true,
+        'data' => receptionReadFloorPlan(),
+    ]);
+}
+
+function handleAdminGetFloorPlan() {
+    requireAdminAuth();
+    sendResponse([
+        'success' => true,
+        'data' => receptionReadFloorPlan(),
+    ]);
+}
+
+function handleAdminSaveFloorPlan() {
+    requireAdminAuth();
+    $input = getRequestInput();
+    $plan = receptionNormalizeFloorPlan($input['plan'] ?? $input);
+    $path = receptionFloorPlanPath();
+    $dir = dirname($path);
+    if (!is_dir($dir) && !@mkdir($dir, 0755, true)) {
+        sendResponse(['success' => false, 'error' => 'Could not create floor plan folder.'], 500);
+    }
+    $json = json_encode($plan, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+    if ($json === false || @file_put_contents($path, $json) === false) {
+        sendResponse(['success' => false, 'error' => 'Could not save the floor plan. Check that reception/data is writable.'], 500);
+    }
+    sendResponse([
+        'success' => true,
+        'data' => $plan,
+    ]);
+}

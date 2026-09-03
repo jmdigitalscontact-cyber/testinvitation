@@ -84,6 +84,7 @@
     els.floorLegend = document.getElementById("floor-legend");
     els.floorHint = document.getElementById("floor-highlight-hint");
     els.floorTables = document.getElementById("floor-tables");
+    els.floorRoom = document.getElementById("floor-room");
     els.floorContainer = document.getElementById("floor-3d-container");
     els.floorResetBtn = document.getElementById("floor-reset-btn");
     els.tablePopup = document.getElementById("table-popup");
@@ -867,25 +868,89 @@
   /* ───────────────────────────────────────────
      FLOOR PLAN — 3D Interactive
      ─────────────────────────────────────────── */
-  function initFloorPlan() {
-    renderFloorTables();
+  const DEFAULT_FLOOR_PLAN = {
+    legend: [
+      { id: "stage", label: "Stage" },
+      { id: "entrance", label: "Entrance" },
+      { id: "bar", label: "Buffet / Bar" },
+    ],
+    tables: [
+      { number: 1, left: 22.5, top: 56 },
+      { number: 2, left: 35, top: 56 },
+      { number: 3, left: 47.5, top: 56 },
+      { number: 4, left: 60, top: 56 },
+      { number: 5, left: 72.5, top: 56 },
+      { number: 6, left: 22.5, top: 72 },
+      { number: 7, left: 35, top: 72 },
+      { number: 8, left: 47.5, top: 72 },
+      { number: 9, left: 60, top: 72 },
+      { number: 10, left: 72.5, top: 72 },
+    ],
+    markers: {
+      stage: { left: 37.5, top: 12, width: 25, height: 14, label: "Stage" },
+      entrance: { left: 40, top: 80, width: 20, height: 8, label: "Entrance" },
+      bar: { left: 7.5, top: 32, width: 12.5, height: 24, label: "Buffet / Bar" },
+    },
+  };
+
+  let floorPlanLayout = DEFAULT_FLOOR_PLAN;
+
+  async function initFloorPlan() {
+    await loadFloorPlanLayout();
+    renderFloorLayout();
     initFloorPlanGestures();
     initFloorTilt();
   }
 
+  async function loadFloorPlanLayout() {
+    try {
+      const result = await apiGet("get-floor-plan");
+      if (result && result.success && result.data) {
+        floorPlanLayout = result.data;
+      }
+    } catch {
+      floorPlanLayout = DEFAULT_FLOOR_PLAN;
+    }
+  }
+
+  function renderFloorLayout() {
+    const plan = floorPlanLayout || DEFAULT_FLOOR_PLAN;
+    if (els.floorLegend) {
+      const legend = Array.isArray(plan.legend) ? plan.legend : [];
+      els.floorLegend.innerHTML = legend.map((item) =>
+        `<span class="reception-legend__chip">${escapeHtml(item.label || item.id)}</span>`
+      ).join("");
+    }
+
+    if (els.floorRoom) {
+      const markers = plan.markers || {};
+      els.floorRoom.querySelectorAll("[data-marker]").forEach((el) => el.remove());
+      ["stage", "entrance", "bar"].forEach((id) => {
+        const marker = markers[id];
+        if (!marker) return;
+        const el = document.createElement("div");
+        el.className = `rec-floor-marker rec-floor-marker--${id}`;
+        el.dataset.marker = id;
+        el.style.left = `${marker.left}%`;
+        el.style.top = `${marker.top}%`;
+        el.style.width = `${marker.width}%`;
+        el.style.height = `${marker.height}%`;
+        el.innerHTML = `<div class="rec-floor-marker__label">${escapeHtml(marker.label || id)}</div>`;
+        if (els.floorTables) els.floorRoom.insertBefore(el, els.floorTables);
+        else els.floorRoom.appendChild(el);
+      });
+    }
+
+    renderFloorTables();
+  }
+
   function renderFloorTables() {
     if (!els.floorTables) return;
-    const positions = [
-      { n: 1, x: 180, y: 280 }, { n: 2, x: 280, y: 280 },
-      { n: 3, x: 380, y: 280 }, { n: 4, x: 480, y: 280 },
-      { n: 5, x: 580, y: 280 }, { n: 6, x: 180, y: 360 },
-      { n: 7, x: 280, y: 360 }, { n: 8, x: 380, y: 360 },
-      { n: 9, x: 480, y: 360 }, { n: 10, x: 580, y: 360 },
-    ];
+    const tables = Array.isArray(floorPlanLayout?.tables) ? floorPlanLayout.tables : DEFAULT_FLOOR_PLAN.tables;
 
-    els.floorTables.innerHTML = positions.map(t =>
-      `<button type="button" class="rec-floor-table" data-table="${t.n}" style="left:${t.x}px;top:${t.y}px">
-        <span class="rec-floor-table__number">${t.n}</span>
+    els.floorTables.innerHTML = tables.map((t) =>
+      `<button type="button" class="rec-floor-table" data-table="${t.number}" style="left:${t.left}%;top:${t.top}%">
+        <span class="rec-floor-table__number">${t.number}</span>
       </button>`
     ).join("");
 

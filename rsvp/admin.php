@@ -249,6 +249,25 @@
             <!-- Seating -->
             <section id="tables" class="admin-panel" aria-label="Seating">
                 <div class="admin-card">
+                    <h2>Reception floor plan</h2>
+                    <p class="admin-card-lead">The guest Floor tab uses this layout. Drag tables and labels to match the venue. You can save a working plan now and adjust it again after you see the room next week.</p>
+                    <div id="floor-plan-message" class="admin-flash" role="status"></div>
+                    <div class="admin-floor-toolbar">
+                        <button type="button" class="admin-btn admin-btn-secondary admin-btn-sm" id="floor-add-table-btn">Add table</button>
+                        <button type="button" class="admin-btn admin-btn-secondary admin-btn-sm" id="floor-remove-table-btn" disabled>Remove selected table</button>
+                        <label class="admin-floor-label-field">
+                            <span>Selected label</span>
+                            <input type="text" id="floor-marker-label" maxlength="32" placeholder="Stage, Entrance…" disabled>
+                        </label>
+                        <button type="button" class="admin-btn admin-btn-primary admin-btn-sm" id="floor-save-btn">Save floor plan</button>
+                    </div>
+                    <div class="admin-floor-editor" id="floor-plan-editor" aria-label="Editable reception floor plan">
+                        <div class="admin-floor-room" id="admin-floor-room"></div>
+                    </div>
+                    <p class="admin-muted" id="floor-plan-hint">Click a table or label, then drag. Saved changes show on the reception Floor tab.</p>
+                </div>
+
+                <div class="admin-card">
                     <h2>Table planning</h2>
                     <div class="admin-form-grid">
                         <div class="admin-field">

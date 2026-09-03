@@ -200,6 +200,18 @@ try {
             handleAssignTable();
             break;
 
+        case 'get-floor-plan':
+            handleGetFloorPlan();
+            break;
+
+        case 'admin-get-floor-plan':
+            handleAdminGetFloorPlan();
+            break;
+
+        case 'admin-save-floor-plan':
+            handleAdminSaveFloorPlan();
+            break;
+
         case 'admin-update-rsvp':
             handleAdminUpdateRSVP();
             break;

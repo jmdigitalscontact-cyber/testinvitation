@@ -5,20 +5,20 @@
     { "id": "bar", "label": "Buffet / Bar" }
   ],
   "tables": [
-    { "number": 1, "left": 18, "top": 62, "width": 10, "height": 10 },
-    { "number": 2, "left": 32, "top": 62, "width": 10, "height": 10 },
-    { "number": 3, "left": 46, "top": 62, "width": 10, "height": 10 },
-    { "number": 4, "left": 60, "top": 62, "width": 10, "height": 10 },
-    { "number": 5, "left": 74, "top": 62, "width": 10, "height": 10 },
-    { "number": 6, "left": 18, "top": 78, "width": 10, "height": 10 },
-    { "number": 7, "left": 32, "top": 78, "width": 10, "height": 10 },
-    { "number": 8, "left": 46, "top": 78, "width": 10, "height": 10 },
-    { "number": 9, "left": 60, "top": 78, "width": 10, "height": 10 },
-    { "number": 10, "left": 74, "top": 78, "width": 10, "height": 10 }
+    { "number": 1, "left": 22.5, "top": 56 },
+    { "number": 2, "left": 35, "top": 56 },
+    { "number": 3, "left": 47.5, "top": 56 },
+    { "number": 4, "left": 60, "top": 56 },
+    { "number": 5, "left": 72.5, "top": 56 },
+    { "number": 6, "left": 22.5, "top": 72 },
+    { "number": 7, "left": 35, "top": 72 },
+    { "number": 8, "left": 47.5, "top": 72 },
+    { "number": 9, "left": 60, "top": 72 },
+    { "number": 10, "left": 72.5, "top": 72 }
   ],
   "markers": {
-    "stage": { "left": 38, "top": 8, "width": 24, "height": 12 },
-    "entrance": { "left": 42, "top": 92, "width": 16, "height": 6 },
-    "bar": { "left": 4, "top": 28, "width": 14, "height": 18 }
+    "stage": { "left": 37.5, "top": 12, "width": 25, "height": 14, "label": "Stage" },
+    "entrance": { "left": 40, "top": 80, "width": 20, "height": 8, "label": "Entrance" },
+    "bar": { "left": 7.5, "top": 32, "width": 12.5, "height": 24, "label": "Buffet / Bar" }
   }
 }
