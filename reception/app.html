@@ -183,7 +183,7 @@
             <div class="reception-floor-top">
               <h2 class="reception-panel__heading">Floor plan</h2>
             </div>
-            <p class="reception-panel__lead">Official Alta Terra Tagaytay layout. Search your name to find your seat, then tap a table to see who is sitting there.</p>
+            <p class="reception-panel__lead">Official Alta Terra Tagaytay layout. Search your name to find your seat, tap a table to see who is sitting there, or tap the plan to zoom.</p>
             <div class="reception-legend" id="floor-legend"></div>
             <div class="reception-floor-3d" id="floor-3d-container">
               <div class="reception-floor-wrap" id="floor-plan-viewport">
@@ -205,10 +205,12 @@
                   </div>
                   <div class="reception-floor__hotspots" id="floor-plan-hotspots" aria-hidden="true"></div>
                 </div>
+                <button type="button" class="reception-floor-zoom-btn" id="floor-zoom-btn">
+                  Tap to zoom
+                </button>
               </div>
             </div>
             <p class="reception-floor-hint" id="floor-highlight-hint" hidden></p>
-            <p class="reception-floor-scroll-hint">On a phone, swipe sideways to see the full hall.</p>
           </div>
         </section>
 
@@ -220,6 +222,22 @@
             <h3 class="rec-table-popup__title" id="table-popup-title"></h3>
             <ul class="rec-table-popup__list" id="table-popup-list"></ul>
           </div>
+        </div>
+
+        <!-- Floor plan zoom -->
+        <div class="rec-floor-zoom" id="floor-zoom-lightbox" hidden role="dialog" aria-modal="true" aria-label="Zoomed floor plan">
+          <div class="rec-floor-zoom__backdrop" data-floor-zoom-close></div>
+          <button type="button" class="rec-floor-zoom__close" data-floor-zoom-close aria-label="Close zoomed floor plan">&times;</button>
+          <div class="rec-floor-zoom__viewport" id="floor-zoom-viewport">
+            <img
+              class="rec-floor-zoom__img"
+              id="floor-zoom-img"
+              src="./assets/alta-terra-floor-plan.png"
+              alt="Alta Terra Tagaytay reception floor layout"
+              draggable="false"
+            />
+          </div>
+          <p class="rec-floor-zoom__hint">Pinch or double-tap to zoom · drag to move</p>
         </div>
 
         <!-- ===== TAB: Menu ===== -->

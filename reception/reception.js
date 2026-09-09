@@ -37,6 +37,7 @@
     markedSeatTable: null,
     markedSeatName: "",
     seatPreviewTimer: 0,
+    seatRevealTimer: 0,
     theme: "light",
     likedPhotos: loadLikedPhotoIds(),
     giftBoxOpened: false,
@@ -89,6 +90,10 @@
     els.floorRoom = document.getElementById("floor-room");
     els.floorContainer = document.getElementById("floor-3d-container");
     els.floorSeatPin = document.getElementById("floor-seat-pin");
+    els.floorZoomBtn = document.getElementById("floor-zoom-btn");
+    els.floorZoomLightbox = document.getElementById("floor-zoom-lightbox");
+    els.floorZoomViewport = document.getElementById("floor-zoom-viewport");
+    els.floorZoomImg = document.getElementById("floor-zoom-img");
     els.tablePopup = document.getElementById("table-popup");
     els.tablePopupTitle = document.getElementById("table-popup-title");
     els.tablePopupList = document.getElementById("table-popup-list");
@@ -695,6 +700,12 @@
     if (hash) history.replaceState(null, "", `#${hash}`);
     else history.replaceState(null, "", window.location.pathname + window.location.search);
 
+    if (tabId !== "floor") {
+      window.clearTimeout(state.seatRevealTimer);
+      els.app?.classList.remove("is-seat-reveal");
+      els.floorViewport?.classList.remove("is-seat-revealing");
+    }
+
     els.panels.forEach(panel => {
       const isActive = panel.dataset.panel === tabId;
       panel.classList.toggle("is-active", isActive);
@@ -815,7 +826,7 @@
     } else if (filtered.length === 1) {
       const assigned = filtered[0].tableNumber != null && filtered[0].tableNumber >= 1;
       els.searchStatus.textContent = assigned
-        ? "1 match — showing your seat"
+        ? `Found you — taking you to ${tableDisplayName(filtered[0].tableNumber)}`
         : "1 match";
     } else {
       els.searchStatus.textContent = `${filtered.length} matches — tap a name to see your seat`;
@@ -870,19 +881,49 @@
     });
   }
 
+  function prefersReducedMotion() {
+    return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  }
+
   function scheduleSeatPreview(matches) {
     window.clearTimeout(state.seatPreviewTimer);
+    window.clearTimeout(state.seatRevealTimer);
     if (matches.length !== 1 || matches[0].tableNumber == null || matches[0].tableNumber < 1) {
       return;
     }
-    state.seatPreviewTimer = window.setTimeout(() => showGuestSeat(matches[0]), 550);
+    const resultCard = els.searchResults?.querySelector(".reception-result-card");
+    resultCard?.classList.add("is-found");
+    const pauseMs = prefersReducedMotion() ? 120 : 1100;
+    state.seatPreviewTimer = window.setTimeout(() => showGuestSeat(matches[0], { animated: true }), pauseMs);
   }
 
-  function showGuestSeat(guest) {
+  function showGuestSeat(guest, options) {
     if (!guest || guest.tableNumber == null || guest.tableNumber < 1) return;
     window.clearTimeout(state.seatPreviewTimer);
+    window.clearTimeout(state.seatRevealTimer);
+
+    const animated = options?.animated !== false && !prefersReducedMotion();
+    const fromSearch = state.activeTab === "search";
+
+    if (!animated || !fromSearch) {
+      els.app?.classList.remove("is-seat-reveal");
+      switchTab("floor");
+      highlightTable(guest.tableNumber, guest.name);
+      return;
+    }
+
+    els.app?.classList.add("is-seat-reveal");
     switchTab("floor");
-    window.setTimeout(() => highlightTable(guest.tableNumber, guest.name), 80);
+    els.floorViewport?.classList.add("is-seat-revealing");
+
+    state.seatRevealTimer = window.setTimeout(() => {
+      highlightTable(guest.tableNumber, guest.name);
+    }, 720);
+
+    window.setTimeout(() => {
+      els.app?.classList.remove("is-seat-reveal");
+      els.floorViewport?.classList.remove("is-seat-revealing");
+    }, 1300);
   }
 
   /* ───────────────────────────────────────────
@@ -976,7 +1017,9 @@
     }).join("");
 
     els.floorTables.querySelectorAll(".rec-floor-table").forEach(btn => {
-      btn.addEventListener("click", () => {
+      btn.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
         const tableNum = parseInt(btn.dataset.table, 10);
         showTablePopup(tableNum);
       });
@@ -1054,6 +1097,159 @@
       els.floorHint.hidden = true;
       els.floorHint.textContent = "";
     }
+  }
+
+  /* ───────────────────────────────────────────
+     FLOOR PLAN ZOOM
+     ─────────────────────────────────────────── */
+  const FLOOR_ZOOM_MIN = 1;
+  const FLOOR_ZOOM_MAX = 4.5;
+  let floorZoom = { scale: 1, x: 0, y: 0, open: false, lastTap: 0 };
+  const floorPointers = new Map();
+  let floorPinchStart = null;
+  let floorPanStart = null;
+
+  function floorZoomDistance(a, b) {
+    return Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+  }
+
+  function applyFloorZoomTransform() {
+    if (!els.floorZoomImg) return;
+    els.floorZoomImg.style.transform = `translate(${floorZoom.x}px, ${floorZoom.y}px) scale(${floorZoom.scale})`;
+  }
+
+  function resetFloorZoomTransform() {
+    floorZoom.scale = 1;
+    floorZoom.x = 0;
+    floorZoom.y = 0;
+    applyFloorZoomTransform();
+  }
+
+  function openFloorZoom() {
+    if (!els.floorZoomLightbox) return;
+    floorZoom.open = true;
+    resetFloorZoomTransform();
+    els.floorZoomLightbox.hidden = false;
+    document.body.classList.add("reception-lightbox-open");
+    els.floorZoomLightbox.querySelector("[data-floor-zoom-close]")?.focus();
+  }
+
+  function closeFloorZoom() {
+    if (!els.floorZoomLightbox) return;
+    floorZoom.open = false;
+    floorPointers.clear();
+    floorPinchStart = null;
+    floorPanStart = null;
+    els.floorZoomLightbox.hidden = true;
+    document.body.classList.remove("reception-lightbox-open");
+    resetFloorZoomTransform();
+    els.floorZoomBtn?.focus({ preventScroll: true });
+  }
+
+  function zoomFloorAt(nextScale, clientX, clientY) {
+    const view = els.floorZoomViewport;
+    if (!view) return;
+    const rect = view.getBoundingClientRect();
+    const cx = clientX - rect.left - rect.width / 2;
+    const cy = clientY - rect.top - rect.height / 2;
+    const prev = floorZoom.scale;
+    const scale = Math.max(FLOOR_ZOOM_MIN, Math.min(FLOOR_ZOOM_MAX, nextScale));
+    const ratio = scale / prev;
+    floorZoom.x = cx - (cx - floorZoom.x) * ratio;
+    floorZoom.y = cy - (cy - floorZoom.y) * ratio;
+    floorZoom.scale = scale;
+    if (scale <= 1.02) {
+      floorZoom.scale = 1;
+      floorZoom.x = 0;
+      floorZoom.y = 0;
+    }
+    applyFloorZoomTransform();
+  }
+
+  function initFloorZoom() {
+    if (!els.floorZoomLightbox || !els.floorZoomViewport || !els.floorZoomImg) return;
+
+    els.floorZoomBtn?.addEventListener("click", (event) => {
+      event.stopPropagation();
+      openFloorZoom();
+    });
+
+    els.floorViewport?.addEventListener("click", (event) => {
+      if (event.target.closest(".rec-floor-table") || event.target.closest("#floor-zoom-btn")) return;
+      openFloorZoom();
+    });
+
+    els.floorZoomLightbox.querySelectorAll("[data-floor-zoom-close]").forEach((el) => {
+      el.addEventListener("click", closeFloorZoom);
+    });
+
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && floorZoom.open) closeFloorZoom();
+    });
+
+    const viewport = els.floorZoomViewport;
+
+    viewport.addEventListener("pointerdown", (event) => {
+      if (!floorZoom.open) return;
+      viewport.setPointerCapture(event.pointerId);
+      floorPointers.set(event.pointerId, event);
+      if (floorPointers.size === 2) {
+        const [a, b] = [...floorPointers.values()];
+        floorPinchStart = {
+          dist: floorZoomDistance(a, b),
+          scale: floorZoom.scale,
+        };
+        floorPanStart = null;
+      } else if (floorPointers.size === 1) {
+        floorPanStart = { x: event.clientX - floorZoom.x, y: event.clientY - floorZoom.y };
+        const now = Date.now();
+        if (now - floorZoom.lastTap < 280) {
+          const next = floorZoom.scale > 1.4 ? 1 : 2.4;
+          zoomFloorAt(next, event.clientX, event.clientY);
+          floorZoom.lastTap = 0;
+        } else {
+          floorZoom.lastTap = now;
+        }
+      }
+    });
+
+    viewport.addEventListener("pointermove", (event) => {
+      if (!floorZoom.open || !floorPointers.has(event.pointerId)) return;
+      floorPointers.set(event.pointerId, event);
+      if (floorPointers.size >= 2 && floorPinchStart) {
+        const [a, b] = [...floorPointers.values()];
+        const dist = floorZoomDistance(a, b);
+        const midX = (a.clientX + b.clientX) / 2;
+        const midY = (a.clientY + b.clientY) / 2;
+        zoomFloorAt(floorPinchStart.scale * (dist / floorPinchStart.dist), midX, midY);
+        viewport.classList.add("is-dragging");
+        return;
+      }
+      if (floorPanStart && floorZoom.scale > 1) {
+        floorZoom.x = event.clientX - floorPanStart.x;
+        floorZoom.y = event.clientY - floorPanStart.y;
+        applyFloorZoomTransform();
+        viewport.classList.add("is-dragging");
+      }
+    });
+
+    function endFloorPointer(event) {
+      floorPointers.delete(event.pointerId);
+      if (floorPointers.size < 2) floorPinchStart = null;
+      if (floorPointers.size === 0) {
+        floorPanStart = null;
+        viewport.classList.remove("is-dragging");
+      }
+    }
+    viewport.addEventListener("pointerup", endFloorPointer);
+    viewport.addEventListener("pointercancel", endFloorPointer);
+
+    viewport.addEventListener("wheel", (event) => {
+      if (!floorZoom.open) return;
+      event.preventDefault();
+      const next = floorZoom.scale * (event.deltaY < 0 ? 1.12 : 0.9);
+      zoomFloorAt(next, event.clientX, event.clientY);
+    }, { passive: false });
   }
 
   /* ───────────────────────────────────────────
@@ -1989,6 +2185,7 @@
     initParticles();
     initTabs();
     initFloorPlan();
+    initFloorZoom();
     initCoupleMessageForm();
     initGiftBox();
     initWelcome();
