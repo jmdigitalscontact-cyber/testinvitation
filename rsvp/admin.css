@@ -616,10 +616,11 @@ body.admin-app {
   font-size: 0.95rem;
 }
 
-.admin-table-overview-card ul {
-  margin: 0.5rem 0 0;
-  padding-left: 1.1rem;
-  font-size: 0.84rem;
+.admin-seating-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  white-space: nowrap;
 }
 
 .admin-planning-grid {

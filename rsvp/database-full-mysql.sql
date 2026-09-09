@@ -166,6 +166,7 @@ CREATE TABLE IF NOT EXISTS table_assignments (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
     invitation_id VARCHAR(50) NOT NULL,
     attendee_id BIGINT NULL,
+    guest_name VARCHAR(255) NOT NULL DEFAULT '',
     table_number INT NOT NULL,
     seat_number INT NULL,
     assigned_by BIGINT NULL,
@@ -174,15 +175,15 @@ CREATE TABLE IF NOT EXISTS table_assignments (
     CONSTRAINT fk_table_assignments_invitation FOREIGN KEY (invitation_id)
         REFERENCES invitations(invitation_id) ON DELETE CASCADE,
     CONSTRAINT fk_table_assignments_attendee FOREIGN KEY (attendee_id)
-        REFERENCES attendees(id) ON DELETE CASCADE,
+        REFERENCES attendees(id) ON DELETE SET NULL,
     CONSTRAINT fk_table_assignments_admin FOREIGN KEY (assigned_by)
-        REFERENCES admin_users(id) ON DELETE SET NULL,
-    CONSTRAINT unique_invitation_attendee UNIQUE (invitation_id, attendee_id)
+        REFERENCES admin_users(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE INDEX idx_table_assignments_invitation_id ON table_assignments(invitation_id);
 CREATE INDEX idx_table_assignments_attendee_id ON table_assignments(attendee_id);
 CREATE INDEX idx_table_assignments_table_number ON table_assignments(table_number);
+CREATE INDEX idx_table_assignments_guest_name ON table_assignments(invitation_id, guest_name);
 
 -- ------------------------------------------------------------
 -- 10) RECEPTION PHOTOS

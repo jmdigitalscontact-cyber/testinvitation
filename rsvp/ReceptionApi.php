@@ -171,96 +171,553 @@ function handleGenerateReceptionQR() {
     ]);
 }
 
+function seatingNormalizeGuestName($name) {
+    $name = trim(html_entity_decode((string)$name, ENT_QUOTES, 'UTF-8'));
+    $name = preg_replace('/\s+/u', ' ', $name);
+    return is_string($name) ? $name : '';
+}
+
+function seatingGuestKey($name) {
+    $normalized = seatingNormalizeGuestName($name);
+    if ($normalized === '') {
+        return '';
+    }
+    return function_exists('mb_strtolower')
+        ? mb_strtolower($normalized, 'UTF-8')
+        : strtolower($normalized);
+}
+
+function seatingPersonIsGoing($attendee) {
+    if (!is_array($attendee)) {
+        return false;
+    }
+    $name = seatingNormalizeGuestName($attendee['attendee_name'] ?? $attendee['name'] ?? '');
+    if ($name === '') {
+        return false;
+    }
+    foreach (['attending', 'going', 'is_going'] as $flag) {
+        if (!array_key_exists($flag, $attendee)) {
+            continue;
+        }
+        $value = $attendee[$flag];
+        if (is_string($value)) {
+            return in_array(strtolower(trim($value)), ['1', 'true', 'yes', 'y', 'on', 'checked'], true);
+        }
+        return (bool)$value;
+    }
+    return true;
+}
+
+function seatingSqlIntOrNull($value) {
+    if ($value === null || $value === '') {
+        return 'NULL';
+    }
+    return (string)((int)$value);
+}
+
+function seatingEnsureAssignmentsTable($mysqli) {
+    $exists = $mysqli->query("SHOW TABLES LIKE 'table_assignments'");
+    if (!$exists || $exists->num_rows === 0) {
+        $attendeeFk = '';
+        if (seatingTableExists($mysqli, 'attendees')) {
+            $attendeeFk = ', CONSTRAINT fk_table_assignments_attendee FOREIGN KEY (attendee_id) REFERENCES attendees(id) ON DELETE SET NULL';
+        }
+        $adminFk = '';
+        if (seatingTableExists($mysqli, 'admin_users')) {
+            $adminFk = ', CONSTRAINT fk_table_assignments_admin FOREIGN KEY (assigned_by) REFERENCES admin_users(id) ON DELETE SET NULL';
+        }
+        $created = $mysqli->query("
+            CREATE TABLE IF NOT EXISTS table_assignments (
+                id BIGINT AUTO_INCREMENT PRIMARY KEY,
+                invitation_id VARCHAR(50) NOT NULL,
+                attendee_id BIGINT NULL,
+                guest_name VARCHAR(255) NOT NULL DEFAULT '',
+                table_number INT NOT NULL,
+                seat_number INT NULL,
+                assigned_by BIGINT NULL,
+                assigned_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                CONSTRAINT fk_table_assignments_invitation FOREIGN KEY (invitation_id) REFERENCES invitations(invitation_id) ON DELETE CASCADE
+                {$attendeeFk}
+                {$adminFk}
+            )
+        ");
+        if ($created) {
+            $mysqli->query("CREATE INDEX idx_table_assignments_invitation_id ON table_assignments(invitation_id)");
+            $mysqli->query("CREATE INDEX idx_table_assignments_attendee_id ON table_assignments(attendee_id)");
+            $mysqli->query("CREATE INDEX idx_table_assignments_table_number ON table_assignments(table_number)");
+            $mysqli->query("CREATE INDEX idx_table_assignments_guest_name ON table_assignments(invitation_id, guest_name)");
+        }
+        return;
+    }
+
+    $column = $mysqli->query("SHOW COLUMNS FROM table_assignments LIKE 'guest_name'");
+    if ($column && $column->num_rows === 0) {
+        $mysqli->query("ALTER TABLE table_assignments ADD COLUMN guest_name VARCHAR(255) NOT NULL DEFAULT ''");
+    }
+
+    $unique = $mysqli->query("SHOW INDEX FROM table_assignments");
+    if ($unique) {
+        while ($indexRow = $unique->fetch_assoc()) {
+            if (($indexRow['Key_name'] ?? '') === 'unique_invitation_attendee') {
+                $mysqli->query("ALTER TABLE table_assignments DROP INDEX unique_invitation_attendee");
+                break;
+            }
+        }
+    }
+
+    if (seatingTableExists($mysqli, 'attendees')) {
+        $fk = $mysqli->query("
+            SELECT CONSTRAINT_NAME, DELETE_RULE
+            FROM information_schema.REFERENTIAL_CONSTRAINTS
+            WHERE CONSTRAINT_SCHEMA = DATABASE()
+              AND TABLE_NAME = 'table_assignments'
+              AND REFERENCED_TABLE_NAME = 'attendees'
+            LIMIT 1
+        ");
+        if ($fk && ($row = $fk->fetch_assoc()) && !empty($row['CONSTRAINT_NAME']) && strtoupper((string)$row['DELETE_RULE']) === 'CASCADE') {
+            $name = str_replace('`', '', $row['CONSTRAINT_NAME']);
+            $mysqli->query("ALTER TABLE table_assignments DROP FOREIGN KEY `{$name}`");
+            $mysqli->query("
+                ALTER TABLE table_assignments
+                ADD CONSTRAINT fk_table_assignments_attendee
+                FOREIGN KEY (attendee_id) REFERENCES attendees(id) ON DELETE SET NULL
+            ");
+        }
+    }
+}
+
+function seatingTableExists($mysqli, $tableName) {
+    $escaped = $mysqli->real_escape_string($tableName);
+    $result = $mysqli->query("SHOW TABLES LIKE '{$escaped}'");
+    return $result && $result->num_rows > 0;
+}
+
+function seatingCollectConfirmedPeople($mysqli) {
+    $people = [];
+    $result = $mysqli->query("
+        SELECT i.invitation_id, i.guest_name AS party_name,
+               r.attendees, r.special_notes
+        FROM invitations i
+        INNER JOIN rsvp_responses r ON r.invitation_id = i.invitation_id
+        WHERE r.attending = 'yes'
+        ORDER BY i.guest_name ASC
+    ");
+    if (!$result) {
+        return $people;
+    }
+
+    $attendeesByInvitation = [];
+    if (seatingTableExists($mysqli, 'attendees')) {
+        $attendeeResult = $mysqli->query("
+            SELECT a.id, a.invitation_id, a.attendee_name
+            FROM attendees a
+            INNER JOIN rsvp_responses r ON r.invitation_id = a.invitation_id AND r.attending = 'yes'
+            ORDER BY a.id ASC
+        ");
+        if ($attendeeResult) {
+            while ($row = $attendeeResult->fetch_assoc()) {
+                $name = seatingNormalizeGuestName($row['attendee_name'] ?? '');
+                if ($name === '') {
+                    continue;
+                }
+                $invitationId = (string)$row['invitation_id'];
+                $attendeesByInvitation[$invitationId][] = [
+                    'attendee_id' => (int)$row['id'],
+                    'guest_name' => $name,
+                ];
+            }
+        }
+    }
+
+    while ($row = $result->fetch_assoc()) {
+        $invitationId = (string)$row['invitation_id'];
+        $partyName = seatingNormalizeGuestName($row['party_name'] ?? '');
+        $names = $attendeesByInvitation[$invitationId] ?? [];
+
+        if (!$names) {
+            $attendees = !empty($row['attendees']) ? json_decode($row['attendees'], true) : [];
+            if (is_array($attendees)) {
+                foreach ($attendees as $attendee) {
+                    if (!seatingPersonIsGoing($attendee)) {
+                        continue;
+                    }
+                    $name = seatingNormalizeGuestName($attendee['attendee_name'] ?? $attendee['name'] ?? '');
+                    if ($name === '') {
+                        continue;
+                    }
+                    $names[] = [
+                        'attendee_id' => null,
+                        'guest_name' => $name,
+                    ];
+                }
+            }
+        }
+
+        if (!$names && !empty($row['special_notes'])) {
+            $noteNames = preg_split('/\r\n|\r|\n|,/', (string)$row['special_notes']);
+            foreach ($noteNames as $noteName) {
+                $name = seatingNormalizeGuestName($noteName);
+                if ($name === '') {
+                    continue;
+                }
+                $names[] = [
+                    'attendee_id' => null,
+                    'guest_name' => $name,
+                ];
+            }
+        }
+
+        if (!$names && $partyName !== '') {
+            $names[] = [
+                'attendee_id' => null,
+                'guest_name' => $partyName,
+            ];
+        }
+
+        $usedKeys = [];
+        foreach ($names as $person) {
+            $key = seatingGuestKey($person['guest_name']);
+            if ($key === '' || isset($usedKeys[$key])) {
+                continue;
+            }
+            $usedKeys[$key] = true;
+            $people[] = [
+                'invitation_id' => $invitationId,
+                'party_name' => $partyName,
+                'guest_name' => $person['guest_name'],
+                'attendee_id' => $person['attendee_id'],
+            ];
+        }
+    }
+
+    usort($people, function ($a, $b) {
+        $byName = strcasecmp($a['guest_name'], $b['guest_name']);
+        if ($byName !== 0) {
+            return $byName;
+        }
+        return strcasecmp($a['party_name'], $b['party_name']);
+    });
+
+    return $people;
+}
+
+function seatingLoadAssignments($mysqli) {
+    if (!seatingTableExists($mysqli, 'table_assignments')) {
+        return [];
+    }
+    $result = $mysqli->query("
+        SELECT id, invitation_id, attendee_id, guest_name, table_number, seat_number
+        FROM table_assignments
+        ORDER BY id ASC
+    ");
+    if (!$result) {
+        return [];
+    }
+    $assignments = [];
+    while ($row = $result->fetch_assoc()) {
+        $assignments[] = [
+            'id' => (int)$row['id'],
+            'invitation_id' => (string)$row['invitation_id'],
+            'attendee_id' => $row['attendee_id'] !== null ? (int)$row['attendee_id'] : null,
+            'guest_name' => seatingNormalizeGuestName($row['guest_name'] ?? ''),
+            'table_number' => (int)$row['table_number'],
+            'seat_number' => $row['seat_number'] !== null ? (int)$row['seat_number'] : null,
+        ];
+    }
+    return $assignments;
+}
+
+function seatingFindAssignment(array $assignments, array $person) {
+    $invitationId = (string)($person['invitation_id'] ?? '');
+    $attendeeId = isset($person['attendee_id']) ? (int)$person['attendee_id'] : 0;
+    $guestKey = seatingGuestKey($person['guest_name'] ?? '');
+
+    foreach ($assignments as $assignment) {
+        if ($assignment['invitation_id'] !== $invitationId) {
+            continue;
+        }
+        if ($attendeeId > 0 && (int)($assignment['attendee_id'] ?? 0) === $attendeeId) {
+            return $assignment;
+        }
+    }
+
+    foreach ($assignments as $assignment) {
+        if ($assignment['invitation_id'] !== $invitationId) {
+            continue;
+        }
+        if ($guestKey !== '' && seatingGuestKey($assignment['guest_name']) === $guestKey) {
+            return $assignment;
+        }
+    }
+
+    foreach ($assignments as $assignment) {
+        if ($assignment['invitation_id'] !== $invitationId) {
+            continue;
+        }
+        if (($assignment['guest_name'] === '' || $assignment['guest_name'] === null)
+            && empty($assignment['attendee_id'])) {
+            return $assignment;
+        }
+    }
+
+    return null;
+}
+
+function seatingMigrateLegacyPartyAssignments($mysqli) {
+    if (!seatingTableExists($mysqli, 'table_assignments')) {
+        return;
+    }
+
+    $legacy = $mysqli->query("
+        SELECT id, invitation_id, attendee_id, table_number, seat_number, assigned_by
+        FROM table_assignments
+        WHERE guest_name = '' OR guest_name IS NULL
+    ");
+    if (!$legacy || $legacy->num_rows === 0) {
+        return;
+    }
+
+    $people = seatingCollectConfirmedPeople($mysqli);
+    $peopleByInvitation = [];
+    foreach ($people as $person) {
+        $peopleByInvitation[$person['invitation_id']][] = $person;
+    }
+
+    $namedAssignments = seatingLoadAssignments($mysqli);
+    $namedKeys = [];
+    foreach ($namedAssignments as $assignment) {
+        if ($assignment['guest_name'] === '') {
+            continue;
+        }
+        $namedKeys[$assignment['invitation_id'] . "\n" . seatingGuestKey($assignment['guest_name'])] = true;
+    }
+
+    while ($row = $legacy->fetch_assoc()) {
+        $assignmentId = (int)$row['id'];
+        $invitationId = (string)$row['invitation_id'];
+        $tableNumber = (int)$row['table_number'];
+        $seatNumberSql = seatingSqlIntOrNull($row['seat_number']);
+        $assignedBySql = seatingSqlIntOrNull($row['assigned_by']);
+        $attendeeId = $row['attendee_id'] !== null ? (int)$row['attendee_id'] : 0;
+
+        if ($attendeeId > 0) {
+            $matchedName = '';
+            foreach ($peopleByInvitation[$invitationId] ?? [] as $person) {
+                if ((int)$person['attendee_id'] === $attendeeId) {
+                    $matchedName = $person['guest_name'];
+                    break;
+                }
+            }
+            if ($matchedName === '' && seatingTableExists($mysqli, 'attendees')) {
+                $lookup = $mysqli->prepare("SELECT attendee_name FROM attendees WHERE id = ? LIMIT 1");
+                if ($lookup) {
+                    $lookup->bind_param('i', $attendeeId);
+                    $lookup->execute();
+                    $found = $lookup->get_result()->fetch_assoc();
+                    $lookup->close();
+                    $matchedName = seatingNormalizeGuestName($found['attendee_name'] ?? '');
+                }
+            }
+            if ($matchedName !== '') {
+                $stmt = $mysqli->prepare("UPDATE table_assignments SET guest_name = ? WHERE id = ?");
+                if ($stmt) {
+                    $stmt->bind_param('si', $matchedName, $assignmentId);
+                    $stmt->execute();
+                    $stmt->close();
+                }
+            }
+            continue;
+        }
+
+        $invitationSql = $mysqli->real_escape_string($invitationId);
+        foreach ($peopleByInvitation[$invitationId] ?? [] as $person) {
+            $key = $invitationId . "\n" . seatingGuestKey($person['guest_name']);
+            if (isset($namedKeys[$key])) {
+                continue;
+            }
+            $guestSql = $mysqli->real_escape_string($person['guest_name']);
+            $personAttendeeSql = seatingSqlIntOrNull($person['attendee_id']);
+            $mysqli->query("
+                INSERT INTO table_assignments (invitation_id, attendee_id, guest_name, table_number, seat_number, assigned_by)
+                VALUES ('{$invitationSql}', {$personAttendeeSql}, '{$guestSql}', {$tableNumber}, {$seatNumberSql}, {$assignedBySql})
+            ");
+            $namedKeys[$key] = true;
+        }
+
+        $stmt = $mysqli->prepare("DELETE FROM table_assignments WHERE id = ?");
+        if ($stmt) {
+            $stmt->bind_param('i', $assignmentId);
+            $stmt->execute();
+            $stmt->close();
+        }
+    }
+}
+
+function seatingDecoratePeople(array $people, array $assignments) {
+    $decorated = [];
+    foreach ($people as $person) {
+        $assignment = seatingFindAssignment($assignments, $person);
+        $personal = $assignment && (
+            seatingGuestKey($assignment['guest_name']) === seatingGuestKey($person['guest_name'])
+            || ((int)($assignment['attendee_id'] ?? 0) > 0 && (int)($assignment['attendee_id'] ?? 0) === (int)($person['attendee_id'] ?? 0))
+        );
+        $decorated[] = [
+            'invitation_id' => $person['invitation_id'],
+            'party_name' => $person['party_name'],
+            'guest_name' => $person['guest_name'],
+            'attendee_id' => $person['attendee_id'],
+            'assignment_id' => $assignment && $personal ? (int)$assignment['id'] : ($assignment ? (int)$assignment['id'] : null),
+            'table_number' => $assignment ? (int)$assignment['table_number'] : null,
+            'seat_number' => $assignment && !empty($assignment['seat_number']) ? (int)$assignment['seat_number'] : null,
+            'inherited' => $assignment && !$personal,
+        ];
+    }
+    return $decorated;
+}
+
+function seatingPrepareAdminList($mysqli) {
+    seatingEnsureAssignmentsTable($mysqli);
+    seatingMigrateLegacyPartyAssignments($mysqli);
+    $people = seatingCollectConfirmedPeople($mysqli);
+    $assignments = seatingLoadAssignments($mysqli);
+    return seatingDecoratePeople($people, $assignments);
+}
+
+function seatingFindConfirmedPerson($mysqli, $invitationId, $guestName) {
+    $key = seatingGuestKey($guestName);
+    if ($invitationId === '' || $key === '') {
+        return null;
+    }
+    foreach (seatingCollectConfirmedPeople($mysqli) as $person) {
+        if ($person['invitation_id'] === $invitationId && seatingGuestKey($person['guest_name']) === $key) {
+            return $person;
+        }
+    }
+    return null;
+}
+
+function seatingUpsertGuestAssignment($mysqli, $invitationId, $guestName, $tableNumber, $adminId) {
+    seatingEnsureAssignmentsTable($mysqli);
+    seatingMigrateLegacyPartyAssignments($mysqli);
+
+    $person = seatingFindConfirmedPerson($mysqli, $invitationId, $guestName);
+    if (!$person) {
+        return ['ok' => false, 'error' => 'That guest is not on the confirmed list.'];
+    }
+
+    $assignments = seatingLoadAssignments($mysqli);
+    $existing = null;
+    foreach ($assignments as $assignment) {
+        if ($assignment['invitation_id'] !== $invitationId) {
+            continue;
+        }
+        $sameName = seatingGuestKey($assignment['guest_name']) === seatingGuestKey($person['guest_name']);
+        $sameAttendee = (int)($assignment['attendee_id'] ?? 0) > 0
+            && (int)($assignment['attendee_id'] ?? 0) === (int)($person['attendee_id'] ?? 0);
+        if ($sameName || $sameAttendee) {
+            $existing = $assignment;
+            break;
+        }
+    }
+
+    $guestName = $person['guest_name'];
+    $invitationSql = $mysqli->real_escape_string($invitationId);
+    $guestSql = $mysqli->real_escape_string($guestName);
+    $attendeeSql = seatingSqlIntOrNull($person['attendee_id']);
+    $adminSql = seatingSqlIntOrNull($adminId > 0 ? $adminId : null);
+    $tableNumber = (int)$tableNumber;
+
+    if ($existing) {
+        $assignmentId = (int)$existing['id'];
+        $ok = $mysqli->query("
+            UPDATE table_assignments
+            SET guest_name = '{$guestSql}', attendee_id = {$attendeeSql}, table_number = {$tableNumber}, assigned_by = {$adminSql}
+            WHERE id = {$assignmentId}
+        ");
+        if (!$ok) {
+            return ['ok' => false, 'error' => 'Could not update the table assignment: ' . $mysqli->error];
+        }
+        return ['ok' => true];
+    }
+
+    $ok = $mysqli->query("
+        INSERT INTO table_assignments (invitation_id, attendee_id, guest_name, table_number, assigned_by)
+        VALUES ('{$invitationSql}', {$attendeeSql}, '{$guestSql}', {$tableNumber}, {$adminSql})
+    ");
+    if (!$ok) {
+        return ['ok' => false, 'error' => 'Could not save the table assignment: ' . $mysqli->error];
+    }
+    return ['ok' => true];
+}
+
+function seatingDeleteGuestAssignment($mysqli, $assignmentId, $invitationId = '', $guestName = '') {
+    seatingEnsureAssignmentsTable($mysqli);
+    seatingMigrateLegacyPartyAssignments($mysqli);
+
+    if ((int)$assignmentId > 0) {
+        $id = (int)$assignmentId;
+        $stmt = $mysqli->prepare("DELETE FROM table_assignments WHERE id = ?");
+        if (!$stmt) {
+            return ['ok' => false, 'error' => 'Could not remove the table assignment.'];
+        }
+        $stmt->bind_param('i', $id);
+        $ok = $stmt->execute();
+        $stmt->close();
+        return $ok ? ['ok' => true] : ['ok' => false, 'error' => 'Could not remove the table assignment.'];
+    }
+
+    $person = seatingFindConfirmedPerson($mysqli, $invitationId, $guestName);
+    if (!$person) {
+        return ['ok' => false, 'error' => 'That guest is not on the confirmed list.'];
+    }
+    $assignment = seatingFindAssignment(seatingLoadAssignments($mysqli), $person);
+    if (!$assignment) {
+        return ['ok' => true];
+    }
+    if (!empty($assignment['inherited']) || (
+        seatingGuestKey($assignment['guest_name']) === '' && empty($assignment['attendee_id'])
+    )) {
+        return ['ok' => false, 'error' => 'Assign this guest individually before removing their seat.'];
+    }
+
+    $id = (int)$assignment['id'];
+    $stmt = $mysqli->prepare("DELETE FROM table_assignments WHERE id = ?");
+    if (!$stmt) {
+        return ['ok' => false, 'error' => 'Could not remove the table assignment.'];
+    }
+    $stmt->bind_param('i', $id);
+    $ok = $stmt->execute();
+    $stmt->close();
+    return $ok ? ['ok' => true] : ['ok' => false, 'error' => 'Could not remove the table assignment.'];
+}
+
 function handleGetReceptionGuests() {
     receptionRequireApiKey();
 
     $db = Database::getInstance();
     $mysqli = $db->getConnection();
+    seatingEnsureAssignmentsTable($mysqli);
+
+    $people = seatingCollectConfirmedPeople($mysqli);
+    $assignments = seatingLoadAssignments($mysqli);
     $guests = [];
 
-    $query = "
-        SELECT
-            a.id AS attendee_id,
-            a.attendee_name,
-            a.invitation_id,
-            ta_att.table_number AS attendee_table,
-            ta_att.seat_number AS attendee_seat,
-            ta_inv.table_number AS invitation_table,
-            ta_inv.seat_number AS invitation_seat
-        FROM attendees a
-        INNER JOIN rsvp_responses r ON r.invitation_id = a.invitation_id AND r.attending = 'yes'
-        LEFT JOIN table_assignments ta_att ON ta_att.attendee_id = a.id
-        LEFT JOIN table_assignments ta_inv ON ta_inv.invitation_id = a.invitation_id AND ta_inv.attendee_id IS NULL
-        ORDER BY a.attendee_name ASC
-    ";
-
-    $result = $mysqli->query($query);
-    if ($result) {
-        while ($row = $result->fetch_assoc()) {
-            $name = receptionNormalizeName($row['attendee_name'] ?? '');
-            if ($name === '') {
-                continue;
-            }
-            $tableNumber = $row['attendee_table'] ?? $row['invitation_table'] ?? null;
-            $seatNumber = $row['attendee_seat'] ?? $row['invitation_seat'] ?? null;
-            $guests[] = [
-                'id' => 'a-' . $row['attendee_id'],
-                'name' => $name,
-                'tableNumber' => $tableNumber !== null ? (int)$tableNumber : null,
-                'seatNumber' => $seatNumber !== null ? (int)$seatNumber : null,
-                'invitationId' => $row['invitation_id'] ?? '',
-            ];
-        }
-    }
-
-    if (empty($guests)) {
-        $fallback = "
-            SELECT i.invitation_id, i.guest_name, r.attendees, r.special_notes,
-                   ta.table_number, ta.seat_number
-            FROM invitations i
-            INNER JOIN rsvp_responses r ON r.invitation_id = i.invitation_id AND r.attending = 'yes'
-            LEFT JOIN table_assignments ta ON ta.invitation_id = i.invitation_id AND ta.attendee_id IS NULL
-            ORDER BY i.guest_name ASC
-        ";
-        $result = $mysqli->query($fallback);
-        if ($result) {
-            while ($row = $result->fetch_assoc()) {
-                $names = [];
-                $attendees = !empty($row['attendees']) ? json_decode($row['attendees'], true) : [];
-                if (is_array($attendees)) {
-                    foreach ($attendees as $att) {
-                        if (!is_array($att)) {
-                            continue;
-                        }
-                        $n = receptionNormalizeName($att['attendee_name'] ?? $att['name'] ?? '');
-                        if ($n !== '') {
-                            $names[] = $n;
-                        }
-                    }
-                }
-                if (empty($names)) {
-                    $primary = receptionNormalizeName($row['guest_name'] ?? '');
-                    if ($primary !== '') {
-                        $names[] = $primary;
-                    }
-                }
-                $tableNumber = isset($row['table_number']) ? (int)$row['table_number'] : null;
-                $seatNumber = isset($row['seat_number']) ? (int)$row['seat_number'] : null;
-                foreach ($names as $index => $name) {
-                    $guests[] = [
-                        'id' => 'i-' . $row['invitation_id'] . '-' . $index,
-                        'name' => $name,
-                        'tableNumber' => $tableNumber > 0 ? $tableNumber : null,
-                        'seatNumber' => $seatNumber > 0 ? $seatNumber : null,
-                        'invitationId' => $row['invitation_id'] ?? '',
-                    ];
-                }
-            }
-        }
+    foreach (seatingDecoratePeople($people, $assignments) as $index => $person) {
+        $guests[] = [
+            'id' => $person['attendee_id']
+                ? 'a-' . $person['attendee_id']
+                : 'i-' . $person['invitation_id'] . '-' . $index,
+            'name' => $person['guest_name'],
+            'tableNumber' => $person['table_number'] !== null ? (int)$person['table_number'] : null,
+            'seatNumber' => $person['seat_number'] !== null ? (int)$person['seat_number'] : null,
+            'invitationId' => $person['invitation_id'],
+        ];
     }
 
     sendResponse(['success' => true, 'data' => $guests]);
 }
+
 
 function receptionMapPhotoRow(array $row) {
     $path = str_replace('\\', '/', (string)$row['storage_path']);

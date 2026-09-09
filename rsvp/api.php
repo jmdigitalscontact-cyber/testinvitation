@@ -200,6 +200,10 @@ try {
             handleAssignTable();
             break;
 
+        case 'delete-table-assignment':
+            handleDeleteTableAssignment();
+            break;
+
         case 'get-floor-plan':
             handleGetFloorPlan();
             break;
@@ -1327,44 +1331,11 @@ function handleGetTableAssignments() {
     try {
         $db = Database::getInstance();
         $mysqli = $db->getConnection();
-
-        // Check if table exists, create if not
-        $result = $mysqli->query("SHOW TABLES LIKE 'table_assignments'");
-        if ($result->num_rows === 0) {
-            // Table doesn't exist, return empty array
-            sendResponse(['success' => true, 'data' => []]);
-            return;
-        }
-
-        $query = "
-            SELECT ta.*, i.guest_name, r.attendees AS attendees, r.special_notes AS special_notes
-            FROM table_assignments ta
-            JOIN invitations i ON ta.invitation_id = i.invitation_id
-            LEFT JOIN rsvp_responses r ON ta.invitation_id = r.invitation_id
-            ORDER BY ta.table_number, i.guest_name
-        ";
-
-        $result = $mysqli->query($query);
-        if (!$result) {
-            throw new Exception('Database query failed: ' . $mysqli->error);
-        }
-
-        $assignments = [];
-        while ($row = $result->fetch_assoc()) {
-            $row['attendees'] = !empty($row['attendees']) ? json_decode($row['attendees'], true) : [];
-
-            if (empty($row['attendees']) && !empty($row['special_notes'])) {
-                $nameLines = preg_split('/\r\n|\r|\n|,/', trim($row['special_notes']));
-                $nameLines = array_filter(array_map('trim', $nameLines));
-                foreach ($nameLines as $name) {
-                    $row['attendees'][] = ['attendee_name' => $name];
-                }
-            }
-
-            $assignments[] = htmlDecode($row);
-        }
-
-        sendResponse(['success' => true, 'data' => $assignments]);
+        $guests = seatingPrepareAdminList($mysqli);
+        sendResponse([
+            'success' => true,
+            'data' => htmlDecode($guests),
+        ]);
     } catch (Exception $e) {
         sendResponse(['success' => false, 'error' => $e->getMessage()], 500);
     }
@@ -1374,11 +1345,12 @@ function handleAssignTable() {
     try {
         $admin = requireAdminAuth();
         $input = getRequestInput();
-        $invitation_id = sanitize($input['invitation_id'] ?? '');
-        $table_number = (int)($input['table_number'] ?? 0);
+        $invitationId = sanitize($input['invitation_id'] ?? '');
+        $guestName = seatingNormalizeGuestName($input['guest_name'] ?? '');
+        $tableNumber = (int)($input['table_number'] ?? 0);
 
-        if (empty($invitation_id) || $table_number < 1) {
-            sendResponse(['success' => false, 'error' => 'Missing or invalid required fields'], 400);
+        if ($invitationId === '' || $guestName === '' || $tableNumber < 1 || $tableNumber > 40) {
+            sendResponse(['success' => false, 'error' => 'Choose a confirmed guest and a table from 1 to 40.'], 400);
         }
 
         $adminId = (int)($admin['id'] ?? 0);
@@ -1388,72 +1360,44 @@ function handleAssignTable() {
 
         $db = Database::getInstance();
         $mysqli = $db->getConnection();
-
-            // Check if table exists, create if not
-            $result = $mysqli->query("SHOW TABLES LIKE 'table_assignments'");
-            if ($result->num_rows === 0) {
-                // Create the table (MySQL-compatible syntax)
-                $createTableQuery = "
-                CREATE TABLE IF NOT EXISTS table_assignments (
-                    id BIGINT AUTO_INCREMENT PRIMARY KEY,
-                    invitation_id VARCHAR(50) NOT NULL,
-                    attendee_id BIGINT NULL,
-                    table_number INT NOT NULL,
-                    seat_number INT NULL,
-                    assigned_by BIGINT NULL,
-                    assigned_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-                    CONSTRAINT fk_table_assignments_invitation FOREIGN KEY (invitation_id) REFERENCES invitations(invitation_id) ON DELETE CASCADE,
-                    CONSTRAINT fk_table_assignments_attendee FOREIGN KEY (attendee_id) REFERENCES attendees(id) ON DELETE CASCADE,
-                    CONSTRAINT fk_table_assignments_admin FOREIGN KEY (assigned_by) REFERENCES admin_users(id) ON DELETE SET NULL,
-                    CONSTRAINT unique_invitation_attendee UNIQUE (invitation_id, attendee_id)
-                )
-                ";
-
-                if (!$mysqli->query($createTableQuery)) {
-                    throw new Exception('Failed to create table_assignments table: ' . $mysqli->error);
-                }
-                $mysqli->query("CREATE INDEX idx_table_assignments_invitation_id ON table_assignments(invitation_id)");
-                $mysqli->query("CREATE INDEX idx_table_assignments_attendee_id ON table_assignments(attendee_id)");
-                $mysqli->query("CREATE INDEX idx_table_assignments_table_number ON table_assignments(table_number)");
-            }
-
-        // First, delete any existing assignments for this invitation (without attendee_id)
-        // This ensures when changing tables, the old assignment is removed
-        $deleteStmt = $mysqli->prepare("
-            DELETE FROM table_assignments
-            WHERE invitation_id = ? AND attendee_id IS NULL
-        ");
-
-        if (!$deleteStmt) {
-            throw new Exception('Failed to prepare delete statement: ' . $mysqli->error);
-        }
-
-        $deleteStmt->bind_param('s', $invitation_id);
-
-        if (!$deleteStmt->execute()) {
-            throw new Exception('Failed to delete old table assignment: ' . $deleteStmt->error);
-        }
-
-        // Now insert the new assignment using the authenticated admin's ID.
-        $stmt = $mysqli->prepare("
-            INSERT INTO table_assignments (invitation_id, table_number, assigned_by)
-            VALUES (?, ?, ?)
-        ");
-
-        if (!$stmt) {
-            throw new Exception('Failed to prepare statement: ' . $mysqli->error);
-        }
-
-        $stmt->bind_param('sii', $invitation_id, $table_number, $adminId);
-
-        if (!$stmt->execute()) {
-            throw new Exception('Failed to save table assignment: ' . $stmt->error);
+        $result = seatingUpsertGuestAssignment($mysqli, $invitationId, $guestName, $tableNumber, $adminId);
+        if (empty($result['ok'])) {
+            sendResponse(['success' => false, 'error' => $result['error'] ?? 'Could not save the table assignment.'], 400);
         }
 
         sendResponse([
             'success' => true,
-            'message' => 'Table assignment saved successfully'
+            'message' => 'Table assignment saved',
+            'data' => htmlDecode(seatingPrepareAdminList($mysqli)),
+        ]);
+    } catch (Exception $e) {
+        sendResponse(['success' => false, 'error' => $e->getMessage()], 500);
+    }
+}
+
+function handleDeleteTableAssignment() {
+    try {
+        requireAdminAuth();
+        $input = getRequestInput();
+        $assignmentId = (int)($input['assignment_id'] ?? $input['id'] ?? 0);
+        $invitationId = sanitize($input['invitation_id'] ?? '');
+        $guestName = seatingNormalizeGuestName($input['guest_name'] ?? '');
+
+        if ($assignmentId < 1 && ($invitationId === '' || $guestName === '')) {
+            sendResponse(['success' => false, 'error' => 'Missing table assignment to remove.'], 400);
+        }
+
+        $db = Database::getInstance();
+        $mysqli = $db->getConnection();
+        $result = seatingDeleteGuestAssignment($mysqli, $assignmentId, $invitationId, $guestName);
+        if (empty($result['ok'])) {
+            sendResponse(['success' => false, 'error' => $result['error'] ?? 'Could not remove the table assignment.'], 400);
+        }
+
+        sendResponse([
+            'success' => true,
+            'message' => 'Table assignment removed',
+            'data' => htmlDecode(seatingPrepareAdminList($mysqli)),
         ]);
     } catch (Exception $e) {
         sendResponse(['success' => false, 'error' => $e->getMessage()], 500);

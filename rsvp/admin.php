@@ -297,19 +297,28 @@
             </div>
 
                 <div class="admin-card">
-                    <h2>Assign tables</h2>
-                    <div class="admin-field">
-                        <label for="table-number-select">Filter by table</label>
-                        <select id="table-number-select">
-                            <option value="">All tables</option>
-                    </select>
-                </div>
+                    <h2>Seat confirmed guests</h2>
+                    <p class="admin-card-lead">Every guest who confirmed yes is listed here as their own person. Assign, edit, or remove a table for each name — not for the whole invitation.</p>
+                    <div id="seating-assignments-message" class="admin-flash" role="status"></div>
+                    <div class="admin-form-grid">
+                        <div class="admin-field">
+                            <label for="table-guest-search">Search guest</label>
+                            <input type="search" id="table-guest-search" placeholder="Guest or invitation party">
+                        </div>
+                        <div class="admin-field">
+                            <label for="table-number-select">Show</label>
+                            <select id="table-number-select">
+                                <option value="">All confirmed guests</option>
+                                <option value="unassigned">Unassigned</option>
+                            </select>
+                        </div>
+                    </div>
                     <div class="admin-table-wrap">
                         <table class="admin-table" id="table-assignments-table">
                         <thead>
                             <tr>
                                     <th>Guest</th>
-                                <th>Companions</th>
+                                    <th>Invitation party</th>
                                     <th>Table</th>
                                     <th></th>
                             </tr>
@@ -317,13 +326,14 @@
                             <tbody></tbody>
                     </table>
                 </div>
+                    <p class="admin-muted" id="seating-guest-count"></p>
                     <button type="button" class="admin-btn admin-btn-secondary" onclick="loadTableAssignments()">Refresh</button>
             </div>
 
                 <div class="admin-card">
                     <h2>Table overview</h2>
                     <div class="admin-field">
-                        <label for="table-search">Search guest or companion</label>
+                        <label for="table-search">Search seated guests</label>
                         <input type="search" id="table-search" placeholder="Start typing a name" oninput="filterTableOverview()">
                 </div>
                     <div id="table-overview"></div>
@@ -592,11 +602,13 @@
                     </div>
             <form onsubmit="saveTableAssignment(event)">
                 <input type="hidden" id="assign-invitation-id">
+                <input type="hidden" id="assign-guest-name">
+                <input type="hidden" id="assign-assignment-id">
                 <p><strong>Guest:</strong> <span id="assign-guest-label"></span></p>
-                <p style="margin-bottom:0.85rem"><strong>Companions:</strong> <span id="assign-companions-label"></span></p>
+                <p style="margin-bottom:0.85rem"><strong>Invitation party:</strong> <span id="assign-party-label"></span></p>
                 <div class="admin-field">
                     <label for="assign-table-number">Table number</label>
-                    <input type="number" id="assign-table-number" min="1" max="50" required>
+                    <input type="number" id="assign-table-number" min="1" max="40" required>
                     <p class="admin-muted" style="margin-top:0.35rem">Guest tables are 1–14. Enter 15 for VIP 1 and 16 for VIP 2.</p>
                     </div>
                 <div class="admin-actions">

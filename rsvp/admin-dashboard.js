@@ -9,7 +9,9 @@
   let globalInvitations = [];
   let globalResponses = [];
   let globalAssignments = [];
+  let globalSeatingGuests = [];
   let tableSelectBound = false;
+  let tableGuestSearchBound = false;
   let allInvitations = [];
   let currentInvitationsPage = 1;
   const DASHBOARD_PER_PAGE = 5;
@@ -1901,6 +1903,8 @@
         floorPlanSelected = null;
         floorPlanDirty = false;
         renderAdminFloorPlan();
+        populateTableNumberSelect();
+        renderSeatingGuestTable();
       })
       .catch((error) => {
         showFlash("floor-plan-message", error.message || "Could not load the floor plan.", "error");
@@ -2253,188 +2257,151 @@
   }
 
   window.loadTableAssignments = function loadTableAssignments() {
-    Promise.all([
-      AdminAuth.apiCall("api.php?action=get-invitations").then((r) => r.json()),
-      AdminAuth.apiCall("api.php?action=get-rsvp-summary").then((r) => r.json()),
-      AdminAuth.apiCall("api.php?action=get-table-assignments").then((r) => r.json()),
-    ])
-      .then(([invitationsRes, responsesRes, assignmentsRes]) => {
-        if (!invitationsRes.success || !responsesRes.success) return;
-
-        globalInvitations = invitationsRes.data || [];
-        globalResponses = responsesRes.data || [];
-        globalAssignments = assignmentsRes.success ? assignmentsRes.data || [] : [];
-
-        populateTableAssignmentsTable(globalInvitations, globalResponses, globalAssignments);
-        updateTablePlanningSummary(globalInvitations, globalResponses, globalAssignments);
-
-        const tableSearchValue = ($("table-search")?.value || "").trim();
-        if (tableSearchValue) {
-          filterTableOverview();
-        } else {
-          populateTableOverview(globalAssignments, globalResponses);
+    AdminAuth.apiCall("api.php?action=get-table-assignments")
+      .then((r) => r.json())
+      .then((assignmentsRes) => {
+        if (!assignmentsRes || !assignmentsRes.success) {
+          throw new Error(assignmentsRes?.error || "Could not load seating.");
         }
-
-        const totalCapacity = parseInt($("total-capacity").value, 10) || 200;
-        const seatsPerTable = parseInt($("seats-per-table").value, 10) || 10;
-        const tablesNeeded = Math.max(1, Math.ceil(totalCapacity / seatsPerTable));
-        populateTableNumberSelect(tablesNeeded);
-        attachTableSelectionListener();
+        applySeatingGuests(assignmentsRes.data || []);
+        hideFlash("seating-assignments-message");
       })
-      .catch(() => {
-        showFlash("dashboard-message", "Failed to load table assignments.", "error");
+      .catch((error) => {
+        showFlash("seating-assignments-message", error.message || "Failed to load table assignments.", "error");
       });
   };
 
-  function companionNamesFromResponse(response) {
-    let names = [];
-    if (response && Array.isArray(response.attendees) && response.attendees.length > 0) {
-      names = response.attendees
-        .filter((a) => {
-          if (!a || typeof a !== "object") return false;
-          if (Object.prototype.hasOwnProperty.call(a, "attending")) {
-            return !!a.attending && a.attending !== "false" && a.attending !== "0";
-          }
-          if (Object.prototype.hasOwnProperty.call(a, "going")) {
-            return !!a.going;
-          }
-          return true;
-        })
-        .map((a) => a.attendee_name || a.name || "")
-        .map((n) => n.trim())
-        .filter(Boolean);
-    } else if (response && response.special_notes) {
-      names = response.special_notes
-        .split(/\r\n|\r|\n|,/)
-        .map((n) => n.trim())
-        .filter(Boolean);
+  function applySeatingGuests(guests) {
+    globalSeatingGuests = Array.isArray(guests) ? guests : [];
+    globalAssignments = globalSeatingGuests.filter((guest) => Number(guest.table_number) > 0);
+    updateTablePlanningSummary(globalSeatingGuests);
+    populateTableNumberSelect();
+    attachTableSelectionListener();
+    attachSeatingSearchListener();
+    renderSeatingGuestTable();
+    const tableSearchValue = ($("table-search")?.value || "").trim();
+    if (tableSearchValue) {
+      filterTableOverview();
+    } else {
+      populateTableOverview(globalSeatingGuests);
     }
-    return names;
   }
 
-  function buildAssignmentRow(invitation, response, assignment) {
+  function seatingGuestMatchesQuery(guest, query) {
+    if (!query) return true;
+    const haystack = `${guest.guest_name || ""} ${guest.party_name || ""}`.toLowerCase();
+    return haystack.includes(query);
+  }
+
+  function filteredSeatingGuests() {
+    const query = ($("table-guest-search")?.value || "").trim().toLowerCase();
+    const filter = $("table-number-select")?.value || "";
+    return globalSeatingGuests.filter((guest) => {
+      if (!seatingGuestMatchesQuery(guest, query)) return false;
+      if (filter === "unassigned") return !Number(guest.table_number);
+      if (filter) return parseInt(guest.table_number, 10) === parseInt(filter, 10);
+      return true;
+    });
+  }
+
+  function buildSeatingGuestRow(guest) {
     const tr = document.createElement("tr");
-    const companions = companionNamesFromResponse(response);
+    const tableLabel = Number(guest.table_number)
+      ? escapeHtml(tableDisplayName(guest.table_number))
+      : '<span class="admin-muted">Not assigned</span>';
     tr.innerHTML = `
-      <td>${escapeHtml(invitation.guest_name)}</td>
-      <td>${companions.length ? companions.map((n) => `<div>${escapeHtml(n)}</div>`).join("") : "None"}</td>
-      <td>${assignment ? escapeHtml(tableDisplayName(assignment.table_number)) : "Not assigned"}</td>
-      <td></td>
+      <td>${escapeHtml(guest.guest_name)}</td>
+      <td>${escapeHtml(guest.party_name || "—")}</td>
+      <td>${tableLabel}</td>
+      <td class="admin-seating-actions"></td>
     `;
-    const assignBtn = tr.lastElementChild.appendChild(document.createElement("button"));
+    const actions = tr.lastElementChild;
+    const assignBtn = document.createElement("button");
     assignBtn.type = "button";
     assignBtn.className = "admin-btn admin-btn-secondary admin-btn-sm";
-    assignBtn.textContent = assignment ? "Change" : "Assign";
-    assignBtn.dataset.action = "assign-table";
-    assignBtn.dataset.id = invitation.invitation_id;
-    assignBtn.addEventListener("click", () => {
-      openAssignTableModal(invitation, response, assignment);
-    });
+    assignBtn.textContent = Number(guest.table_number) ? "Edit" : "Assign";
+    assignBtn.addEventListener("click", () => openAssignTableModal(guest));
+    actions.appendChild(assignBtn);
+    if (Number(guest.table_number) || guest.assignment_id) {
+      const deleteBtn = document.createElement("button");
+      deleteBtn.type = "button";
+      deleteBtn.className = "admin-btn admin-btn-danger admin-btn-sm";
+      deleteBtn.textContent = "Delete";
+      deleteBtn.addEventListener("click", () => deleteTableAssignment(guest));
+      actions.appendChild(deleteBtn);
+    }
     return tr;
   }
 
-  function populateTableAssignmentsTable(invitations, responses, assignments) {
+  function renderSeatingGuestTable() {
     const tbody = document.querySelector("#table-assignments-table tbody");
+    if (!tbody) return;
+    const guests = filteredSeatingGuests();
     tbody.innerHTML = "";
-
-    const assignmentMap = {};
-    assignments.forEach((a) => {
-      assignmentMap[a.invitation_id] = a;
-    });
-
-    const respondedInvitations = invitations.filter((inv) =>
-      responses.some((resp) => resp.invitation_id === inv.invitation_id)
-    );
-
-    if (!respondedInvitations.length) {
-      tbody.innerHTML = '<tr><td colspan="4" class="admin-empty">No RSVP responses to assign yet.</td></tr>';
+    const count = $("seating-guest-count");
+    if (!globalSeatingGuests.length) {
+      tbody.innerHTML = '<tr><td colspan="4" class="admin-empty">No confirmed guests to seat yet.</td></tr>';
+      if (count) count.textContent = "";
       return;
     }
-
-    respondedInvitations.forEach((invitation) => {
-      const response = responses.find((r) => r.invitation_id === invitation.invitation_id);
-      tbody.appendChild(
-        buildAssignmentRow(invitation, response, assignmentMap[invitation.invitation_id])
-      );
-    });
+    if (!guests.length) {
+      tbody.innerHTML = '<tr><td colspan="4" class="admin-empty">No guests match this search or filter.</td></tr>';
+      if (count) count.textContent = `Showing 0 of ${globalSeatingGuests.length} confirmed guests.`;
+      return;
+    }
+    guests.forEach((guest) => tbody.appendChild(buildSeatingGuestRow(guest)));
+    if (count) {
+      count.textContent = `Showing ${guests.length} of ${globalSeatingGuests.length} confirmed guests.`;
+    }
   }
 
-  function populateTableNumberSelect(tablesNeeded) {
+  function populateTableNumberSelect() {
     const select = $("table-number-select");
+    if (!select) return;
     const current = select.value;
-    select.innerHTML = '<option value="">All tables</option>';
     const planTables = Array.isArray(floorPlanDraft?.tables) ? floorPlanDraft.tables : [];
     const maxFromPlan = planTables.reduce((max, table) => Math.max(max, Number(table.number) || 0), 0);
-    const maxTable = Math.max(tablesNeeded || 0, maxFromPlan, 1);
+    const assignedMax = globalSeatingGuests.reduce((max, guest) => Math.max(max, Number(guest.table_number) || 0), 0);
+    const totalCapacity = parseInt($("total-capacity")?.value, 10) || 200;
+    const seatsPerTable = parseInt($("seats-per-table")?.value, 10) || 10;
+    const tablesNeeded = Math.max(1, Math.ceil(totalCapacity / seatsPerTable));
+    const maxTable = Math.max(tablesNeeded, maxFromPlan, assignedMax, 16);
+
+    select.innerHTML = '<option value="">All confirmed guests</option><option value="unassigned">Unassigned</option>';
     for (let i = 1; i <= maxTable; i += 1) {
       const option = document.createElement("option");
       option.value = String(i);
       option.textContent = tableDisplayName(i);
       select.appendChild(option);
     }
-    select.value = current;
+    select.value = [...select.options].some((option) => option.value === current) ? current : "";
   }
 
   function attachTableSelectionListener() {
     const select = $("table-number-select");
     if (!select || tableSelectBound) return;
     tableSelectBound = true;
-    select.addEventListener("change", () => {
-      const selectedTable = select.value;
-      if (!selectedTable) {
-        populateTableAssignmentsTable(globalInvitations, globalResponses, globalAssignments);
-        return;
-      }
-      filterAndDisplayTable(parseInt(selectedTable, 10));
-    });
+    select.addEventListener("change", renderSeatingGuestTable);
   }
 
-  function filterAndDisplayTable(tableNumber) {
-    const filteredAssignments = globalAssignments.filter(
-      (a) => parseInt(a.table_number, 10) === tableNumber
-    );
-    const filteredInvitationIds = new Set(filteredAssignments.map((a) => a.invitation_id));
-    const filteredInvitations = globalInvitations.filter((inv) =>
-      filteredInvitationIds.has(inv.invitation_id)
-    );
-    const filteredResponses = globalResponses.filter((resp) =>
-      filteredInvitationIds.has(resp.invitation_id)
-    );
-
-    const tbody = document.querySelector("#table-assignments-table tbody");
-    tbody.innerHTML = "";
-
-    if (!filteredInvitations.length) {
-      tbody.innerHTML = `<tr><td colspan="4" class="admin-empty">No guests assigned to ${escapeHtml(tableDisplayName(tableNumber))}.</td></tr>`;
-      return;
-    }
-
-    const assignmentMap = {};
-    filteredAssignments.forEach((a) => {
-      assignmentMap[a.invitation_id] = a;
-    });
-
-    filteredInvitations.forEach((invitation) => {
-      const response = filteredResponses.find((r) => r.invitation_id === invitation.invitation_id);
-      tbody.appendChild(
-        buildAssignmentRow(invitation, response, assignmentMap[invitation.invitation_id])
-      );
-    });
+  function attachSeatingSearchListener() {
+    const input = $("table-guest-search");
+    if (!input || tableGuestSearchBound) return;
+    tableGuestSearchBound = true;
+    input.addEventListener("input", renderSeatingGuestTable);
   }
 
-  function populateTableOverview(assignments, responses) {
+  function populateTableOverview(guests) {
     const overviewDiv = $("table-overview");
+    if (!overviewDiv) return;
     overviewDiv.innerHTML = "";
 
-    const responseMap = {};
-    responses.forEach((r) => {
-      responseMap[r.invitation_id] = r;
-    });
-
     const tableGroups = {};
-    assignments.forEach((assignment) => {
-      if (!tableGroups[assignment.table_number]) tableGroups[assignment.table_number] = [];
-      tableGroups[assignment.table_number].push(assignment);
+    (guests || []).forEach((guest) => {
+      const tableNumber = parseInt(guest.table_number, 10);
+      if (!tableNumber) return;
+      if (!tableGroups[tableNumber]) tableGroups[tableNumber] = [];
+      tableGroups[tableNumber].push(guest);
     });
 
     if (!Object.keys(tableGroups).length) {
@@ -2448,35 +2415,20 @@
     Object.keys(tableGroups)
       .sort((a, b) => parseInt(a, 10) - parseInt(b, 10))
       .forEach((tableNum) => {
-        const tableAssignments = tableGroups[tableNum];
-        const totalGuests = tableAssignments.reduce((sum, a) => {
-          const response = responseMap[a.invitation_id];
-          const count = response && response.attendee_count ? parseInt(response.attendee_count, 10) : 1;
-          return sum + Math.max(1, count);
-        }, 0);
-
-        const listItems = tableAssignments
-          .map((a) => {
-            const rows = [escapeHtml(a.guest_name)];
-            const response = responseMap[a.invitation_id];
-            if (response && Array.isArray(response.attendees)) {
-              response.attendees.forEach((att) => {
-                if (!att || typeof att !== "object") return;
-                if (Object.prototype.hasOwnProperty.call(att, "attending") && !att.attending) return;
-                if (Object.prototype.hasOwnProperty.call(att, "going") && !att.going) return;
-                const name = att.attendee_name || att.name || "";
-                if (name) rows.push(escapeHtml(name));
-              });
-            }
-            return `<li>${rows.map((n) => `<div>${n}</div>`).join("")}</li>`;
+        const seated = tableGroups[tableNum];
+        const listItems = seated
+          .map((guest) => {
+            const party = guest.party_name && guest.party_name !== guest.guest_name
+              ? ` <span class="admin-muted">(${escapeHtml(guest.party_name)})</span>`
+              : "";
+            return `<li>${escapeHtml(guest.guest_name)}${party}</li>`;
           })
           .join("");
-
         const card = document.createElement("div");
         card.className = "admin-card admin-table-overview-card";
         card.innerHTML = `
           <h3>${escapeHtml(tableDisplayName(tableNum))}</h3>
-          <p><strong>${totalGuests}</strong> guest(s)</p>
+          <p><strong>${seated.length}</strong> guest(s)</p>
           <ul>${listItems}</ul>
         `;
         grid.appendChild(card);
@@ -2486,132 +2438,97 @@
   }
 
   window.updateTableCalculations = function updateTableCalculations() {
-    const totalCapacity = parseInt($("total-capacity").value, 10) || 200;
-    const seatsPerTable = parseInt($("seats-per-table").value, 10) || 10;
-    $("tables-needed").textContent = Math.ceil(totalCapacity / seatsPerTable);
-
-    if (window.currentTableData) {
-      updateTablePlanningSummary(
-        window.currentTableData.invitations,
-        window.currentTableData.responses,
-        window.currentTableData.assignments
-      );
-    }
-
-    const select = $("table-number-select");
-    if (select) {
-      populateTableNumberSelect(Math.max(1, Math.ceil(totalCapacity / seatsPerTable)));
-    }
+    populateTableNumberSelect();
+    updateTablePlanningSummary(globalSeatingGuests);
+    renderSeatingGuestTable();
   };
 
-  function updateTablePlanningSummary(invitations, responses, assignments) {
-    const totalCapacity = parseInt($("total-capacity").value, 10) || 200;
-    const seatsPerTable = parseInt($("seats-per-table").value, 10) || 10;
+  function updateTablePlanningSummary(guests) {
+    const list = Array.isArray(guests) ? guests : globalSeatingGuests;
+    const totalCapacity = parseInt($("total-capacity")?.value, 10) || 200;
+    const seatsPerTable = parseInt($("seats-per-table")?.value, 10) || 10;
     const tablesNeeded = Math.ceil(totalCapacity / seatsPerTable);
-    const assignedTableNumbers = new Set(assignments.map((a) => a.table_number));
+    const assignedGuests = list.filter((guest) => Number(guest.table_number) > 0);
+    const assignedTableNumbers = new Set(assignedGuests.map((guest) => parseInt(guest.table_number, 10)));
     const tablesAssigned = assignedTableNumbers.size;
+    const confirmedGuests = list.length;
+    const unassignedGuests = confirmedGuests - assignedGuests.length;
+    const coverage = confirmedGuests > 0 ? Math.round((assignedGuests.length / confirmedGuests) * 100) : 0;
 
-    $("tables-needed").textContent = tablesNeeded;
-    $("tables-assigned").textContent = tablesAssigned;
+    if ($("tables-needed")) $("tables-needed").textContent = String(tablesNeeded);
+    if ($("tables-assigned")) $("tables-assigned").textContent = String(tablesAssigned);
 
-    const confirmedGuests = responses
-      .filter((r) => r.attending === "yes")
-      .reduce((total, r) => total + (parseInt(r.attendee_count, 10) || 0), 0);
-
-    const assignedInvitationIds = new Set(assignments.map((a) => a.invitation_id));
-    const unassignedGuests = responses
-      .filter((r) => r.attending === "yes" && !assignedInvitationIds.has(r.invitation_id))
-      .reduce((total, r) => total + (parseInt(r.attendee_count, 10) || 0), 0);
-
-    const yesCount = responses.filter((r) => r.attending === "yes").length;
-    const coverage =
-      yesCount > 0 ? Math.round((assignedInvitationIds.size / yesCount) * 100) : 0;
-
-    $("table-planning-summary").innerHTML = `
-      <div class="admin-planning-grid">
-        <div>
-          <strong>Total capacity</strong><br>${totalCapacity} guests<br>
-          <strong>Seats per table</strong><br>${seatsPerTable}<br>
-          <strong>Tables required</strong><br>${tablesNeeded}
+    const summary = $("table-planning-summary");
+    if (summary) {
+      summary.innerHTML = `
+        <div class="admin-planning-grid">
+          <div>
+            <strong>Total capacity</strong><br>${totalCapacity} guests<br>
+            <strong>Seats per table</strong><br>${seatsPerTable}<br>
+            <strong>Tables required</strong><br>${tablesNeeded}
+          </div>
+          <div>
+            <strong>Confirmed guests</strong><br>${confirmedGuests}<br>
+            <strong>Tables in use</strong><br>${tablesAssigned}<br>
+            <strong>Unassigned guests</strong><br>${unassignedGuests}
+          </div>
+          <div>
+            <strong>Status</strong><br>${tablesAssigned >= tablesNeeded ? "Complete" : `${Math.max(0, tablesNeeded - tablesAssigned)} table(s) still open`}<br>
+            <strong>Coverage</strong><br>${coverage}% of confirmed guests assigned
+          </div>
         </div>
-        <div>
-          <strong>Confirmed guests</strong><br>${confirmedGuests}<br>
-          <strong>Tables in use</strong><br>${tablesAssigned}<br>
-          <strong>Unassigned guests</strong><br>${unassignedGuests}
-        </div>
-        <div>
-          <strong>Status</strong><br>${tablesAssigned >= tablesNeeded ? "Complete" : `${tablesNeeded - tablesAssigned} table(s) still open`}<br>
-          <strong>Coverage</strong><br>${coverage}% of confirmed parties assigned
-        </div>
-      </div>
-    `;
+      `;
+    }
 
-    window.currentTableData = { invitations, responses, assignments };
-  }
-
-  function assignmentMatchesTableSearch(assignment, responses, query) {
-    const guestName = (assignment.guest_name || "").toLowerCase();
-    if (guestName.includes(query)) return true;
-
-    const attendeeLists = [];
-    if (Array.isArray(assignment.attendees)) attendeeLists.push(assignment.attendees);
-
-    const response = responses.find((r) => r.invitation_id === assignment.invitation_id);
-    if (response && Array.isArray(response.attendees)) attendeeLists.push(response.attendees);
-
-    return attendeeLists.some((attendees) =>
-      attendees.some((guest) =>
-        String(guest?.attendee_name || guest?.name || "")
-          .toLowerCase()
-          .includes(query)
-      )
-    );
+    window.currentTableData = { guests: list, assignments: assignedGuests };
   }
 
   window.filterTableOverview = function filterTableOverview() {
-    const searchInput = $("table-search");
-    const query = (searchInput ? searchInput.value : "").trim().toLowerCase();
-    const tableData = window.currentTableData || {
-      responses: globalResponses,
-      assignments: globalAssignments,
-    };
-    const { responses, assignments } = tableData;
-
+    const query = ($("table-search")?.value || "").trim().toLowerCase();
+    const seated = globalSeatingGuests.filter((guest) => Number(guest.table_number) > 0);
+    const matched = query
+      ? seated.filter((guest) => seatingGuestMatchesQuery(guest, query))
+      : seated;
+    populateTableOverview(matched);
+    const result = $("table-overview-search-result");
+    if (!result) return;
     if (!query) {
-      populateTableOverview(assignments, responses);
-      $("table-overview-search-result").textContent = "";
+      result.textContent = "";
       return;
     }
-
-    const matchedAssignments = assignments.filter((assignment) =>
-      assignmentMatchesTableSearch(assignment, responses, query)
-    );
-
-    populateTableOverview(matchedAssignments, responses);
-    $("table-overview-search-result").textContent = matchedAssignments.length
-      ? `${matchedAssignments.length} matching assignment(s).`
-      : "No matching guests found.";
+    result.textContent = matched.length
+      ? `${matched.length} matching seated guest(s).`
+      : "No matching seated guests found.";
   };
 
-  window.openAssignTableModal = function openAssignTableModal(invitation, response, currentAssignment) {
-    $("assign-invitation-id").value = invitation.invitation_id;
-    $("assign-guest-label").textContent = invitation.guest_name;
-    const companions = companionNamesFromResponse(response);
-    $("assign-companions-label").textContent = companions.length ? companions.join(", ") : "None";
-    $("assign-table-number").value = currentAssignment
-      ? currentAssignment.table_number
-      : $("table-number-select").value || "";
+  window.openAssignTableModal = function openAssignTableModal(guest) {
+    $("assign-invitation-id").value = guest.invitation_id || "";
+    $("assign-guest-name").value = guest.guest_name || "";
+    $("assign-assignment-id").value = guest.assignment_id || "";
+    $("assign-guest-label").textContent = guest.guest_name || "";
+    if ($("assign-party-label")) $("assign-party-label").textContent = guest.party_name || "—";
+    const title = $("assign-table-title");
+    if (title) title.textContent = Number(guest.table_number) ? "Edit table" : "Assign table";
+    const filterValue = $("table-number-select")?.value || "";
+    $("assign-table-number").value = Number(guest.table_number)
+      ? guest.table_number
+      : (/^\d+$/.test(filterValue) ? filterValue : "");
     openModal("assign-table-modal");
   };
 
   window.saveTableAssignment = function saveTableAssignment(event) {
     event.preventDefault();
     const invitationId = $("assign-invitation-id").value;
+    const guestName = $("assign-guest-name").value;
     const tableNumber = parseInt($("assign-table-number").value, 10);
     const submitBtn = $("assign-table-submit");
 
-    if (!Number.isInteger(tableNumber) || tableNumber < 1) {
-      showFlash("dashboard-message", "Enter a valid table number.", "error");
+    if (!invitationId || !guestName) {
+      showFlash("seating-assignments-message", "Choose a confirmed guest first.", "error");
+      return;
+    }
+    if (!Number.isInteger(tableNumber) || tableNumber < 1 || tableNumber > 40) {
+      showFlash("seating-assignments-message", "Enter a table from 1 to 40.", "error");
       return;
     }
 
@@ -2620,7 +2537,11 @@
 
     AdminAuth.apiCall("api.php?action=assign-table", {
       method: "POST",
-      body: JSON.stringify({ invitation_id: invitationId, table_number: tableNumber }),
+      body: JSON.stringify({
+        invitation_id: invitationId,
+        guest_name: guestName,
+        table_number: tableNumber,
+      }),
     })
       .then((response) => response.json())
       .then((data) => {
@@ -2628,16 +2549,45 @@
         submitBtn.textContent = "Save assignment";
         if (data.success) {
           closeModal("assign-table-modal");
-          loadTableAssignments();
-          showFlash("dashboard-message", "Table assignment saved.", "success");
+          if (Array.isArray(data.data)) applySeatingGuests(data.data);
+          else loadTableAssignments();
+          showFlash("seating-assignments-message", `${guestName} is now at ${tableDisplayName(tableNumber)}.`, "success");
         } else {
-          showFlash("dashboard-message", data.message || data.error || "Save failed.", "error");
+          showFlash("seating-assignments-message", data.message || data.error || "Save failed.", "error");
         }
       })
       .catch((error) => {
         submitBtn.disabled = false;
         submitBtn.textContent = "Save assignment";
-        showFlash("dashboard-message", error.message || "Save failed.", "error");
+        showFlash("seating-assignments-message", error.message || "Save failed.", "error");
+      });
+  };
+
+  window.deleteTableAssignment = function deleteTableAssignment(guest) {
+    const name = guest.guest_name || "this guest";
+    const tableLabel = Number(guest.table_number) ? tableDisplayName(guest.table_number) : "their table";
+    if (!window.confirm(`Remove ${name} from ${tableLabel}?`)) return;
+
+    AdminAuth.apiCall("api.php?action=delete-table-assignment", {
+      method: "POST",
+      body: JSON.stringify({
+        assignment_id: guest.assignment_id || 0,
+        invitation_id: guest.invitation_id,
+        guest_name: guest.guest_name,
+      }),
+    })
+      .then((response) => response.json())
+      .then((data) => {
+        if (data.success) {
+          if (Array.isArray(data.data)) applySeatingGuests(data.data);
+          else loadTableAssignments();
+          showFlash("seating-assignments-message", `${name} is no longer assigned to a table.`, "success");
+        } else {
+          showFlash("seating-assignments-message", data.message || data.error || "Could not remove that assignment.", "error");
+        }
+      })
+      .catch((error) => {
+        showFlash("seating-assignments-message", error.message || "Could not remove that assignment.", "error");
       });
   };
 
