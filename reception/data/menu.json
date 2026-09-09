@@ -7,7 +7,8 @@
         {
           "name": "Garden Greens with Champagne Vinaigrette",
           "description": "Seasonal leaves, edible flowers, and toasted almonds",
-          "tags": ["V", "GF"]
+          "tags": ["V", "GF"],
+          "recommended": true
         },
         {
           "name": "Caprese Skewers",
@@ -28,7 +29,8 @@
         {
           "name": "Herb-Crusted Beef Tenderloin",
           "description": "Roasted garlic jus, truffle potato puree, broccolini",
-          "tags": ["GF"]
+          "tags": ["GF"],
+          "recommended": true
         },
         {
           "name": "Pan-Seared Salmon",
@@ -49,7 +51,8 @@
         {
           "name": "Wedding Cake",
           "description": "Vanilla bean sponge, berry compote",
-          "tags": ["N"]
+          "tags": ["N"],
+          "recommended": true
         },
         {
           "name": "Chocolate Mousse",

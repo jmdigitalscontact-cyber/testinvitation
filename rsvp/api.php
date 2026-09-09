@@ -212,6 +212,18 @@ try {
             handleAdminSaveFloorPlan();
             break;
 
+        case 'get-menu':
+            handleGetMenu();
+            break;
+
+        case 'admin-get-menu':
+            handleAdminGetMenu();
+            break;
+
+        case 'admin-save-menu':
+            handleAdminSaveMenu();
+            break;
+
         case 'admin-update-rsvp':
             handleAdminUpdateRSVP();
             break;

@@ -2165,3 +2165,209 @@ function handleAdminSaveFloorPlan() {
         'data' => $plan,
     ]);
 }
+
+function receptionMenuPath() {
+    return __DIR__ . '/../reception/data/menu.json';
+}
+
+function receptionDefaultMenu() {
+    return [
+        'sections' => [
+            [
+                'id' => 'appetizers',
+                'title' => 'Appetizers',
+                'items' => [
+                    ['name' => 'Garden Greens with Champagne Vinaigrette', 'description' => 'Seasonal leaves, edible flowers, and toasted almonds', 'tags' => ['V', 'GF'], 'recommended' => true],
+                    ['name' => 'Caprese Skewers', 'description' => 'Fresh mozzarella, heirloom tomato, basil oil', 'tags' => ['GF'], 'recommended' => false],
+                    ['name' => 'Mini Crab Cakes', 'description' => 'Lemon aioli and micro herbs', 'tags' => [], 'recommended' => false],
+                ],
+            ],
+            [
+                'id' => 'mains',
+                'title' => 'Main Course',
+                'items' => [
+                    ['name' => 'Herb-Crusted Beef Tenderloin', 'description' => 'Roasted garlic jus, truffle potato puree, broccolini', 'tags' => ['GF'], 'recommended' => true],
+                    ['name' => 'Pan-Seared Salmon', 'description' => 'Citrus beurre blanc, asparagus, saffron rice', 'tags' => ['GF'], 'recommended' => false],
+                    ['name' => 'Wild Mushroom Risotto', 'description' => 'Parmesan crisp, aged balsamic', 'tags' => ['V', 'GF'], 'recommended' => false],
+                ],
+            ],
+            [
+                'id' => 'desserts',
+                'title' => 'Desserts',
+                'items' => [
+                    ['name' => 'Wedding Cake', 'description' => 'Vanilla bean sponge, berry compote', 'tags' => ['N'], 'recommended' => true],
+                    ['name' => 'Chocolate Mousse', 'description' => 'Gold leaf and fresh raspberries', 'tags' => ['GF'], 'recommended' => false],
+                    ['name' => 'Seasonal Fruit Tart', 'description' => 'Pastry cream and mint', 'tags' => ['N'], 'recommended' => false],
+                ],
+            ],
+            [
+                'id' => 'drinks',
+                'title' => 'Drinks',
+                'items' => [
+                    ['name' => 'Signature Cocktails', 'description' => 'Berber Bloom (gin) and Golden Hour (sparkling wine)', 'tags' => [], 'recommended' => false],
+                    ['name' => 'Wine Selection', 'description' => 'White, red, and rosé — service with dinner', 'tags' => [], 'recommended' => false],
+                    ['name' => 'Coffee & Tea', 'description' => 'Espresso, herbal tea, and chilled water', 'tags' => ['V', 'GF'], 'recommended' => false],
+                ],
+            ],
+        ],
+        'tagLegend' => [
+            'V' => 'Vegan',
+            'GF' => 'Gluten-Free',
+            'N' => 'Contains Nuts',
+        ],
+    ];
+}
+
+function receptionMenuSlug($title, array &$used) {
+    $base = strtolower(trim((string)$title));
+    $base = preg_replace('/[^a-z0-9]+/', '-', $base);
+    $base = trim((string)$base, '-');
+    if ($base === '') {
+        $base = 'course';
+    }
+    $base = substr($base, 0, 32);
+    $id = $base;
+    $n = 2;
+    while (isset($used[$id])) {
+        $id = substr($base, 0, 28) . '-' . $n;
+        $n += 1;
+    }
+    $used[$id] = true;
+    return $id;
+}
+
+function receptionNormalizeMenu($raw) {
+    $defaults = receptionDefaultMenu();
+    $plan = is_array($raw) ? $raw : [];
+
+    $tagLegend = [];
+    $sourceLegend = isset($plan['tagLegend']) && is_array($plan['tagLegend']) ? $plan['tagLegend'] : $defaults['tagLegend'];
+    foreach ($sourceLegend as $code => $label) {
+        $key = strtoupper(preg_replace('/[^a-zA-Z0-9]/', '', (string)$code));
+        $key = substr($key, 0, 6);
+        if ($key === '' || isset($tagLegend[$key])) {
+            continue;
+        }
+        $text = trim((string)$label);
+        if ($text === '') {
+            $text = $key;
+        }
+        $tagLegend[$key] = substr($text, 0, 32);
+        if (count($tagLegend) >= 12) {
+            break;
+        }
+    }
+    if (!$tagLegend) {
+        $tagLegend = $defaults['tagLegend'];
+    }
+
+    $sections = [];
+    $usedIds = [];
+    $sourceSections = isset($plan['sections']) && is_array($plan['sections']) ? $plan['sections'] : $defaults['sections'];
+    foreach ($sourceSections as $section) {
+        if (!is_array($section)) {
+            continue;
+        }
+        $title = trim((string)($section['title'] ?? ''));
+        if ($title === '') {
+            $title = 'Course';
+        }
+        $title = substr($title, 0, 48);
+        $idSource = trim((string)($section['id'] ?? ''));
+        $id = $idSource !== '' ? receptionMenuSlug($idSource, $usedIds) : receptionMenuSlug($title, $usedIds);
+
+        $items = [];
+        $sourceItems = isset($section['items']) && is_array($section['items']) ? $section['items'] : [];
+        foreach ($sourceItems as $item) {
+            if (!is_array($item)) {
+                continue;
+            }
+            $name = trim((string)($item['name'] ?? ''));
+            if ($name === '') {
+                continue;
+            }
+            $tags = [];
+            if (isset($item['tags']) && is_array($item['tags'])) {
+                foreach ($item['tags'] as $tag) {
+                    $tagKey = strtoupper(preg_replace('/[^a-zA-Z0-9]/', '', (string)$tag));
+                    if ($tagKey !== '' && isset($tagLegend[$tagKey]) && !in_array($tagKey, $tags, true)) {
+                        $tags[] = $tagKey;
+                    }
+                }
+            }
+            $items[] = [
+                'name' => substr($name, 0, 96),
+                'description' => substr(trim((string)($item['description'] ?? '')), 0, 280),
+                'tags' => $tags,
+                'recommended' => !empty($item['recommended']),
+            ];
+            if (count($items) >= 20) {
+                break;
+            }
+        }
+        if (!$items) {
+            continue;
+        }
+        $sections[] = [
+            'id' => $id,
+            'title' => $title,
+            'items' => $items,
+        ];
+        if (count($sections) >= 12) {
+            break;
+        }
+    }
+    if (!$sections) {
+        return $defaults;
+    }
+
+    return [
+        'sections' => $sections,
+        'tagLegend' => $tagLegend,
+    ];
+}
+
+function receptionReadMenu() {
+    $path = receptionMenuPath();
+    if (!is_file($path)) {
+        return receptionDefaultMenu();
+    }
+    $decoded = json_decode((string)file_get_contents($path), true);
+    return receptionNormalizeMenu($decoded);
+}
+
+function handleGetMenu() {
+    receptionRequireApiKey();
+    header('Cache-Control: no-store');
+    sendResponse([
+        'success' => true,
+        'data' => receptionReadMenu(),
+    ]);
+}
+
+function handleAdminGetMenu() {
+    requireAdminAuth();
+    sendResponse([
+        'success' => true,
+        'data' => receptionReadMenu(),
+    ]);
+}
+
+function handleAdminSaveMenu() {
+    requireAdminAuth();
+    $input = getRequestInput();
+    $menu = receptionNormalizeMenu($input['menu'] ?? $input);
+    $path = receptionMenuPath();
+    $dir = dirname($path);
+    if (!is_dir($dir) && !@mkdir($dir, 0755, true)) {
+        sendResponse(['success' => false, 'error' => 'Could not create menu folder.'], 500);
+    }
+    $json = json_encode($menu, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    if ($json === false || @file_put_contents($path, $json) === false) {
+        sendResponse(['success' => false, 'error' => 'Could not save the menu. Check that reception/data is writable.'], 500);
+    }
+    sendResponse([
+        'success' => true,
+        'data' => $menu,
+    ]);
+}

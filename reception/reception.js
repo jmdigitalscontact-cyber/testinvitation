@@ -1257,6 +1257,15 @@
      ─────────────────────────────────────────── */
   async function loadMenu() {
     try {
+      const result = await apiGet("get-menu");
+      if (result && result.success && result.data) {
+        renderMenu(result.data);
+        return;
+      }
+    } catch {
+      /* fall through to the static menu file */
+    }
+    try {
       const res = await fetch("./data/menu.json");
       if (!res.ok) throw new Error("Menu not found");
       const data = await res.json();
@@ -1312,7 +1321,7 @@
     els.menuRoot.innerHTML = filteredSections.map(section => {
       const items = section.items.map((item, idx) => {
         const tags = (item.tags || []).map(t => `<span class="reception-tag">${escapeHtml(t)}</span>`).join("");
-        const isRec = idx === 0 && section.id !== "drinks";
+        const isRec = !!item.recommended;
         return `
           <article class="reception-menu-item ${isRec ? "is-recommended" : ""}" style="animation-delay:${idx * 60}ms">
             <p class="reception-menu-item__name">${escapeHtml(item.name)}</p>

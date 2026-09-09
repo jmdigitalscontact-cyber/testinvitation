@@ -30,6 +30,7 @@
                 <button type="button" class="admin-nav-btn" data-tab="responses">Responses</button>
                 <button type="button" class="admin-nav-btn" data-tab="export">Export</button>
                 <button type="button" class="admin-nav-btn" data-tab="tables">Seating</button>
+                <button type="button" class="admin-nav-btn" data-tab="menu">Menu</button>
                 <button type="button" class="admin-nav-btn" data-tab="photos">Photos</button>
                 <button type="button" class="admin-nav-btn" data-tab="reception">Reception</button>
             </nav>
@@ -327,6 +328,29 @@
                 </div>
                     <div id="table-overview"></div>
                     <p id="table-overview-search-result" style="margin-top:0.5rem;color:var(--admin-muted);font-size:0.84rem"></p>
+                </div>
+            </section>
+
+            <!-- Reception menu -->
+            <section id="menu" class="admin-panel" aria-label="Menu">
+                <div class="admin-card">
+                    <h2>Reception food menu</h2>
+                    <p class="admin-card-lead">Edit courses and dishes here. Guests see this on the reception Menu tab after you save. Use dietary tags so they can filter vegan, gluten-free, and nut dishes.</p>
+                    <div id="menu-editor-message" class="admin-flash" role="status"></div>
+                    <div class="admin-floor-toolbar">
+                        <button type="button" class="admin-btn admin-btn-secondary admin-btn-sm" id="menu-add-section-btn">Add course</button>
+                        <button type="button" class="admin-btn admin-btn-primary admin-btn-sm" id="menu-save-btn">Save menu</button>
+                    </div>
+                    <div id="menu-editor-root" class="admin-menu-editor"></div>
+                </div>
+
+                <div class="admin-card">
+                    <h2>Dietary tags</h2>
+                    <p class="admin-card-lead">These codes appear as filters on the reception menu (for example V, GF, N).</p>
+                    <div id="menu-tags-root" class="admin-menu-tags-editor"></div>
+                    <div class="admin-actions" style="margin-top:0.75rem">
+                        <button type="button" class="admin-btn admin-btn-secondary admin-btn-sm" id="menu-add-tag-btn">Add tag</button>
+                    </div>
                 </div>
             </section>
 

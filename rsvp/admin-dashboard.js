@@ -104,6 +104,7 @@
       loadTableAssignments();
       loadFloorPlanEditor();
     }
+    else if (tabName === "menu") loadMenuEditor();
     else if (tabName === "photos") loadAdminPhotos();
     else if (tabName === "reception") {
       loadReceptionVotes();
@@ -1924,6 +1925,327 @@
       })
       .catch((error) => {
         showFlash("floor-plan-message", error.message || "Could not save the floor plan.", "error");
+      })
+      .finally(() => {
+        if (saveBtn) saveBtn.disabled = false;
+      });
+  }
+
+  let menuDraft = null;
+  let menuEditorBound = false;
+
+  function cloneMenu(menu) {
+    return JSON.parse(JSON.stringify(menu || {}));
+  }
+
+  function menuTagKeys(menu) {
+    return Object.keys(menu?.tagLegend || {});
+  }
+
+  function uniqueMenuId(title, used) {
+    let base = String(title || "course").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+    if (!base) base = "course";
+    let id = base.slice(0, 32);
+    let n = 2;
+    while (used.has(id)) {
+      id = `${base.slice(0, 28)}-${n}`;
+      n += 1;
+    }
+    used.add(id);
+    return id;
+  }
+
+  function blankMenuItem() {
+    return { name: "", description: "", tags: [], recommended: false };
+  }
+
+  function renderMenuTagsEditor() {
+    const root = $("menu-tags-root");
+    if (!root || !menuDraft) return;
+    const entries = Object.entries(menuDraft.tagLegend || {});
+    if (!entries.length) {
+      root.innerHTML = '<p class="admin-empty">No dietary tags yet.</p>';
+      return;
+    }
+    root.innerHTML = entries.map(([code, label], index) => `
+      <div class="admin-menu-tag-row" data-tag-index="${index}" data-tag-code="${escapeHtml(code)}">
+        <input type="text" class="admin-menu-tag-code" data-tag-field="code" maxlength="6" value="${escapeHtml(code)}" aria-label="Tag code">
+        <input type="text" class="admin-menu-tag-label" data-tag-field="label" maxlength="32" value="${escapeHtml(label)}" aria-label="Tag label">
+        <button type="button" class="admin-btn admin-btn-secondary admin-btn-sm" data-remove-tag="${escapeHtml(code)}">Remove</button>
+      </div>
+    `).join("");
+  }
+
+  function renderMenuEditor() {
+    const root = $("menu-editor-root");
+    if (!root || !menuDraft) return;
+    const tags = menuTagKeys(menuDraft);
+    const sections = Array.isArray(menuDraft.sections) ? menuDraft.sections : [];
+    if (!sections.length) {
+      root.innerHTML = '<p class="admin-empty">No courses yet. Add a course to start the menu.</p>';
+      renderMenuTagsEditor();
+      return;
+    }
+
+    root.innerHTML = sections.map((section, sIndex) => {
+      const items = Array.isArray(section.items) ? section.items : [];
+      const itemHtml = items.map((item, iIndex) => {
+        const tagBoxes = tags.map((code) => {
+          const checked = (item.tags || []).includes(code) ? "checked" : "";
+          return `<label class="admin-checkbox admin-menu-tag-check"><input type="checkbox" data-menu-tag="${escapeHtml(code)}" ${checked}><span>${escapeHtml(code)}</span></label>`;
+        }).join("");
+        return `
+          <div class="admin-menu-item" data-item-index="${iIndex}">
+            <div class="admin-form-grid">
+              <div class="admin-field">
+                <label>Dish name</label>
+                <input type="text" data-item-field="name" maxlength="96" value="${escapeHtml(item.name || "")}">
+              </div>
+              <div class="admin-field">
+                <label>Description</label>
+                <textarea data-item-field="description" maxlength="280" rows="2">${escapeHtml(item.description || "")}</textarea>
+              </div>
+            </div>
+            <div class="admin-menu-item-meta">
+              <div class="admin-menu-item-tags">${tagBoxes || '<span class="admin-muted">Add dietary tags below.</span>'}</div>
+              <label class="admin-checkbox"><input type="checkbox" data-item-field="recommended" ${item.recommended ? "checked" : ""}><span>Highlight</span></label>
+              <button type="button" class="admin-btn admin-btn-secondary admin-btn-sm" data-remove-item="${iIndex}">Remove dish</button>
+            </div>
+          </div>
+        `;
+      }).join("");
+      return `
+        <article class="admin-menu-section" data-section-index="${sIndex}">
+          <div class="admin-menu-section-head">
+            <div class="admin-field" style="margin:0;flex:1">
+              <label>Course title</label>
+              <input type="text" data-section-field="title" maxlength="48" value="${escapeHtml(section.title || "")}">
+            </div>
+            <button type="button" class="admin-btn admin-btn-secondary admin-btn-sm" data-remove-section="${sIndex}">Remove course</button>
+          </div>
+          ${itemHtml}
+          <button type="button" class="admin-btn admin-btn-secondary admin-btn-sm" data-add-item="${sIndex}">Add dish</button>
+        </article>
+      `;
+    }).join("");
+    renderMenuTagsEditor();
+  }
+
+  function collectMenuLegendFromDom() {
+    if (!menuDraft) return;
+    const next = {};
+    document.querySelectorAll("#menu-tags-root .admin-menu-tag-row").forEach((row) => {
+      const code = String(row.querySelector("[data-tag-field='code']")?.value || "").toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 6);
+      const label = String(row.querySelector("[data-tag-field='label']")?.value || "").trim().slice(0, 32);
+      if (!code || next[code]) return;
+      next[code] = label || code;
+    });
+    menuDraft.tagLegend = next;
+  }
+
+  function bindMenuEditor() {
+    if (menuEditorBound) return;
+    menuEditorBound = true;
+
+    $("menu-editor-root")?.addEventListener("input", (event) => {
+      if (!menuDraft) return;
+      const sectionEl = event.target.closest("[data-section-index]");
+      if (!sectionEl) return;
+      const sIndex = parseInt(sectionEl.dataset.sectionIndex, 10);
+      const section = menuDraft.sections[sIndex];
+      if (!section) return;
+      if (event.target.matches("[data-section-field='title']")) {
+        section.title = String(event.target.value || "").slice(0, 48);
+        return;
+      }
+      const itemEl = event.target.closest("[data-item-index]");
+      if (!itemEl) return;
+      const item = section.items[parseInt(itemEl.dataset.itemIndex, 10)];
+      if (!item) return;
+      if (event.target.matches("[data-item-field='name']")) item.name = String(event.target.value || "").slice(0, 96);
+      if (event.target.matches("[data-item-field='description']")) item.description = String(event.target.value || "").slice(0, 280);
+    });
+
+    $("menu-editor-root")?.addEventListener("change", (event) => {
+      if (!menuDraft) return;
+      const sectionEl = event.target.closest("[data-section-index]");
+      if (!sectionEl) return;
+      const section = menuDraft.sections[parseInt(sectionEl.dataset.sectionIndex, 10)];
+      const itemEl = event.target.closest("[data-item-index]");
+      if (!section || !itemEl) return;
+      const item = section.items[parseInt(itemEl.dataset.itemIndex, 10)];
+      if (!item) return;
+      if (event.target.matches("[data-item-field='recommended']")) {
+        item.recommended = !!event.target.checked;
+        return;
+      }
+      if (event.target.matches("[data-menu-tag]")) {
+        const code = event.target.getAttribute("data-menu-tag");
+        const tags = new Set(item.tags || []);
+        if (event.target.checked) tags.add(code);
+        else tags.delete(code);
+        item.tags = [...tags];
+      }
+    });
+
+    $("menu-editor-root")?.addEventListener("click", (event) => {
+      if (!menuDraft) return;
+      const addItem = event.target.closest("[data-add-item]");
+      if (addItem) {
+        const sIndex = parseInt(addItem.getAttribute("data-add-item"), 10);
+        if (!menuDraft.sections[sIndex]) return;
+        if ((menuDraft.sections[sIndex].items || []).length >= 20) {
+          showFlash("menu-editor-message", "Each course can have up to 20 dishes.", "error");
+          return;
+        }
+        menuDraft.sections[sIndex].items.push(blankMenuItem());
+        renderMenuEditor();
+        return;
+      }
+      const removeItem = event.target.closest("[data-remove-item]");
+      if (removeItem) {
+        const sectionEl = event.target.closest("[data-section-index]");
+        const sIndex = parseInt(sectionEl?.dataset.sectionIndex, 10);
+        const iIndex = parseInt(removeItem.getAttribute("data-remove-item"), 10);
+        const section = menuDraft.sections[sIndex];
+        if (!section) return;
+        if ((section.items || []).length <= 1) {
+          showFlash("menu-editor-message", "Keep at least one dish in each course, or remove the course.", "error");
+          return;
+        }
+        section.items.splice(iIndex, 1);
+        renderMenuEditor();
+        return;
+      }
+      const removeSection = event.target.closest("[data-remove-section]");
+      if (removeSection) {
+        if (menuDraft.sections.length <= 1) {
+          showFlash("menu-editor-message", "Keep at least one course on the menu.", "error");
+          return;
+        }
+        menuDraft.sections.splice(parseInt(removeSection.getAttribute("data-remove-section"), 10), 1);
+        renderMenuEditor();
+      }
+    });
+
+    $("menu-tags-root")?.addEventListener("input", (event) => {
+      if (!menuDraft || !event.target.matches("[data-tag-field='label']")) return;
+      const row = event.target.closest(".admin-menu-tag-row");
+      const codeInput = row?.querySelector("[data-tag-field='code']");
+      const code = String(codeInput?.value || "").toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 6);
+      if (code && menuDraft.tagLegend[code] !== undefined) {
+        menuDraft.tagLegend[code] = String(event.target.value || "").trim().slice(0, 32) || code;
+      }
+    });
+
+    $("menu-tags-root")?.addEventListener("focusout", (event) => {
+      if (!menuDraft || !event.target.matches("[data-tag-field='code']")) return;
+      const row = event.target.closest(".admin-menu-tag-row");
+      const oldCode = row?.dataset.tagCode || "";
+      collectMenuLegendFromDom();
+      const newCode = String(event.target.value || "").toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 6);
+      if (oldCode && newCode && oldCode !== newCode) {
+        menuDraft.sections.forEach((section) => {
+          (section.items || []).forEach((item) => {
+            item.tags = (item.tags || []).map((tag) => (tag === oldCode ? newCode : tag));
+            item.tags = [...new Set(item.tags)];
+          });
+        });
+      }
+      renderMenuEditor();
+    });
+
+    $("menu-tags-root")?.addEventListener("click", (event) => {
+      const btn = event.target.closest("[data-remove-tag]");
+      if (!btn || !menuDraft) return;
+      const code = btn.getAttribute("data-remove-tag");
+      delete menuDraft.tagLegend[code];
+      menuDraft.sections.forEach((section) => {
+        (section.items || []).forEach((item) => {
+          item.tags = (item.tags || []).filter((tag) => tag !== code);
+        });
+      });
+      renderMenuEditor();
+    });
+
+    $("menu-add-section-btn")?.addEventListener("click", () => {
+      if (!menuDraft) return;
+      if ((menuDraft.sections || []).length >= 12) {
+        showFlash("menu-editor-message", "You can have up to 12 courses.", "error");
+        return;
+      }
+      const used = new Set((menuDraft.sections || []).map((section) => section.id));
+      menuDraft.sections.push({
+        id: uniqueMenuId("course", used),
+        title: "New course",
+        items: [blankMenuItem()],
+      });
+      renderMenuEditor();
+      hideFlash("menu-editor-message");
+    });
+
+    $("menu-add-tag-btn")?.addEventListener("click", () => {
+      if (!menuDraft) return;
+      collectMenuLegendFromDom();
+      if (menuTagKeys(menuDraft).length >= 12) {
+        showFlash("menu-editor-message", "You can have up to 12 dietary tags.", "error");
+        return;
+      }
+      let n = 1;
+      while (menuDraft.tagLegend[`T${n}`]) n += 1;
+      menuDraft.tagLegend[`T${n}`] = "New tag";
+      renderMenuEditor();
+    });
+
+    $("menu-save-btn")?.addEventListener("click", saveMenuEditor);
+  }
+
+  function loadMenuEditor() {
+    bindMenuEditor();
+    AdminAuth.apiCall("api.php?action=admin-get-menu")
+      .then((res) => res.json())
+      .then((payload) => {
+        if (!payload || !payload.success) throw new Error(payload?.error || "Could not load menu");
+        menuDraft = cloneMenu(payload.data);
+        if (!menuDraft.tagLegend) menuDraft.tagLegend = {};
+        if (!Array.isArray(menuDraft.sections)) menuDraft.sections = [];
+        renderMenuEditor();
+        hideFlash("menu-editor-message");
+      })
+      .catch((error) => {
+        showFlash("menu-editor-message", error.message || "Could not load the menu.", "error");
+      });
+  }
+
+  function saveMenuEditor() {
+    if (!menuDraft) return;
+    collectMenuLegendFromDom();
+    const used = new Set();
+    menuDraft.sections = (menuDraft.sections || []).map((section) => ({
+      ...section,
+      id: uniqueMenuId(section.id || section.title, used),
+      title: String(section.title || "").trim() || "Course",
+      items: (section.items || []).filter((item) => String(item.name || "").trim()),
+    })).filter((section) => section.items.length);
+    if (!menuDraft.sections.length) {
+      showFlash("menu-editor-message", "Add at least one dish before saving.", "error");
+      return;
+    }
+    const saveBtn = $("menu-save-btn");
+    if (saveBtn) saveBtn.disabled = true;
+    AdminAuth.apiCall("api.php?action=admin-save-menu", {
+      method: "POST",
+      body: JSON.stringify({ menu: menuDraft }),
+    })
+      .then((res) => res.json())
+      .then((payload) => {
+        if (!payload || !payload.success) throw new Error(payload?.error || "Save failed");
+        menuDraft = cloneMenu(payload.data);
+        renderMenuEditor();
+        showFlash("menu-editor-message", "Menu saved. Guests will see this on the reception Menu tab.", "success");
+      })
+      .catch((error) => {
+        showFlash("menu-editor-message", error.message || "Could not save the menu.", "error");
       })
       .finally(() => {
         if (saveBtn) saveBtn.disabled = false;
