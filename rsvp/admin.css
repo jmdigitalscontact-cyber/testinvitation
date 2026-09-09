@@ -653,6 +653,27 @@ body.admin-app {
     grid-template-columns: 1fr;
     gap: 0.15rem;
   }
+
+  .admin-floor-room {
+    width: 100%;
+    min-width: 20rem;
+  }
+
+  .admin-floor-table-dot {
+    width: 34px;
+    height: 34px;
+    font-size: 0.8rem;
+  }
+
+  .admin-floor-piece--vip .admin-floor-table-dot {
+    width: 58px;
+    height: 32px;
+    font-size: 0.62rem;
+  }
+
+  .admin-floor-piece__caption {
+    font-size: 0.6rem;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -923,7 +944,8 @@ body.admin-app {
 }
 
 .admin-floor-key__table,
-.admin-floor-key__marker {
+.admin-floor-key__marker,
+.admin-floor-key__vip {
   display: inline-block;
   width: 0.9rem;
   height: 0.9rem;
@@ -937,6 +959,13 @@ body.admin-app {
   box-shadow: 0 0 0 1px #4a5f4e;
 }
 
+.admin-floor-key__vip {
+  border-radius: 3px;
+  background: #5c5c5c;
+  border-color: #fff;
+  box-shadow: 0 0 0 1px #5c5c5c;
+}
+
 .admin-floor-key__marker {
   border-radius: 3px;
   background: #efe4c8;
@@ -945,23 +974,36 @@ body.admin-app {
 .admin-floor-editor {
   overflow: auto;
   padding: 0.15rem 0 0.35rem;
+  -webkit-overflow-scrolling: touch;
 }
 
 .admin-floor-room {
   position: relative;
-  width: min(100%, 800px);
-  min-height: 420px;
-  height: 420px;
+  width: min(100%, 960px);
+  min-height: 220px;
+  height: auto;
+  aspect-ratio: 1024 / 721;
   margin: 0 auto;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.35), rgba(201, 184, 150, 0.12)),
-    #f4efe6;
+  background: #fff;
   border: 3px solid #8c7a5c;
   border-radius: 14px;
-  box-shadow: inset 0 0 0 12px rgba(255, 255, 255, 0.4);
+  box-shadow: inset 0 0 0 4px rgba(255, 255, 255, 0.4);
   overflow: hidden;
   user-select: none;
   touch-action: none;
+}
+
+.admin-floor-plan-img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  object-position: center;
+  pointer-events: none;
+  user-select: none;
+  z-index: 0;
+  background: #fff;
 }
 
 .admin-floor-grid {
@@ -1032,19 +1074,28 @@ body.admin-app {
 }
 
 .admin-floor-table-dot {
-  width: 52px;
-  height: 52px;
+  width: 42px;
+  height: 42px;
   border-radius: 50%;
-  background: #4a5f4e;
+  background: rgba(74, 95, 78, 0.88);
   border: 3px solid #fff;
   color: #fff;
   font-family: var(--admin-serif);
-  font-size: 1.05rem;
+  font-size: 0.95rem;
   font-weight: 700;
   display: flex;
   align-items: center;
   justify-content: center;
   box-shadow: 0 4px 12px rgba(47, 61, 49, 0.28);
+}
+
+.admin-floor-piece--vip .admin-floor-table-dot {
+  width: 72px;
+  height: 40px;
+  border-radius: 6px;
+  background: rgba(70, 70, 70, 0.9);
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
 }
 
 .admin-floor-marker-box {
@@ -1083,6 +1134,13 @@ body.admin-app {
   padding: 0.08rem 0.45rem;
   white-space: nowrap;
   pointer-events: none;
+  opacity: 0;
+}
+
+.admin-floor-piece.is-selected .admin-floor-piece__caption,
+.admin-floor-piece:hover .admin-floor-piece__caption,
+.admin-floor-piece:focus-visible .admin-floor-piece__caption {
+  opacity: 1;
 }
 
 .admin-muted {

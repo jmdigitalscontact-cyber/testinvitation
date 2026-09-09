@@ -1993,24 +1993,34 @@ function receptionDefaultFloorPlan() {
         'legend' => [
             ['id' => 'stage', 'label' => 'Stage'],
             ['id' => 'entrance', 'label' => 'Entrance'],
-            ['id' => 'bar', 'label' => 'Buffet / Bar'],
+            ['id' => 'bar', 'label' => 'Mobile Bar'],
+            ['id' => 'buffet', 'label' => 'Buffet'],
+            ['id' => 'video360', 'label' => '360 Video'],
         ],
         'tables' => [
-            ['number' => 1, 'left' => 22.5, 'top' => 56],
-            ['number' => 2, 'left' => 35, 'top' => 56],
-            ['number' => 3, 'left' => 47.5, 'top' => 56],
-            ['number' => 4, 'left' => 60, 'top' => 56],
-            ['number' => 5, 'left' => 72.5, 'top' => 56],
-            ['number' => 6, 'left' => 22.5, 'top' => 72],
-            ['number' => 7, 'left' => 35, 'top' => 72],
-            ['number' => 8, 'left' => 47.5, 'top' => 72],
-            ['number' => 9, 'left' => 60, 'top' => 72],
-            ['number' => 10, 'left' => 72.5, 'top' => 72],
+            ['number' => 1, 'left' => 41, 'top' => 73.5, 'kind' => 'round', 'label' => '1'],
+            ['number' => 2, 'left' => 42, 'top' => 34.7, 'kind' => 'round', 'label' => '2'],
+            ['number' => 3, 'left' => 47.9, 'top' => 63.8, 'kind' => 'round', 'label' => '3'],
+            ['number' => 4, 'left' => 47.9, 'top' => 44.4, 'kind' => 'round', 'label' => '4'],
+            ['number' => 5, 'left' => 52.7, 'top' => 73.5, 'kind' => 'round', 'label' => '5'],
+            ['number' => 6, 'left' => 54.7, 'top' => 35.4, 'kind' => 'round', 'label' => '6'],
+            ['number' => 7, 'left' => 58.6, 'top' => 63.8, 'kind' => 'round', 'label' => '7'],
+            ['number' => 8, 'left' => 61.5, 'top' => 44.4, 'kind' => 'round', 'label' => '8'],
+            ['number' => 9, 'left' => 64.5, 'top' => 73.5, 'kind' => 'round', 'label' => '9'],
+            ['number' => 10, 'left' => 67.4, 'top' => 35.4, 'kind' => 'round', 'label' => '10'],
+            ['number' => 11, 'left' => 70.3, 'top' => 63.8, 'kind' => 'round', 'label' => '11'],
+            ['number' => 12, 'left' => 72.3, 'top' => 44.4, 'kind' => 'round', 'label' => '12'],
+            ['number' => 13, 'left' => 76.2, 'top' => 73.5, 'kind' => 'round', 'label' => '13'],
+            ['number' => 14, 'left' => 79.1, 'top' => 35.4, 'kind' => 'round', 'label' => '14'],
+            ['number' => 15, 'left' => 28.3, 'top' => 65.2, 'kind' => 'vip', 'label' => 'VIP 1'],
+            ['number' => 16, 'left' => 28.3, 'top' => 43, 'kind' => 'vip', 'label' => 'VIP 2'],
         ],
         'markers' => [
-            'stage' => ['left' => 37.5, 'top' => 12, 'width' => 25, 'height' => 14, 'label' => 'Stage'],
-            'entrance' => ['left' => 40, 'top' => 80, 'width' => 20, 'height' => 8, 'label' => 'Entrance'],
-            'bar' => ['left' => 7.5, 'top' => 32, 'width' => 12.5, 'height' => 24, 'label' => 'Buffet / Bar'],
+            'stage' => ['left' => 2, 'top' => 42, 'width' => 10, 'height' => 22, 'label' => 'Stage'],
+            'entrance' => ['left' => 42, 'top' => 88, 'width' => 16, 'height' => 6, 'label' => 'Entrance'],
+            'bar' => ['left' => 52, 'top' => 86, 'width' => 16, 'height' => 6, 'label' => 'Mobile Bar'],
+            'buffet' => ['left' => 52, 'top' => 16, 'width' => 20, 'height' => 6, 'label' => 'Buffet'],
+            'video360' => ['left' => 78, 'top' => 70, 'width' => 8, 'height' => 10, 'label' => '360 Video'],
         ],
     ];
 }
@@ -2042,10 +2052,20 @@ function receptionNormalizeFloorPlan($raw) {
             continue;
         }
         $seen[$number] = true;
+        $kind = strtolower(trim((string)($table['kind'] ?? 'round')));
+        if ($kind !== 'vip') {
+            $kind = 'round';
+        }
+        $label = trim((string)($table['label'] ?? ''));
+        if ($label === '') {
+            $label = $kind === 'vip' ? ('VIP ' . $number) : (string)$number;
+        }
         $tables[] = [
             'number' => $number,
             'left' => receptionClampPercent($table['left'] ?? 50, 4, 96),
             'top' => receptionClampPercent($table['top'] ?? 50, 8, 94),
+            'kind' => $kind,
+            'label' => substr($label, 0, 24),
         ];
         if (count($tables) >= 40) {
             break;
@@ -2061,19 +2081,32 @@ function receptionNormalizeFloorPlan($raw) {
 
     $markers = [];
     $sourceMarkers = isset($plan['markers']) && is_array($plan['markers']) ? $plan['markers'] : [];
-    foreach ($defaults['markers'] as $id => $defaultMarker) {
-        $marker = isset($sourceMarkers[$id]) && is_array($sourceMarkers[$id]) ? $sourceMarkers[$id] : $defaultMarker;
+    $markerIds = array_unique(array_merge(array_keys($defaults['markers']), array_keys($sourceMarkers)));
+    foreach ($markerIds as $rawId) {
+        $id = strtolower(preg_replace('/[^a-z0-9_-]/', '', (string)$rawId));
+        if ($id === '') {
+            continue;
+        }
+        $defaultMarker = isset($defaults['markers'][$id]) && is_array($defaults['markers'][$id])
+            ? $defaults['markers'][$id]
+            : ['left' => 40, 'top' => 40, 'width' => 12, 'height' => 8, 'label' => $id];
+        $marker = isset($sourceMarkers[$rawId]) && is_array($sourceMarkers[$rawId])
+            ? $sourceMarkers[$rawId]
+            : (isset($sourceMarkers[$id]) && is_array($sourceMarkers[$id]) ? $sourceMarkers[$id] : $defaultMarker);
         $label = trim((string)($marker['label'] ?? $defaultMarker['label']));
         if ($label === '') {
             $label = $defaultMarker['label'];
         }
         $markers[$id] = [
-            'left' => receptionClampPercent($marker['left'] ?? $defaultMarker['left'], 0, 92),
-            'top' => receptionClampPercent($marker['top'] ?? $defaultMarker['top'], 0, 92),
-            'width' => receptionClampPercent($marker['width'] ?? $defaultMarker['width'], 8, 60),
-            'height' => receptionClampPercent($marker['height'] ?? $defaultMarker['height'], 6, 50),
+            'left' => receptionClampPercent($marker['left'] ?? $defaultMarker['left'], 0, 96),
+            'top' => receptionClampPercent($marker['top'] ?? $defaultMarker['top'], 0, 96),
+            'width' => receptionClampPercent($marker['width'] ?? $defaultMarker['width'], 4, 80),
+            'height' => receptionClampPercent($marker['height'] ?? $defaultMarker['height'], 3, 60),
             'label' => substr($label, 0, 32),
         ];
+        if (count($markers) >= 20) {
+            break;
+        }
     }
 
     $legend = [];

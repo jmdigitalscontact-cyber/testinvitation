@@ -37,7 +37,7 @@
     markedSeatTable: null,
     markedSeatName: "",
     seatPreviewTimer: 0,
-    theme: localStorage.getItem(THEME_STORAGE) || "dark",
+    theme: "light",
     likedPhotos: loadLikedPhotoIds(),
     giftBoxOpened: false,
   };
@@ -116,8 +116,6 @@
     els.toast = document.getElementById("reception-toast");
     els.particleCanvas = document.getElementById("particle-canvas");
     els.confettiCanvas = document.getElementById("confetti-canvas");
-    els.themeToggle = document.getElementById("theme-toggle");
-    els.themeToggleIcon = document.querySelector(".reception-theme-toggle__icon");
     els.giftBox = document.getElementById("gift-box");
     els.giftBoxLid = document.getElementById("gift-box-lid");
     els.giftBoxCta = document.querySelector(".rec-gift-box__cta");
@@ -218,16 +216,13 @@
      THEME
      ─────────────────────────────────────────── */
   function setTheme(theme) {
-    state.theme = theme;
-    document.documentElement.setAttribute("data-theme", theme);
-    localStorage.setItem(THEME_STORAGE, theme);
-    if (els.themeToggleIcon) {
-      els.themeToggleIcon.textContent = theme === "dark" ? "☀️" : "🌙";
+    state.theme = "light";
+    document.documentElement.setAttribute("data-theme", "light");
+    try {
+      localStorage.setItem(THEME_STORAGE, "light");
+    } catch {
+      /* ignore quota / private mode */
     }
-  }
-
-  function toggleTheme() {
-    setTheme(state.theme === "dark" ? "light" : "dark");
   }
 
   /* ───────────────────────────────────────────
@@ -265,7 +260,7 @@
 
     function animate() {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
-      const isLight = state.theme === "light";
+      const isLight = true;
 
       particles.forEach(p => {
         p.x += p.speedX;
@@ -780,7 +775,7 @@
     if (guest.tableNumber == null || guest.tableNumber < 1) {
       return { text: "Not assigned yet", unassigned: true };
     }
-    let label = `Table ${guest.tableNumber}`;
+    let label = tableDisplayName(guest.tableNumber);
     if (guest.seatNumber != null && guest.seatNumber > 0) {
       label += ` · Seat ${guest.seatNumber}`;
     }
@@ -897,24 +892,34 @@
     legend: [
       { id: "stage", label: "Stage" },
       { id: "entrance", label: "Entrance" },
-      { id: "bar", label: "Buffet / Bar" },
+      { id: "bar", label: "Mobile Bar" },
+      { id: "buffet", label: "Buffet" },
+      { id: "video360", label: "360 Video" },
     ],
     tables: [
-      { number: 1, left: 22.5, top: 56 },
-      { number: 2, left: 35, top: 56 },
-      { number: 3, left: 47.5, top: 56 },
-      { number: 4, left: 60, top: 56 },
-      { number: 5, left: 72.5, top: 56 },
-      { number: 6, left: 22.5, top: 72 },
-      { number: 7, left: 35, top: 72 },
-      { number: 8, left: 47.5, top: 72 },
-      { number: 9, left: 60, top: 72 },
-      { number: 10, left: 72.5, top: 72 },
+      { number: 1, left: 41, top: 73.5, kind: "round", label: "1" },
+      { number: 2, left: 42, top: 34.7, kind: "round", label: "2" },
+      { number: 3, left: 47.9, top: 63.8, kind: "round", label: "3" },
+      { number: 4, left: 47.9, top: 44.4, kind: "round", label: "4" },
+      { number: 5, left: 52.7, top: 73.5, kind: "round", label: "5" },
+      { number: 6, left: 54.7, top: 35.4, kind: "round", label: "6" },
+      { number: 7, left: 58.6, top: 63.8, kind: "round", label: "7" },
+      { number: 8, left: 61.5, top: 44.4, kind: "round", label: "8" },
+      { number: 9, left: 64.5, top: 73.5, kind: "round", label: "9" },
+      { number: 10, left: 67.4, top: 35.4, kind: "round", label: "10" },
+      { number: 11, left: 70.3, top: 63.8, kind: "round", label: "11" },
+      { number: 12, left: 72.3, top: 44.4, kind: "round", label: "12" },
+      { number: 13, left: 76.2, top: 73.5, kind: "round", label: "13" },
+      { number: 14, left: 79.1, top: 35.4, kind: "round", label: "14" },
+      { number: 15, left: 28.3, top: 65.2, kind: "vip", label: "VIP 1" },
+      { number: 16, left: 28.3, top: 43, kind: "vip", label: "VIP 2" },
     ],
     markers: {
-      stage: { left: 37.5, top: 12, width: 25, height: 14, label: "Stage" },
-      entrance: { left: 40, top: 80, width: 20, height: 8, label: "Entrance" },
-      bar: { left: 7.5, top: 32, width: 12.5, height: 24, label: "Buffet / Bar" },
+      stage: { left: 2, top: 42, width: 10, height: 22, label: "Stage" },
+      entrance: { left: 42, top: 88, width: 16, height: 6, label: "Entrance" },
+      bar: { left: 52, top: 86, width: 16, height: 6, label: "Mobile Bar" },
+      buffet: { left: 52, top: 16, width: 20, height: 6, label: "Buffet" },
+      video360: { left: 78, top: 70, width: 8, height: 10, label: "360 Video" },
     },
   };
 
@@ -936,6 +941,16 @@
     }
   }
 
+  function tableDisplayName(number) {
+    const tables = Array.isArray(floorPlanLayout?.tables) ? floorPlanLayout.tables : DEFAULT_FLOOR_PLAN.tables;
+    const table = tables.find((item) => Number(item.number) === Number(number));
+    const label = String(table?.label || "").trim();
+    if (table?.kind === "vip" || /^vip/i.test(label)) {
+      return label || `VIP ${number}`;
+    }
+    return `Table ${number}`;
+  }
+
   function renderFloorLayout() {
     const plan = floorPlanLayout || DEFAULT_FLOOR_PLAN;
     if (els.floorLegend) {
@@ -945,25 +960,6 @@
       ).join("");
     }
 
-    if (els.floorRoom) {
-      const markers = plan.markers || {};
-      els.floorRoom.querySelectorAll("[data-marker]").forEach((el) => el.remove());
-      ["stage", "entrance", "bar"].forEach((id) => {
-        const marker = markers[id];
-        if (!marker) return;
-        const el = document.createElement("div");
-        el.className = `rec-floor-marker rec-floor-marker--${id}`;
-        el.dataset.marker = id;
-        el.style.left = `${marker.left}%`;
-        el.style.top = `${marker.top}%`;
-        el.style.width = `${marker.width}%`;
-        el.style.height = `${marker.height}%`;
-        el.innerHTML = `<div class="rec-floor-marker__label">${escapeHtml(marker.label || id)}</div>`;
-        if (els.floorTables) els.floorRoom.insertBefore(el, els.floorTables);
-        else els.floorRoom.appendChild(el);
-      });
-    }
-
     renderFloorTables();
   }
 
@@ -971,11 +967,13 @@
     if (!els.floorTables) return;
     const tables = Array.isArray(floorPlanLayout?.tables) ? floorPlanLayout.tables : DEFAULT_FLOOR_PLAN.tables;
 
-    els.floorTables.innerHTML = tables.map((t) =>
-      `<button type="button" class="rec-floor-table" data-table="${t.number}" style="left:${t.left}%;top:${t.top}%">
-        <span class="rec-floor-table__number">${t.number}</span>
-      </button>`
-    ).join("");
+    els.floorTables.innerHTML = tables.map((t) => {
+      const isVip = t.kind === "vip";
+      const name = tableDisplayName(t.number);
+      return `<button type="button" class="rec-floor-table${isVip ? " rec-floor-table--vip" : ""}" data-table="${t.number}" style="left:${t.left}%;top:${t.top}%" aria-label="${escapeHtml(name)}">
+        <span class="rec-floor-table__number">${escapeHtml(isVip ? (t.label || "VIP") : String(t.number))}</span>
+      </button>`;
+    }).join("");
 
     els.floorTables.querySelectorAll(".rec-floor-table").forEach(btn => {
       btn.addEventListener("click", () => {
@@ -993,7 +991,7 @@
     if (!els.tablePopup || !els.tablePopupTitle || !els.tablePopupList) return;
 
     const guestsAtTable = state.guests.filter(g => g.tableNumber === tableNum);
-    els.tablePopupTitle.textContent = `Table ${tableNum}`;
+    els.tablePopupTitle.textContent = tableDisplayName(tableNum);
     els.tablePopupList.innerHTML = guestsAtTable.length
       ? guestsAtTable.map((g, i) =>
           `<li style="animation-delay:${i * 40}ms">${escapeHtml(g.name)}</li>`
@@ -1025,8 +1023,8 @@
     if (els.floorHint) {
       els.floorHint.hidden = false;
       els.floorHint.textContent = state.markedSeatName
-        ? `${state.markedSeatName} — Your seat is here · Table ${num}`
-        : `Your seat is here · Table ${num}`;
+        ? `${state.markedSeatName} — Your seat is here · ${tableDisplayName(num)}`
+        : `Your seat is here · ${tableDisplayName(num)}`;
     }
   }
 
@@ -1980,7 +1978,7 @@
   function init() {
     cacheEls();
     applyAccessLock();
-    setTheme(state.theme);
+    setTheme("light");
 
     if (!hasReceptionAccessKey()) {
       initParticles();
@@ -2002,7 +2000,6 @@
     });
 
     els.searchInput?.addEventListener("input", onSearchInput);
-    els.themeToggle?.addEventListener("click", toggleTheme);
   }
 
   function initLockScreen() {

@@ -1634,9 +1634,22 @@
   }
 
   function selectedFloorHint() {
-    if (!floorPlanSelected) return "Green circles are tables. Beige boxes are Stage, Entrance, and Buffet. Drag them on the floor, then save.";
-    if (floorPlanSelected.type === "table") return `Selected Table ${floorPlanSelected.number}. Drag to move, or remove it.`;
+    if (!floorPlanSelected) return "Drag tables onto the official Alta Terra seats, then save. VIP 1 is table 15 and VIP 2 is table 16 when assigning seats.";
+    if (floorPlanSelected.type === "table") {
+      const table = floorPlanDraft?.tables?.find((item) => item.number === floorPlanSelected.number);
+      const name = tableDisplayName(floorPlanSelected.number, table);
+      return `Selected ${name}. Drag to move, edit the label, or remove it.`;
+    }
     return `Selected ${floorPlanSelected.id}. Drag to move, or edit the label.`;
+  }
+
+  function tableDisplayName(number, table) {
+    const item = table || floorPlanDraft?.tables?.find((row) => Number(row.number) === Number(number));
+    const label = String(item?.label || "").trim();
+    if (item?.kind === "vip" || /^vip/i.test(label)) {
+      return label || `VIP ${number}`;
+    }
+    return label && label !== String(number) ? `Table ${label}` : `Table ${number}`;
   }
 
   function updateFloorPlanToolbar() {
@@ -1644,7 +1657,11 @@
     const labelInput = $("floor-marker-label");
     if (removeBtn) removeBtn.disabled = !(floorPlanSelected && floorPlanSelected.type === "table");
     if (labelInput) {
-      if (floorPlanSelected && floorPlanSelected.type === "marker" && floorPlanDraft?.markers?.[floorPlanSelected.id]) {
+      if (floorPlanSelected && floorPlanSelected.type === "table") {
+        const table = floorPlanDraft?.tables?.find((item) => item.number === floorPlanSelected.number);
+        labelInput.disabled = false;
+        labelInput.value = table?.label || String(floorPlanSelected.number);
+      } else if (floorPlanSelected && floorPlanSelected.type === "marker" && floorPlanDraft?.markers?.[floorPlanSelected.id]) {
         labelInput.disabled = false;
         labelInput.value = floorPlanDraft.markers[floorPlanSelected.id].label || "";
       } else {
@@ -1657,9 +1674,9 @@
   }
 
   function prepareAdminFloorRoom(room) {
-    const parentWidth = room.parentElement ? room.parentElement.clientWidth : 800;
-    const width = Math.max(320, Math.min(parentWidth, 800));
-    const height = Math.max(420, Math.round(width * 0.625));
+    const parentWidth = room.parentElement ? room.parentElement.clientWidth : 960;
+    const width = Math.max(300, Math.min(parentWidth, 960));
+    const height = Math.max(220, Math.round(width * (721 / 1024)));
     room.style.position = "relative";
     room.style.width = `${width}px`;
     room.style.height = `${height}px`;
@@ -1669,24 +1686,13 @@
     room.style.touchAction = "none";
     room.style.userSelect = "none";
 
-    if (!room.querySelector(".admin-floor-grid")) {
-      const grid = document.createElement("div");
-      grid.className = "admin-floor-grid";
-      grid.setAttribute("aria-hidden", "true");
-      room.appendChild(grid);
-    }
-    if (!room.querySelector(".admin-floor-wall--top")) {
-      [
-        ["admin-floor-wall admin-floor-wall--top", "Stage wall"],
-        ["admin-floor-wall admin-floor-wall--bottom", "Entrance wall"],
-        ["admin-floor-wall admin-floor-wall--left", "Buffet side"],
-      ].forEach(([className, text]) => {
-        const wall = document.createElement("div");
-        wall.className = className;
-        wall.setAttribute("aria-hidden", "true");
-        wall.textContent = text;
-        room.appendChild(wall);
-      });
+    if (!room.querySelector(".admin-floor-plan-img")) {
+      const img = document.createElement("img");
+      img.className = "admin-floor-plan-img";
+      img.src = "../reception/assets/alta-terra-floor-plan.png";
+      img.alt = "Official Alta Terra Tagaytay floor layout";
+      img.draggable = false;
+      room.appendChild(img);
     }
   }
 
@@ -1713,35 +1719,18 @@
     prepareAdminFloorRoom(room);
     room.querySelectorAll("[data-kind]").forEach((el) => el.remove());
 
-    const markers = floorPlanDraft.markers || {};
-    ["stage", "entrance", "bar"].forEach((id) => {
-      const marker = markers[id];
-      if (!marker) return;
-      const el = document.createElement("button");
-      el.type = "button";
-      el.className = `admin-floor-piece admin-floor-piece--marker admin-floor-piece--${id}`;
-      el.dataset.kind = "marker";
-      el.dataset.id = id;
-      el.innerHTML = `
-        <span class="admin-floor-marker-box"><span class="admin-floor-piece__title">${escapeHtml(marker.label || id)}</span></span>
-        <span class="admin-floor-piece__caption">Drag to move</span>
-      `;
-      placeAdminFloorPiece(el, marker, false);
-      if (floorPlanSelected && floorPlanSelected.type === "marker" && floorPlanSelected.id === id) {
-        el.classList.add("is-selected");
-      }
-      room.appendChild(el);
-    });
-
     (floorPlanDraft.tables || []).forEach((table) => {
       const el = document.createElement("button");
       el.type = "button";
-      el.className = "admin-floor-piece admin-floor-piece--table";
+      const isVip = table.kind === "vip";
+      el.className = `admin-floor-piece admin-floor-piece--table${isVip ? " admin-floor-piece--vip" : ""}`;
       el.dataset.kind = "table";
       el.dataset.number = String(table.number);
+      const name = tableDisplayName(table.number, table);
+      el.setAttribute("aria-label", `${name}, drag to move`);
       el.innerHTML = `
-        <span class="admin-floor-table-dot">${table.number}</span>
-        <span class="admin-floor-piece__caption">Table ${table.number} · drag</span>
+        <span class="admin-floor-table-dot">${escapeHtml(isVip ? (table.label || "VIP") : String(table.number))}</span>
+        <span class="admin-floor-piece__caption">${escapeHtml(name)} · drag</span>
       `;
       placeAdminFloorPiece(el, table, true);
       if (floorPlanSelected && floorPlanSelected.type === "table" && floorPlanSelected.number === table.number) {
@@ -1851,6 +1840,8 @@
         number,
         left: Math.min(90, 18 + col * 14),
         top: Math.min(88, 42 + row * 14),
+        kind: "round",
+        label: String(number),
       });
       floorPlanDraft.tables.sort((a, b) => a.number - b.number);
       floorPlanDirty = true;
@@ -1871,10 +1862,23 @@
     });
 
     $("floor-marker-label")?.addEventListener("input", (event) => {
-      if (!floorPlanDraft || !floorPlanSelected || floorPlanSelected.type !== "marker") return;
+      if (!floorPlanDraft || !floorPlanSelected) return;
+      const nextLabel = String(event.target.value || "").slice(0, 24);
+      if (floorPlanSelected.type === "table") {
+        const table = floorPlanDraft.tables.find((item) => item.number === floorPlanSelected.number);
+        if (!table) return;
+        table.label = nextLabel;
+        floorPlanDirty = true;
+        const title = document.querySelector(`.admin-floor-piece[data-number="${floorPlanSelected.number}"] .admin-floor-table-dot`);
+        const caption = document.querySelector(`.admin-floor-piece[data-number="${floorPlanSelected.number}"] .admin-floor-piece__caption`);
+        if (title) title.textContent = table.kind === "vip" ? (table.label || "VIP") : (table.label || String(table.number));
+        if (caption) caption.textContent = `${tableDisplayName(table.number, table)} · drag`;
+        return;
+      }
+      if (floorPlanSelected.type !== "marker") return;
       const marker = floorPlanDraft.markers[floorPlanSelected.id];
       if (!marker) return;
-      marker.label = String(event.target.value || "").slice(0, 32);
+      marker.label = nextLabel.slice(0, 32);
       floorPlanDirty = true;
       const title = document.querySelector(`.admin-floor-piece[data-id="${floorPlanSelected.id}"] .admin-floor-piece__title`);
       if (title) title.textContent = marker.label || floorPlanSelected.id;
@@ -1992,7 +1996,7 @@
     tr.innerHTML = `
       <td>${escapeHtml(invitation.guest_name)}</td>
       <td>${companions.length ? companions.map((n) => `<div>${escapeHtml(n)}</div>`).join("") : "None"}</td>
-      <td>${assignment ? `Table ${escapeHtml(String(assignment.table_number))}` : "Not assigned"}</td>
+      <td>${assignment ? escapeHtml(tableDisplayName(assignment.table_number)) : "Not assigned"}</td>
       <td></td>
     `;
     const assignBtn = tr.lastElementChild.appendChild(document.createElement("button"));
@@ -2037,10 +2041,13 @@
     const select = $("table-number-select");
     const current = select.value;
     select.innerHTML = '<option value="">All tables</option>';
-    for (let i = 1; i <= tablesNeeded; i += 1) {
+    const planTables = Array.isArray(floorPlanDraft?.tables) ? floorPlanDraft.tables : [];
+    const maxFromPlan = planTables.reduce((max, table) => Math.max(max, Number(table.number) || 0), 0);
+    const maxTable = Math.max(tablesNeeded || 0, maxFromPlan, 1);
+    for (let i = 1; i <= maxTable; i += 1) {
       const option = document.createElement("option");
       option.value = String(i);
-      option.textContent = `Table ${i}`;
+      option.textContent = tableDisplayName(i);
       select.appendChild(option);
     }
     select.value = current;
@@ -2076,7 +2083,7 @@
     tbody.innerHTML = "";
 
     if (!filteredInvitations.length) {
-      tbody.innerHTML = `<tr><td colspan="4" class="admin-empty">No guests assigned to Table ${tableNumber}.</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="4" class="admin-empty">No guests assigned to ${escapeHtml(tableDisplayName(tableNumber))}.</td></tr>`;
       return;
     }
 
@@ -2146,7 +2153,7 @@
         const card = document.createElement("div");
         card.className = "admin-card admin-table-overview-card";
         card.innerHTML = `
-          <h3>Table ${escapeHtml(tableNum)}</h3>
+          <h3>${escapeHtml(tableDisplayName(tableNum))}</h3>
           <p><strong>${totalGuests}</strong> guest(s)</p>
           <ul>${listItems}</ul>
         `;

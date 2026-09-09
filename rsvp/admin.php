@@ -250,26 +250,26 @@
             <section id="tables" class="admin-panel" aria-label="Seating">
                 <div class="admin-card">
                     <h2>Reception floor plan</h2>
-                    <p class="admin-card-lead">The floor below is the reception room. Green circles are tables. Beige boxes are Stage, Entrance, and Buffet. Drag any of them to place them, then save.</p>
+                    <p class="admin-card-lead">This is the official Alta Terra Tagaytay layout. Round tables are 1–14. Grey rectangles are VIP 1 (table 15) and VIP 2 (table 16). Drag any table to match the printed seats, then save.</p>
                     <div id="floor-plan-message" class="admin-flash" role="status"></div>
                     <div class="admin-floor-toolbar">
                         <button type="button" class="admin-btn admin-btn-secondary admin-btn-sm" id="floor-add-table-btn">Add table</button>
                         <button type="button" class="admin-btn admin-btn-secondary admin-btn-sm" id="floor-remove-table-btn" disabled>Remove selected table</button>
                         <label class="admin-floor-label-field">
                             <span>Selected label</span>
-                            <input type="text" id="floor-marker-label" maxlength="32" placeholder="Stage, Entrance…" disabled>
+                            <input type="text" id="floor-marker-label" maxlength="24" placeholder="VIP 1, Table 8…" disabled>
                         </label>
                         <button type="button" class="admin-btn admin-btn-primary admin-btn-sm" id="floor-save-btn">Save floor plan</button>
                     </div>
                     <div class="admin-floor-key" aria-hidden="true">
-                        <span><i class="admin-floor-key__table"></i> Tables</span>
-                        <span><i class="admin-floor-key__marker"></i> Stage / Entrance / Buffet</span>
-                        <span>Drag anything on the floor to edit</span>
+                        <span><i class="admin-floor-key__table"></i> Guest tables 1–14</span>
+                        <span><i class="admin-floor-key__vip"></i> VIP tables</span>
+                        <span>Drag hotspots on the official layout to edit</span>
                     </div>
-                    <div class="admin-floor-editor" id="floor-plan-editor" aria-label="Editable reception floor plan">
+                    <div class="admin-floor-editor" id="floor-plan-editor" aria-label="Editable Alta Terra reception floor plan">
                         <div class="admin-floor-room" id="admin-floor-room"></div>
                     </div>
-                    <p class="admin-muted" id="floor-plan-hint">Green circles are tables. Beige boxes are Stage, Entrance, and Buffet. Drag them on the floor, then save.</p>
+                    <p class="admin-muted" id="floor-plan-hint">Drag tables onto the official Alta Terra seats, then save. Guests will see this layout on the reception Floor tab.</p>
                 </div>
 
                 <div class="admin-card">
@@ -277,7 +277,7 @@
                     <div class="admin-form-grid">
                         <div class="admin-field">
                             <label for="total-capacity">Total guest capacity</label>
-                            <input type="number" id="total-capacity" value="200" min="1" onchange="updateTableCalculations()">
+                            <input type="number" id="total-capacity" value="150" min="1" onchange="updateTableCalculations()">
                     </div>
                         <div class="admin-field">
                             <label for="seats-per-table">Seats per table</label>
@@ -573,6 +573,7 @@
                 <div class="admin-field">
                     <label for="assign-table-number">Table number</label>
                     <input type="number" id="assign-table-number" min="1" max="50" required>
+                    <p class="admin-muted" style="margin-top:0.35rem">Guest tables are 1–14. Enter 15 for VIP 1 and 16 for VIP 2.</p>
                     </div>
                 <div class="admin-actions">
                     <button type="button" class="admin-btn admin-btn-secondary" data-close-modal="assign-table-modal">Cancel</button>
