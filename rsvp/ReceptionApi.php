@@ -2845,6 +2845,7 @@ function weddingDefaultGifts() {
                 'account_number' => '',
                 'note' => 'Philippines mobile wallets',
                 'link' => '',
+                'qr_image' => '',
             ],
             [
                 'id' => 'bank',
@@ -2853,6 +2854,7 @@ function weddingDefaultGifts() {
                 'account_number' => '',
                 'note' => 'BDO',
                 'link' => '',
+                'qr_image' => '',
             ],
             [
                 'id' => 'paypal',
@@ -2861,6 +2863,7 @@ function weddingDefaultGifts() {
                 'account_number' => '',
                 'note' => 'Best for guests overseas',
                 'link' => '',
+                'qr_image' => '',
             ],
         ],
     ];
@@ -2912,6 +2915,10 @@ function weddingNormalizeGifts($raw) {
         if ($link !== '' && !preg_match('#^https://#i', $link)) {
             $link = '';
         }
+        $qrImage = basename(trim((string)($method['qr_image'] ?? '')));
+        if ($qrImage !== '' && !preg_match('/^[a-z0-9._-]+\.(jpe?g|png|webp)$/i', $qrImage)) {
+            $qrImage = '';
+        }
         $methods[] = [
             'id' => $idSource !== '' ? weddingGiftsSlug($idSource, $used) : weddingGiftsSlug($title, $used),
             'title' => substr($title, 0, 64),
@@ -2919,6 +2926,7 @@ function weddingNormalizeGifts($raw) {
             'account_number' => substr(trim((string)($method['account_number'] ?? '')), 0, 64),
             'note' => substr(trim((string)($method['note'] ?? '')), 0, 160),
             'link' => substr($link, 0, 240),
+            'qr_image' => $qrImage,
         ];
         if (count($methods) >= 6) {
             break;
@@ -2944,12 +2952,270 @@ function weddingReadGifts() {
     return weddingNormalizeGifts($decoded);
 }
 
+function weddingGiftQrDir() {
+    return __DIR__ . '/data/gift-qr';
+}
+
+function weddingGiftQrPath($fileName) {
+    $fileName = basename((string)$fileName);
+    if ($fileName === '' || !preg_match('/^[a-z0-9._-]+\.(jpe?g|png|webp)$/i', $fileName)) {
+        return '';
+    }
+    $path = weddingGiftQrDir() . DIRECTORY_SEPARATOR . $fileName;
+    $realDir = realpath(weddingGiftQrDir());
+    $realFile = is_file($path) ? realpath($path) : false;
+    if (!$realDir || !$realFile || strpos($realFile, $realDir) !== 0) {
+        return is_file($path) ? $path : '';
+    }
+    return $realFile;
+}
+
+function weddingMethodHasGiftQr(array $method) {
+    $file = trim((string)($method['qr_image'] ?? ''));
+    return $file !== '' && is_file(weddingGiftQrDir() . DIRECTORY_SEPARATOR . basename($file));
+}
+
+function weddingWriteGifts(array $gifts) {
+    $gifts = weddingNormalizeGifts($gifts);
+    $path = weddingGiftsPath();
+    $dir = dirname($path);
+    if (!is_dir($dir) && !@mkdir($dir, 0755, true)) {
+        return false;
+    }
+    $json = json_encode($gifts, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    if ($json === false || @file_put_contents($path, $json) === false) {
+        return false;
+    }
+    $keep = [];
+    foreach ($gifts['methods'] as $method) {
+        $file = basename((string)($method['qr_image'] ?? ''));
+        if ($file !== '') {
+            $keep[$file] = true;
+        }
+    }
+    $qrDir = weddingGiftQrDir();
+    if (is_dir($qrDir)) {
+        foreach (['jpg', 'jpeg', 'png', 'webp'] as $ext) {
+            foreach (glob($qrDir . DIRECTORY_SEPARATOR . '*.' . $ext) ?: [] as $existing) {
+                if (!isset($keep[basename($existing)])) {
+                    @unlink($existing);
+                }
+            }
+        }
+    }
+    return $gifts;
+}
+
+function weddingDeleteGiftQrFiles($methodId, $keepFile = '') {
+    $dir = weddingGiftQrDir();
+    if (!is_dir($dir)) {
+        return;
+    }
+    $keepFile = basename((string)$keepFile);
+    foreach (glob($dir . DIRECTORY_SEPARATOR . $methodId . '.*') ?: [] as $path) {
+        if ($keepFile !== '' && basename($path) === $keepFile) {
+            continue;
+        }
+        @unlink($path);
+    }
+}
+
 function weddingPublicGifts() {
     $gifts = weddingReadGifts();
-    $gifts['methods'] = array_values(array_filter($gifts['methods'], function ($method) {
-        return $method['account_number'] !== '' || $method['link'] !== '';
-    }));
+    $public = [];
+    foreach ($gifts['methods'] as $method) {
+        $hasQr = weddingMethodHasGiftQr($method);
+        if ($method['account_number'] === '' && $method['link'] === '' && !$hasQr) {
+            continue;
+        }
+        $row = $method;
+        $row['qr_url'] = $hasQr
+            ? ('rsvp/api.php?action=serve-gift-qr&id=' . rawurlencode($method['id']))
+            : '';
+        unset($row['qr_image']);
+        $public[] = $row;
+    }
+    $gifts['methods'] = $public;
     return $gifts;
+}
+
+function weddingAdminGiftsView(array $gifts) {
+    foreach ($gifts['methods'] as &$method) {
+        $method['qr_url'] = weddingMethodHasGiftQr($method)
+            ? ('api.php?action=serve-gift-qr&id=' . rawurlencode($method['id']) . '&t=' . (string)time())
+            : '';
+    }
+    unset($method);
+    return $gifts;
+}
+
+function handleAdminGetGifts() {
+    requireAdminAuth();
+    sendResponse([
+        'success' => true,
+        'data' => weddingAdminGiftsView(weddingReadGifts()),
+    ]);
+}
+
+function handleAdminSaveGifts() {
+    requireAdminAuth();
+    $input = getRequestInput();
+    $gifts = weddingWriteGifts($input['gifts'] ?? $input);
+    if ($gifts === false) {
+        sendResponse(['success' => false, 'error' => 'Could not save gift details. Check that rsvp/data is writable.'], 500);
+    }
+    sendResponse([
+        'success' => true,
+        'data' => weddingAdminGiftsView($gifts),
+    ]);
+}
+
+function handleAdminUploadGiftQr() {
+    requireAdminAuth();
+    $methodId = preg_replace('/[^a-z0-9-]/', '', strtolower(trim((string)($_POST['method_id'] ?? ''))));
+    if ($methodId === '') {
+        sendResponse(['success' => false, 'error' => 'Save the payment method first, then upload its QR.'], 400);
+    }
+
+    $file = $_FILES['qr'] ?? null;
+    if (!$file || ($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
+        sendResponse(['success' => false, 'error' => 'Choose a QR image to upload.'], 400);
+    }
+    if (($file['size'] ?? 0) > 3 * 1024 * 1024) {
+        sendResponse(['success' => false, 'error' => 'QR image must be 3MB or smaller.'], 400);
+    }
+
+    $tmp = $file['tmp_name'] ?? '';
+    if ($tmp === '' || !is_uploaded_file($tmp)) {
+        sendResponse(['success' => false, 'error' => 'Upload failed.'], 400);
+    }
+
+    $finfo = finfo_open(FILEINFO_MIME_TYPE);
+    $mime = $finfo ? (string)finfo_file($finfo, $tmp) : '';
+    if ($finfo) {
+        finfo_close($finfo);
+    }
+    $extMap = [
+        'image/jpeg' => 'jpg',
+        'image/jpg' => 'jpg',
+        'image/pjpeg' => 'jpg',
+        'image/png' => 'png',
+        'image/webp' => 'webp',
+    ];
+    if (!isset($extMap[$mime]) || @getimagesize($tmp) === false) {
+        sendResponse(['success' => false, 'error' => 'Upload a JPEG, PNG, or WebP QR image.'], 400);
+    }
+
+    $dir = weddingGiftQrDir();
+    if (!is_dir($dir) && !@mkdir($dir, 0755, true)) {
+        sendResponse(['success' => false, 'error' => 'Could not create the QR folder.'], 500);
+    }
+    $htaccess = $dir . DIRECTORY_SEPARATOR . '.htaccess';
+    if (!is_file($htaccess)) {
+        @file_put_contents($htaccess, "Require all denied\n");
+    }
+
+    $fileName = $methodId . '.' . $extMap[$mime];
+    $dest = $dir . DIRECTORY_SEPARATOR . $fileName;
+    if (!@move_uploaded_file($tmp, $dest)) {
+        sendResponse(['success' => false, 'error' => 'Could not save the QR image.'], 500);
+    }
+    weddingDeleteGiftQrFiles($methodId, $fileName);
+
+    $gifts = weddingReadGifts();
+    $found = false;
+    foreach ($gifts['methods'] as &$method) {
+        if ($method['id'] === $methodId) {
+            $method['qr_image'] = $fileName;
+            $found = true;
+            break;
+        }
+    }
+    unset($method);
+    if (!$found) {
+        @unlink($dest);
+        sendResponse(['success' => false, 'error' => 'That payment method was not found. Save gift details first.'], 400);
+    }
+    $saved = weddingWriteGifts($gifts);
+    if ($saved === false) {
+        sendResponse(['success' => false, 'error' => 'QR uploaded, but gift details could not be updated.'], 500);
+    }
+
+    sendResponse([
+        'success' => true,
+        'message' => 'QR code uploaded. Guests can scan it for a faster gift.',
+        'data' => weddingAdminGiftsView($saved),
+    ]);
+}
+
+function handleAdminDeleteGiftQr() {
+    requireAdminAuth();
+    $input = getRequestInput();
+    $methodId = preg_replace('/[^a-z0-9-]/', '', strtolower(trim((string)($input['method_id'] ?? ''))));
+    if ($methodId === '') {
+        sendResponse(['success' => false, 'error' => 'Missing payment method.'], 400);
+    }
+
+    $gifts = weddingReadGifts();
+    foreach ($gifts['methods'] as &$method) {
+        if ($method['id'] === $methodId) {
+            $method['qr_image'] = '';
+            break;
+        }
+    }
+    unset($method);
+    weddingDeleteGiftQrFiles($methodId);
+    $saved = weddingWriteGifts($gifts);
+    if ($saved === false) {
+        sendResponse(['success' => false, 'error' => 'Could not remove that QR code.'], 500);
+    }
+    sendResponse([
+        'success' => true,
+        'message' => 'QR code removed.',
+        'data' => weddingAdminGiftsView($saved),
+    ]);
+}
+
+function handleServeGiftQr() {
+    $methodId = preg_replace('/[^a-z0-9-]/', '', strtolower(trim((string)($_GET['id'] ?? ''))));
+    if ($methodId === '') {
+        http_response_code(400);
+        echo 'Missing QR';
+        exit;
+    }
+
+    $gifts = weddingReadGifts();
+    $fileName = '';
+    foreach ($gifts['methods'] as $method) {
+        if ($method['id'] === $methodId && weddingMethodHasGiftQr($method)) {
+            $fileName = $method['qr_image'];
+            break;
+        }
+    }
+    $path = $fileName !== '' ? weddingGiftQrPath($fileName) : '';
+    if ($path === '' || !is_file($path)) {
+        http_response_code(404);
+        echo 'QR not found';
+        exit;
+    }
+
+    $finfo = finfo_open(FILEINFO_MIME_TYPE);
+    $mime = $finfo ? (string)finfo_file($finfo, $path) : 'image/jpeg';
+    if ($finfo) {
+        finfo_close($finfo);
+    }
+    $allowed = ['image/jpeg' => true, 'image/png' => true, 'image/webp' => true];
+    if (!isset($allowed[$mime])) {
+        $mime = 'image/jpeg';
+    }
+    if (ob_get_level()) {
+        @ob_end_clean();
+    }
+    header('Content-Type: ' . $mime);
+    header('Content-Length: ' . (string)filesize($path));
+    header('Cache-Control: private, max-age=3600');
+    readfile($path);
+    exit;
 }
 
 function invitationGiftResponse($showGifts) {
@@ -2962,31 +3228,4 @@ function invitationGiftResponse($showGifts) {
         'show_gifts' => true,
         'gifts' => weddingPublicGifts(),
     ];
-}
-
-function handleAdminGetGifts() {
-    requireAdminAuth();
-    sendResponse([
-        'success' => true,
-        'data' => weddingReadGifts(),
-    ]);
-}
-
-function handleAdminSaveGifts() {
-    requireAdminAuth();
-    $input = getRequestInput();
-    $gifts = weddingNormalizeGifts($input['gifts'] ?? $input);
-    $path = weddingGiftsPath();
-    $dir = dirname($path);
-    if (!is_dir($dir) && !@mkdir($dir, 0755, true)) {
-        sendResponse(['success' => false, 'error' => 'Could not create gifts folder.'], 500);
-    }
-    $json = json_encode($gifts, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-    if ($json === false || @file_put_contents($path, $json) === false) {
-        sendResponse(['success' => false, 'error' => 'Could not save gift details. Check that reception/data is writable.'], 500);
-    }
-    sendResponse([
-        'success' => true,
-        'data' => $gifts,
-    ]);
 }

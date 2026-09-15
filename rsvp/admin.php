@@ -373,7 +373,7 @@
             <section id="gifts" class="admin-panel" aria-label="Gifts">
                 <div class="admin-card">
                     <h2>Wedding gift details</h2>
-                    <p class="admin-card-lead">These payment methods are <strong>not</strong> added to every invitation. They appear only on the specific invitations you turn on below — for overseas guests who cannot attend. Everyone else will not see them.</p>
+                    <p class="admin-card-lead">These payment methods are <strong>not</strong> added to every invitation. They appear only on the specific invitations you turn on below. Upload a GCash or bank QR so those guests can scan and send a gift faster.</p>
                     <div id="gifts-editor-message" class="admin-flash" role="status"></div>
                     <div class="admin-field">
                         <label for="gifts-headline">Message on the invitation</label>
@@ -388,6 +388,7 @@
                         <button type="button" class="admin-btn admin-btn-primary admin-btn-sm" id="gifts-save-btn">Save gift details</button>
                     </div>
                     <div id="gifts-methods-root" class="admin-menu-editor"></div>
+                    <input type="file" id="gift-qr-file" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" hidden>
                 </div>
 
                 <div class="admin-card">

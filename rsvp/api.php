@@ -252,6 +252,18 @@ try {
             handleAdminSaveGifts();
             break;
 
+        case 'admin-upload-gift-qr':
+            handleAdminUploadGiftQr();
+            break;
+
+        case 'admin-delete-gift-qr':
+            handleAdminDeleteGiftQr();
+            break;
+
+        case 'serve-gift-qr':
+            handleServeGiftQr();
+            break;
+
         case 'admin-set-invitation-gifts':
             handleAdminSetInvitationGifts();
             break;

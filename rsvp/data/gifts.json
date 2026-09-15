@@ -8,7 +8,8 @@
       "account_name": "Jason & Rhona Mae Berber",
       "account_number": "",
       "note": "Philippines mobile wallets",
-      "link": ""
+      "link": "",
+      "qr_image": ""
     },
     {
       "id": "bank",
@@ -16,7 +17,8 @@
       "account_name": "Jason Berber",
       "account_number": "",
       "note": "BDO",
-      "link": ""
+      "link": "",
+      "qr_image": ""
     },
     {
       "id": "paypal",
@@ -24,7 +26,8 @@
       "account_name": "",
       "account_number": "",
       "note": "Best for guests overseas",
-      "link": ""
+      "link": "",
+      "qr_image": ""
     }
   ]
 }

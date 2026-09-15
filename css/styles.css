@@ -1825,6 +1825,15 @@ audio#wedding-audio { display: none; }
   margin: 0 0 0.35rem;
   font-size: 0.92rem;
 }
+.rsvp-gift-qr {
+  display: block;
+  width: min(100%, 180px);
+  height: auto;
+  margin: 0.55rem auto 0.35rem;
+  border-radius: 12px;
+  background: #fff;
+  border: 1px solid rgba(154,182,157,0.22);
+}
 .rsvp-gift-number {
   margin: 0;
   font-size: 1.05rem;

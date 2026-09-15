@@ -280,7 +280,7 @@
     if (!wrap) return;
     var gifts = invitation && invitation.show_gifts ? invitation.gifts : null;
     var methods = gifts && Array.isArray(gifts.methods) ? gifts.methods.filter(function (method) {
-      return method && (method.account_number || method.link);
+      return method && (method.account_number || method.link || method.qr_url);
     }) : [];
     if (!gifts || !methods.length) {
       wrap.hidden = true;
@@ -302,7 +302,10 @@
         var copy = method.account_number
           ? '<button type="button" class="rsvp-gift-copy" data-copy="' + escapeInviteHtml(method.account_number) + '">Copy</button>'
           : '';
-        return '<article class="rsvp-gift-card"><h4>' + escapeInviteHtml(method.title || 'Gift') + '</h4>' + number + name + note + link + copy + '</article>';
+        var qr = method.qr_url
+          ? '<img class="rsvp-gift-qr" src="' + escapeInviteHtml(method.qr_url) + '" alt="Scan to send a gift">'
+          : '';
+        return '<article class="rsvp-gift-card"><h4>' + escapeInviteHtml(method.title || 'Gift') + '</h4>' + qr + number + name + note + link + copy + '</article>';
       }).join('');
       methodsRoot.querySelectorAll('[data-copy]').forEach(function (btn) {
         btn.addEventListener('click', function () {

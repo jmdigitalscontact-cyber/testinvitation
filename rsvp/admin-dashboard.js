@@ -2266,7 +2266,7 @@
   let giftsInvitations = [];
 
   function blankGiftMethod() {
-    return { id: "", title: "New method", account_name: "", account_number: "", note: "", link: "" };
+    return { id: "", title: "New method", account_name: "", account_number: "", note: "", link: "", qr_image: "", qr_url: "" };
   }
 
   function cloneGifts(data) {
@@ -2310,6 +2310,14 @@
             <input type="url" data-gift-field="link" maxlength="240" value="${escapeHtml(method.link || "")}" placeholder="https://paypal.me/…">
           </div>
         </div>
+        <div class="admin-gift-qr-row">
+          ${method.qr_url ? `<img class="admin-gift-qr-preview" src="${escapeHtml(method.qr_url)}" alt="${escapeHtml(method.title || "Gift")} QR">` : '<p class="admin-muted">No QR uploaded yet.</p>'}
+          <div class="admin-gift-qr-actions">
+            <button type="button" class="admin-btn admin-btn-secondary admin-btn-sm" data-upload-gift-qr="${index}">Upload QR</button>
+            ${method.qr_url ? `<button type="button" class="admin-btn admin-btn-danger admin-btn-sm" data-remove-gift-qr="${escapeHtml(method.id || "")}">Remove QR</button>` : ""}
+            <p class="admin-muted">JPEG, PNG, or WebP · 3MB max. Guests scan this instead of typing the number.</p>
+          </div>
+        </div>
       </div>
     `).join("");
   }
@@ -2320,13 +2328,16 @@
     giftsDraft.thanks = String($("gifts-thanks")?.value || "").trim();
     giftsDraft.methods = Array.from(document.querySelectorAll("#gifts-methods-root [data-gift-index]")).map((card) => {
       const get = (field) => String(card.querySelector(`[data-gift-field="${field}"]`)?.value || "").trim();
+      const current = giftsDraft.methods[Number(card.dataset.giftIndex)] || {};
       return {
-        id: giftsDraft.methods[Number(card.dataset.giftIndex)]?.id || "",
+        id: current.id || "",
         title: get("title"),
         account_name: get("account_name"),
         account_number: get("account_number"),
         note: get("note"),
         link: get("link"),
+        qr_image: current.qr_image || "",
+        qr_url: current.qr_url || "",
       };
     }).filter((method) => method.title);
   }
@@ -2387,16 +2398,104 @@
       });
   }
 
+  let giftQrPendingIndex = -1;
+
+  function persistGiftsDraft() {
+    collectGiftsEditorFromDom();
+    return AdminAuth.apiCall("api.php?action=admin-save-gifts", {
+      method: "POST",
+      body: JSON.stringify({ gifts: giftsDraft }),
+    })
+      .then((res) => res.json())
+      .then((payload) => {
+        if (!payload || !payload.success) throw new Error(payload?.error || "Save failed");
+        giftsDraft = cloneGifts(payload.data);
+        return giftsDraft;
+      });
+  }
+
+  function applyGiftsPayload(payload, message) {
+    giftsDraft = cloneGifts(payload.data);
+    renderGiftsEditor();
+    showFlash("gifts-editor-message", message, "success");
+  }
+
+  function uploadGiftQrForIndex(index, file) {
+    persistGiftsDraft()
+      .then((draft) => {
+        const method = (draft.methods || [])[index];
+        if (!method || !method.id) {
+          throw new Error("Save the payment method first, then upload its QR.");
+        }
+        const form = new FormData();
+        form.append("method_id", method.id);
+        form.append("qr", file, file.name || "qr.jpg");
+        return AdminAuth.apiCall("api.php?action=admin-upload-gift-qr", {
+          method: "POST",
+          body: form,
+        });
+      })
+      .then((res) => res.json())
+      .then((payload) => {
+        if (!payload || !payload.success) throw new Error(payload?.error || "Upload failed");
+        applyGiftsPayload(payload, payload.message || "QR code uploaded. Guests can scan it for a faster gift.");
+      })
+      .catch((error) => {
+        renderGiftsEditor();
+        showFlash("gifts-editor-message", error.message || "Could not upload that QR.", "error");
+      });
+  }
+
+  function removeGiftQr(methodId) {
+    if (!methodId) return;
+    AdminAuth.apiCall("api.php?action=admin-delete-gift-qr", {
+      method: "POST",
+      body: JSON.stringify({ method_id: methodId }),
+    })
+      .then((res) => res.json())
+      .then((payload) => {
+        if (!payload || !payload.success) throw new Error(payload?.error || "Could not remove that QR.");
+        applyGiftsPayload(payload, payload.message || "QR code removed.");
+      })
+      .catch((error) => {
+        showFlash("gifts-editor-message", error.message || "Could not remove that QR.", "error");
+      });
+  }
+
   function bindGiftsEditor() {
     if (giftsEditorBound) return;
     giftsEditorBound = true;
     $("gifts-methods-root")?.addEventListener("click", (event) => {
+      const uploadBtn = event.target.closest("[data-upload-gift-qr]");
+      if (uploadBtn) {
+        giftQrPendingIndex = parseInt(uploadBtn.getAttribute("data-upload-gift-qr"), 10);
+        $("gift-qr-file")?.click();
+        return;
+      }
+      const removeQrBtn = event.target.closest("[data-remove-gift-qr]");
+      if (removeQrBtn) {
+        const methodId = String(removeQrBtn.getAttribute("data-remove-gift-qr") || "");
+        if (!methodId) return;
+        if (!window.confirm("Remove this QR code?")) return;
+        collectGiftsEditorFromDom();
+        removeGiftQr(methodId);
+        return;
+      }
       const btn = event.target.closest("[data-remove-gift]");
       if (!btn || !giftsDraft) return;
       collectGiftsEditorFromDom();
       const index = parseInt(btn.getAttribute("data-remove-gift"), 10);
       giftsDraft.methods.splice(index, 1);
       renderGiftsEditor();
+    });
+    $("gift-qr-file")?.addEventListener("change", () => {
+      const input = $("gift-qr-file");
+      const file = input?.files?.[0];
+      const index = giftQrPendingIndex;
+      giftQrPendingIndex = -1;
+      if (input) input.value = "";
+      if (!file || Number.isNaN(index) || index < 0) return;
+      uploadGiftQrForIndex(index, file);
     });
     $("gifts-add-method-btn")?.addEventListener("click", () => {
       if (!giftsDraft) return;
