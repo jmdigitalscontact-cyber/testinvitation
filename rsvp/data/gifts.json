@@ -1,0 +1,30 @@
+{
+  "headline": "If you cannot celebrate with us in person, a gift toward our future together would mean the world.",
+  "thanks": "Thank you for holding us in your hearts from afar.",
+  "methods": [
+    {
+      "id": "gcash",
+      "title": "GCash / Maya",
+      "account_name": "Jason & Rhona Mae Berber",
+      "account_number": "",
+      "note": "Philippines mobile wallets",
+      "link": ""
+    },
+    {
+      "id": "bank",
+      "title": "Bank transfer",
+      "account_name": "Jason Berber",
+      "account_number": "",
+      "note": "BDO",
+      "link": ""
+    },
+    {
+      "id": "paypal",
+      "title": "PayPal / Wise",
+      "account_name": "",
+      "account_number": "",
+      "note": "Best for guests overseas",
+      "link": ""
+    }
+  ]
+}

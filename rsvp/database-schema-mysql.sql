@@ -13,7 +13,8 @@ CREATE TABLE IF NOT EXISTS invitations (
     email VARCHAR(255),
     phone VARCHAR(20),
     notes TEXT,
-    invited_guest_names JSON
+    invited_guest_names JSON,
+    show_gifts TINYINT(1) NOT NULL DEFAULT 0
 );
 
 CREATE INDEX idx_invitations_invitation_id ON invitations(invitation_id);

@@ -31,6 +31,7 @@
                 <button type="button" class="admin-nav-btn" data-tab="export">Export</button>
                 <button type="button" class="admin-nav-btn" data-tab="tables">Seating</button>
                 <button type="button" class="admin-nav-btn" data-tab="menu">Menu</button>
+                <button type="button" class="admin-nav-btn" data-tab="gifts">Gifts</button>
                 <button type="button" class="admin-nav-btn" data-tab="photos">Photos</button>
                 <button type="button" class="admin-nav-btn" data-tab="reception">Reception</button>
             </nav>
@@ -149,6 +150,10 @@
                             <label for="invited-guest-names">Invited guest names (one per line)</label>
                             <textarea id="invited-guest-names" rows="4" placeholder="Guest name"></textarea>
                     </div>
+                        <label class="admin-checkbox">
+                            <input type="checkbox" id="invite-show-gifts">
+                            <span>Show wedding gifts on this invitation (for overseas guests who cannot attend)</span>
+                        </label>
                         <label class="admin-checkbox">
                             <input type="checkbox" id="auto-send-invite">
                             <span>Send invitation email right away (requires an email address)</span>
@@ -364,6 +369,48 @@
                 </div>
             </section>
 
+            <!-- Wedding gifts -->
+            <section id="gifts" class="admin-panel" aria-label="Gifts">
+                <div class="admin-card">
+                    <h2>Wedding gift details</h2>
+                    <p class="admin-card-lead">These payment methods are <strong>not</strong> added to every invitation. They appear only on the specific invitations you turn on below — for overseas guests who cannot attend. Everyone else will not see them.</p>
+                    <div id="gifts-editor-message" class="admin-flash" role="status"></div>
+                    <div class="admin-field">
+                        <label for="gifts-headline">Message on the invitation</label>
+                        <textarea id="gifts-headline" rows="2" maxlength="280" placeholder="If you cannot celebrate with us in person…"></textarea>
+                    </div>
+                    <div class="admin-field">
+                        <label for="gifts-thanks">Thank-you line</label>
+                        <input type="text" id="gifts-thanks" maxlength="180" placeholder="Thank you for holding us in your hearts from afar.">
+                    </div>
+                    <div class="admin-floor-toolbar">
+                        <button type="button" class="admin-btn admin-btn-secondary admin-btn-sm" id="gifts-add-method-btn">Add payment method</button>
+                        <button type="button" class="admin-btn admin-btn-primary admin-btn-sm" id="gifts-save-btn">Save gift details</button>
+                    </div>
+                    <div id="gifts-methods-root" class="admin-menu-editor"></div>
+                </div>
+
+                <div class="admin-card">
+                    <h2>Show gifts on invitations</h2>
+                    <p class="admin-card-lead">Off by default. Turn this on only for the guests who should see gift details. All other invitations stay unchanged.</p>
+                    <div class="admin-field">
+                        <input type="search" id="gifts-invitation-search" placeholder="Search guest or invitation ID" autocomplete="off">
+                    </div>
+                    <div class="admin-table-wrap">
+                        <table class="admin-table" id="gifts-invitations-table">
+                            <thead>
+                                <tr>
+                                    <th>Guest</th>
+                                    <th>RSVP</th>
+                                    <th>Show gifts</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
             <!-- POV Photos (local failover — not shown on the guest Photos tab) -->
             <section id="photos" class="admin-panel" aria-label="POV Photos">
                 <div id="photos-message" class="admin-flash" role="status"></div>
@@ -560,6 +607,10 @@
                     <label for="edit-invited-names">Invited guest names (one per line)</label>
                     <textarea id="edit-invited-names" rows="4"></textarea>
                 </div>
+                <label class="admin-checkbox" style="margin:0.85rem 0 0">
+                    <input type="checkbox" id="edit-show-gifts">
+                    <span>Show wedding gifts on this invitation (overseas / unable to attend)</span>
+                </label>
                 <div class="admin-card" style="margin-top:1rem;padding:1rem;background:var(--admin-surface-alt, #f7f9f7)">
                     <h4 style="margin:0 0 0.75rem;font-size:0.95rem">RSVP override</h4>
                     <p style="font-size:0.82rem;color:var(--admin-muted);margin:0 0 0.85rem">Fix mistaken submissions or set attendance on behalf of a guest.</p>

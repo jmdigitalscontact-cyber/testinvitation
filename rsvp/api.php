@@ -110,6 +110,22 @@ function ensureInvitedGuestNamesColumn($mysqli) {
     return ($check && $check->num_rows > 0);
 }
 
+function ensureShowGiftsColumn($mysqli) {
+    $result = $mysqli->query("SHOW COLUMNS FROM invitations LIKE 'show_gifts'");
+    if ($result && $result->num_rows > 0) {
+        return true;
+    }
+
+    $mysqli->query("ALTER TABLE invitations ADD COLUMN show_gifts TINYINT(1) NOT NULL DEFAULT 0");
+
+    $check = $mysqli->query("SHOW COLUMNS FROM invitations LIKE 'show_gifts'");
+    return ($check && $check->num_rows > 0);
+}
+
+function invitationWantsGifts($row) {
+    return !empty($row['show_gifts']) && (int)$row['show_gifts'] === 1;
+}
+
 try {
     switch ($action) {
         // ==================== GUEST ENDPOINTS ====================
@@ -226,6 +242,18 @@ try {
 
         case 'admin-save-menu':
             handleAdminSaveMenu();
+            break;
+
+        case 'admin-get-gifts':
+            handleAdminGetGifts();
+            break;
+
+        case 'admin-save-gifts':
+            handleAdminSaveGifts();
+            break;
+
+        case 'admin-set-invitation-gifts':
+            handleAdminSetInvitationGifts();
             break;
 
         case 'admin-update-rsvp':
@@ -396,6 +424,9 @@ function handleVerifyInvitationQR() {
         sendResponse(['success' => false, 'error' => 'Missing invitation ID'], 400);
     }
 
+    $db = Database::getInstance();
+    ensureShowGiftsColumn($db->getConnection());
+
     $auth = new Authentication();
 
     if (!$auth->checkQrRateLimit()) {
@@ -439,7 +470,7 @@ function handleVerifyInvitationQR() {
             'rsvp_edit_available' => $rsvp_edit_available,
             'rsvp_edit_used' => $rsvp_submitted && !$rsvp_edit_available,
             'rsvp_response' => htmlDecode($rsvp_response),
-        ]
+        ] + invitationGiftResponse(invitationWantsGifts($result)),
     ]);
 }
 
@@ -449,6 +480,9 @@ function handleGetInvitationDetails() {
     if (empty($token)) {
         sendResponse(['success' => false, 'error' => 'Missing token'], 400);
     }
+
+    $db = Database::getInstance();
+    ensureShowGiftsColumn($db->getConnection());
 
     $auth = new Authentication();
     $invitation = $auth->validateToken($token);
@@ -472,6 +506,8 @@ function handleGetInvitationDetails() {
     if (empty($invitation['rsvp_status']) || $invitation['rsvp_status'] === 'pending') {
         $invitation['rsvp_status'] = $existing ? ($existing['attending'] ?? 'pending') : 'pending';
     }
+
+    $invitation = array_merge($invitation, invitationGiftResponse(invitationWantsGifts($invitation)));
 
     sendResponse([
         'success' => true,
@@ -633,6 +669,8 @@ function handleCreateInvitation() {
     $db = Database::getInstance();
     $mysqli = $db->getConnection();
     $hasInvitedGuestNamesColumn = ensureInvitedGuestNamesColumn($mysqli);
+    $hasShowGiftsColumn = ensureShowGiftsColumn($mysqli);
+    $showGifts = !empty($input['show_gifts']) ? 1 : 0;
 
     $invitedGuestNames = [];
     if (is_array($rawInvitedGuestNames)) {
@@ -683,6 +721,15 @@ function handleCreateInvitation() {
     }
     $stmt->close();
 
+    if ($hasShowGiftsColumn) {
+        $giftStmt = $mysqli->prepare("UPDATE invitations SET show_gifts = ? WHERE invitation_id = ?");
+        if ($giftStmt) {
+            $giftStmt->bind_param("is", $showGifts, $invitation_id);
+            $giftStmt->execute();
+            $giftStmt->close();
+        }
+    }
+
     // Generate QR code
     $qr_gen = new QRCodeGenerator();
     $qr_result = $qr_gen->generateQRCode($invitation_id, $guest_name);
@@ -695,6 +742,7 @@ function handleCreateInvitation() {
             'guest_name' => $guest_name,
             'max_guests' => $max_guests,
             'invited_guest_names' => $invitedGuestNames,
+            'show_gifts' => (bool)$showGifts,
             'qr_code' => $qr_result
         ]
     ]);
@@ -883,6 +931,8 @@ function handleUpdateInvitation() {
     $db = Database::getInstance();
     $mysqli = $db->getConnection();
     $hasInvitedGuestNamesColumn = ensureInvitedGuestNamesColumn($mysqli);
+    $hasShowGiftsColumn = ensureShowGiftsColumn($mysqli);
+    $showGifts = array_key_exists('show_gifts', $input) ? (!empty($input['show_gifts']) ? 1 : 0) : null;
 
     $invitedGuestNames = [];
     if (is_array($rawInvitedGuestNames)) {
@@ -960,9 +1010,68 @@ function handleUpdateInvitation() {
     }
     $stmt->close();
 
+    if ($hasShowGiftsColumn && $showGifts !== null) {
+        $giftStmt = $mysqli->prepare("UPDATE invitations SET show_gifts = ? WHERE invitation_id = ?");
+        if ($giftStmt) {
+            $giftStmt->bind_param("is", $showGifts, $invitation_id);
+            $giftStmt->execute();
+            $giftStmt->close();
+        }
+    }
+
     sendResponse([
         'success' => true,
         'message' => 'Invitation updated successfully'
+    ]);
+}
+
+function handleAdminSetInvitationGifts() {
+    requireAdminAuth();
+    $input = getRequestInput();
+    $invitationId = sanitize($input['invitation_id'] ?? '');
+    $showGifts = !empty($input['show_gifts']) ? 1 : 0;
+
+    if ($invitationId === '') {
+        sendResponse(['success' => false, 'error' => 'Missing invitation ID'], 400);
+    }
+
+    $db = Database::getInstance();
+    $mysqli = $db->getConnection();
+    if (!ensureShowGiftsColumn($mysqli)) {
+        sendResponse(['success' => false, 'error' => 'Could not enable gift assignments on invitations.'], 500);
+    }
+
+    $stmt = $mysqli->prepare("UPDATE invitations SET show_gifts = ? WHERE invitation_id = ?");
+    if (!$stmt) {
+        sendResponse(['success' => false, 'error' => 'Database error'], 500);
+    }
+    $stmt->bind_param("is", $showGifts, $invitationId);
+    if (!$stmt->execute() || $stmt->affected_rows < 0) {
+        $stmt->close();
+        sendResponse(['success' => false, 'error' => 'Could not update that invitation.'], 500);
+    }
+    $updated = $stmt->affected_rows;
+    $stmt->close();
+    if ($updated < 1) {
+        $exists = $mysqli->prepare("SELECT invitation_id FROM invitations WHERE invitation_id = ?");
+        if ($exists) {
+            $exists->bind_param("s", $invitationId);
+            $exists->execute();
+            $found = $exists->get_result()->num_rows > 0;
+            $exists->close();
+            if (!$found) {
+                sendResponse(['success' => false, 'error' => 'Invitation not found'], 404);
+            }
+        }
+    }
+
+    sendResponse([
+        'success' => true,
+        'message' => $showGifts ? 'Wedding gifts will show on this invitation.' : 'Wedding gifts hidden on this invitation.',
+        'data' => [
+            'invitation_id' => $invitationId,
+            'show_gifts' => (bool)$showGifts,
+        ],
     ]);
 }
 
@@ -1006,13 +1115,16 @@ function handleGetInvitations() {
     $db = Database::getInstance();
     $mysqli = $db->getConnection();
     $hasInvitedGuestNamesColumn = ensureInvitedGuestNamesColumn($mysqli);
+    $hasShowGiftsColumn = ensureShowGiftsColumn($mysqli);
+
+    $showGiftsSelect = $hasShowGiftsColumn ? ", i.show_gifts" : "";
 
     // Explicit column list (never SELECT i.*) so password_hash and other
     // internal fields are never exposed through the admin API.
     $result = $mysqli->query("
         SELECT i.id, i.invitation_id, i.guest_name, i.max_guests, i.status,
                i.created_at, i.updated_at, i.email, i.phone, i.notes,
-               i.invited_guest_names,
+               i.invited_guest_names{$showGiftsSelect},
                COALESCE(r.attending, 'pending') as rsvp_status,
                COALESCE(r.attendee_count, 0) as confirmed_count
         FROM invitations i
@@ -1025,6 +1137,7 @@ function handleGetInvitations() {
         $row['invited_guest_names'] = ($hasInvitedGuestNamesColumn && !empty($row['invited_guest_names']))
             ? (json_decode($row['invited_guest_names'], true) ?: [])
             : decodeInvitedGuestNamesFromNotes($row['notes'] ?? '');
+        $row['show_gifts'] = $hasShowGiftsColumn ? !empty($row['show_gifts']) : false;
         $invitations[] = htmlDecode($row);
     }
 

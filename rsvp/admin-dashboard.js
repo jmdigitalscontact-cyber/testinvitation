@@ -107,6 +107,7 @@
       loadFloorPlanEditor();
     }
     else if (tabName === "menu") loadMenuEditor();
+    else if (tabName === "gifts") loadGiftsEditor();
     else if (tabName === "photos") loadAdminPhotos();
     else if (tabName === "reception") {
       loadReceptionVotes();
@@ -822,6 +823,7 @@
         password,
         email,
         invited_guest_names: invitedGuestNames,
+        show_gifts: !!$("invite-show-gifts")?.checked,
       }),
     })
       .then((response) => response.json())
@@ -851,6 +853,7 @@
         $("create-invitation-form").reset();
         $("max-guests").value = "1";
         if ($("auto-send-invite")) $("auto-send-invite").checked = false;
+        if ($("invite-show-gifts")) $("invite-show-gifts").checked = false;
         loadInvitations();
         loadStats();
       })
@@ -979,7 +982,7 @@
       pageInvitations.forEach((inv) => {
         const tr = document.createElement("tr");
         tr.innerHTML = `
-          <td>${escapeHtml(inv.guest_name)}</td>
+          <td>${escapeHtml(inv.guest_name)}${inv.show_gifts ? ' <span class="admin-badge admin-badge-maybe">Gifts</span>' : ""}</td>
           <td><code>${escapeHtml(inv.invitation_id)}</code></td>
           <td>${escapeHtml(String(inv.max_guests))}</td>
           <td>${statusBadge(inv.rsvp_status)}</td>
@@ -1388,6 +1391,7 @@
       $("edit-invited-names").value = Array.isArray(invitation.invited_guest_names)
         ? invitation.invited_guest_names.join("\n")
         : "";
+      if ($("edit-show-gifts")) $("edit-show-gifts").checked = !!invitation.show_gifts;
       populateEditRsvpFields(invitation, response);
       openModal("edit-modal");
     } catch (error) {
@@ -1439,6 +1443,7 @@
         .split(/\r?\n/)
         .map((n) => n.trim())
         .filter(Boolean),
+      show_gifts: !!$("edit-show-gifts")?.checked,
     };
 
     const passwordEl = $("edit-password");
@@ -2250,6 +2255,200 @@
       })
       .catch((error) => {
         showFlash("menu-editor-message", error.message || "Could not save the menu.", "error");
+      })
+      .finally(() => {
+        if (saveBtn) saveBtn.disabled = false;
+      });
+  }
+
+  let giftsDraft = null;
+  let giftsEditorBound = false;
+  let giftsInvitations = [];
+
+  function blankGiftMethod() {
+    return { id: "", title: "New method", account_name: "", account_number: "", note: "", link: "" };
+  }
+
+  function cloneGifts(data) {
+    return JSON.parse(JSON.stringify(data || { headline: "", thanks: "", methods: [] }));
+  }
+
+  function renderGiftsEditor() {
+    const root = $("gifts-methods-root");
+    if (!root || !giftsDraft) return;
+    if ($("gifts-headline")) $("gifts-headline").value = giftsDraft.headline || "";
+    if ($("gifts-thanks")) $("gifts-thanks").value = giftsDraft.thanks || "";
+    const methods = Array.isArray(giftsDraft.methods) ? giftsDraft.methods : [];
+    if (!methods.length) {
+      root.innerHTML = '<p class="admin-empty">Add a GCash, bank, or PayPal method.</p>';
+      return;
+    }
+    root.innerHTML = methods.map((method, index) => `
+      <div class="admin-menu-section" data-gift-index="${index}">
+        <div class="admin-menu-section-head">
+          <div class="admin-field" style="flex:1;margin:0">
+            <label>Method name</label>
+            <input type="text" data-gift-field="title" maxlength="64" value="${escapeHtml(method.title || "")}">
+          </div>
+          <button type="button" class="admin-btn admin-btn-secondary admin-btn-sm" data-remove-gift="${index}">Remove</button>
+        </div>
+        <div class="admin-form-grid">
+          <div class="admin-field">
+            <label>Account name</label>
+            <input type="text" data-gift-field="account_name" maxlength="96" value="${escapeHtml(method.account_name || "")}">
+          </div>
+          <div class="admin-field">
+            <label>Number / handle</label>
+            <input type="text" data-gift-field="account_number" maxlength="64" value="${escapeHtml(method.account_number || "")}">
+          </div>
+          <div class="admin-field">
+            <label>Note</label>
+            <input type="text" data-gift-field="note" maxlength="160" value="${escapeHtml(method.note || "")}" placeholder="BDO, Maya, overseas…">
+          </div>
+          <div class="admin-field">
+            <label>Link (optional, https only)</label>
+            <input type="url" data-gift-field="link" maxlength="240" value="${escapeHtml(method.link || "")}" placeholder="https://paypal.me/…">
+          </div>
+        </div>
+      </div>
+    `).join("");
+  }
+
+  function collectGiftsEditorFromDom() {
+    if (!giftsDraft) return;
+    giftsDraft.headline = String($("gifts-headline")?.value || "").trim();
+    giftsDraft.thanks = String($("gifts-thanks")?.value || "").trim();
+    giftsDraft.methods = Array.from(document.querySelectorAll("#gifts-methods-root [data-gift-index]")).map((card) => {
+      const get = (field) => String(card.querySelector(`[data-gift-field="${field}"]`)?.value || "").trim();
+      return {
+        id: giftsDraft.methods[Number(card.dataset.giftIndex)]?.id || "",
+        title: get("title"),
+        account_name: get("account_name"),
+        account_number: get("account_number"),
+        note: get("note"),
+        link: get("link"),
+      };
+    }).filter((method) => method.title);
+  }
+
+  function renderGiftsInvitationList() {
+    const tbody = document.querySelector("#gifts-invitations-table tbody");
+    if (!tbody) return;
+    const query = String($("gifts-invitation-search")?.value || "").trim().toLowerCase();
+    const rows = giftsInvitations.filter((inv) => {
+      if (!query) return true;
+      const names = Array.isArray(inv.invited_guest_names) ? inv.invited_guest_names.join(" ") : "";
+      return `${inv.guest_name || ""} ${inv.invitation_id || ""} ${names}`.toLowerCase().includes(query);
+    });
+    if (!rows.length) {
+      tbody.innerHTML = `<tr><td colspan="3" class="admin-empty">${giftsInvitations.length ? "No matching invitations." : "No invitations yet."}</td></tr>`;
+      return;
+    }
+    tbody.innerHTML = "";
+    rows.forEach((inv) => {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td>${escapeHtml(inv.guest_name)}<div class="admin-muted"><code>${escapeHtml(inv.invitation_id)}</code></div></td>
+        <td>${statusBadge(inv.rsvp_status)}</td>
+        <td></td>
+      `;
+      const label = document.createElement("label");
+      label.className = "admin-checkbox";
+      label.style.margin = "0";
+      const checkbox = document.createElement("input");
+      checkbox.type = "checkbox";
+      checkbox.checked = !!inv.show_gifts;
+      checkbox.addEventListener("change", () => setInvitationGifts(inv.invitation_id, checkbox.checked, checkbox));
+      label.appendChild(checkbox);
+      label.appendChild(document.createTextNode(checkbox.checked ? " On" : " Off"));
+      tr.lastElementChild.appendChild(label);
+      tbody.appendChild(tr);
+    });
+  }
+
+  function setInvitationGifts(invitationId, showGifts, checkbox) {
+    AdminAuth.apiCall("api.php?action=admin-set-invitation-gifts", {
+      method: "POST",
+      body: JSON.stringify({ invitation_id: invitationId, show_gifts: showGifts }),
+    })
+      .then((res) => res.json())
+      .then((payload) => {
+        if (!payload || !payload.success) throw new Error(payload?.error || "Could not update invitation.");
+        const inv = giftsInvitations.find((row) => row.invitation_id === invitationId);
+        if (inv) inv.show_gifts = !!showGifts;
+        const listed = allInvitations.find((row) => row.invitation_id === invitationId);
+        if (listed) listed.show_gifts = !!showGifts;
+        showFlash("gifts-editor-message", payload.message || "Invitation updated.", "success");
+        renderGiftsInvitationList();
+      })
+      .catch((error) => {
+        if (checkbox) checkbox.checked = !showGifts;
+        showFlash("gifts-editor-message", error.message || "Could not update invitation.", "error");
+      });
+  }
+
+  function bindGiftsEditor() {
+    if (giftsEditorBound) return;
+    giftsEditorBound = true;
+    $("gifts-methods-root")?.addEventListener("click", (event) => {
+      const btn = event.target.closest("[data-remove-gift]");
+      if (!btn || !giftsDraft) return;
+      collectGiftsEditorFromDom();
+      const index = parseInt(btn.getAttribute("data-remove-gift"), 10);
+      giftsDraft.methods.splice(index, 1);
+      renderGiftsEditor();
+    });
+    $("gifts-add-method-btn")?.addEventListener("click", () => {
+      if (!giftsDraft) return;
+      collectGiftsEditorFromDom();
+      if ((giftsDraft.methods || []).length >= 6) {
+        showFlash("gifts-editor-message", "You can have up to 6 payment methods.", "error");
+        return;
+      }
+      giftsDraft.methods.push(blankGiftMethod());
+      renderGiftsEditor();
+    });
+    $("gifts-save-btn")?.addEventListener("click", saveGiftsEditor);
+    $("gifts-invitation-search")?.addEventListener("input", renderGiftsInvitationList);
+  }
+
+  function loadGiftsEditor() {
+    bindGiftsEditor();
+    Promise.all([
+      AdminAuth.apiCall("api.php?action=admin-get-gifts").then((r) => r.json()),
+      AdminAuth.apiCall("api.php?action=get-invitations").then((r) => r.json()),
+    ])
+      .then(([giftsRes, invRes]) => {
+        if (!giftsRes || !giftsRes.success) throw new Error(giftsRes?.error || "Could not load gift details.");
+        giftsDraft = cloneGifts(giftsRes.data);
+        giftsInvitations = invRes && invRes.success ? (invRes.data || []) : [];
+        renderGiftsEditor();
+        renderGiftsInvitationList();
+        hideFlash("gifts-editor-message");
+      })
+      .catch((error) => {
+        showFlash("gifts-editor-message", error.message || "Could not load gift details.", "error");
+      });
+  }
+
+  function saveGiftsEditor() {
+    if (!giftsDraft) return;
+    collectGiftsEditorFromDom();
+    const saveBtn = $("gifts-save-btn");
+    if (saveBtn) saveBtn.disabled = true;
+    AdminAuth.apiCall("api.php?action=admin-save-gifts", {
+      method: "POST",
+      body: JSON.stringify({ gifts: giftsDraft }),
+    })
+      .then((res) => res.json())
+      .then((payload) => {
+        if (!payload || !payload.success) throw new Error(payload?.error || "Save failed");
+        giftsDraft = cloneGifts(payload.data);
+        renderGiftsEditor();
+        showFlash("gifts-editor-message", "Gift details saved. Only invitations with Show gifts turned on will see them.", "success");
+      })
+      .catch((error) => {
+        showFlash("gifts-editor-message", error.message || "Could not save gift details.", "error");
       })
       .finally(() => {
         if (saveBtn) saveBtn.disabled = false;

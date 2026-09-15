@@ -268,6 +268,58 @@
     }
   }
 
+  function escapeInviteHtml(text) {
+    var div = document.createElement('div');
+    div.textContent = text == null ? '' : String(text);
+    return div.innerHTML;
+  }
+
+  function renderInvitationGifts(invitation) {
+    var wrap = document.getElementById('rsvp-gifts');
+    var methodsRoot = document.getElementById('rsvp-gifts-methods');
+    if (!wrap) return;
+    var gifts = invitation && invitation.show_gifts ? invitation.gifts : null;
+    var methods = gifts && Array.isArray(gifts.methods) ? gifts.methods.filter(function (method) {
+      return method && (method.account_number || method.link);
+    }) : [];
+    if (!gifts || !methods.length) {
+      wrap.hidden = true;
+      if (methodsRoot) methodsRoot.innerHTML = '';
+      return;
+    }
+    var headline = document.getElementById('rsvp-gifts-headline');
+    var thanks = document.getElementById('rsvp-gifts-thanks');
+    if (headline && gifts.headline) headline.textContent = gifts.headline;
+    if (thanks && gifts.thanks) thanks.textContent = gifts.thanks;
+    if (methodsRoot) {
+      methodsRoot.innerHTML = methods.map(function (method) {
+        var number = method.account_number ? '<p class="rsvp-gift-number">' + escapeInviteHtml(method.account_number) + '</p>' : '';
+        var name = method.account_name ? '<p class="rsvp-gift-name">' + escapeInviteHtml(method.account_name) + '</p>' : '';
+        var note = method.note ? '<p class="rsvp-gift-note">' + escapeInviteHtml(method.note) + '</p>' : '';
+        var link = method.link
+          ? '<a class="rsvp-gift-link" href="' + escapeInviteHtml(method.link) + '" target="_blank" rel="noopener noreferrer">Open link</a>'
+          : '';
+        var copy = method.account_number
+          ? '<button type="button" class="rsvp-gift-copy" data-copy="' + escapeInviteHtml(method.account_number) + '">Copy</button>'
+          : '';
+        return '<article class="rsvp-gift-card"><h4>' + escapeInviteHtml(method.title || 'Gift') + '</h4>' + number + name + note + link + copy + '</article>';
+      }).join('');
+      methodsRoot.querySelectorAll('[data-copy]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          var value = btn.getAttribute('data-copy') || '';
+          if (!value) return;
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(value).then(function () {
+              btn.textContent = 'Copied';
+              setTimeout(function () { btn.textContent = 'Copy'; }, 1600);
+            }).catch(function () {});
+          }
+        });
+      });
+    }
+    wrap.hidden = false;
+  }
+
   function renderInvitedParty(invitation) {
     var title = document.getElementById('rsvp-invite-title');
     var meta = document.getElementById('rsvp-invite-meta');
@@ -312,10 +364,14 @@
       if (meta) {
         meta.textContent = 'We already have your final RSVP on record. Thank you for responding!';
       }
+      renderInvitationGifts(invitation);
       return;
     }
 
-    if (!list) return;
+    if (!list) {
+      renderInvitationGifts(invitation);
+      return;
+    }
     list.innerHTML = '';
 
     var currentResponse = invitation.rsvp_response || {};
@@ -376,6 +432,7 @@
     setInviteLoading(false);
     var form = document.getElementById('rsvp-form');
     if (form) form.hidden = false;
+    renderInvitationGifts(invitation);
   }
 
   function loadInvitationDetails() {
@@ -409,6 +466,7 @@
           throw new Error(data && data.error ? data.error : 'Unable to load invitation details');
         }
         renderInvitedParty(data.data);
+        window.__currentInvitation = data.data;
       })
       .catch(function (error) {
         setInviteLoading(true, error.message || 'Unable to load invitation details.');
@@ -529,9 +587,15 @@
           if (doneHelp) doneHelp.textContent = 'For any further changes, please contact Jason & Rhona Mae directly.';
         } else {
           if (doneTitle) doneTitle.textContent = 'RSVP received';
-          if (doneMessage) doneMessage.textContent = 'Thank you! Your family has one correction available if somebody was missed.';
-          if (doneHelp) doneHelp.textContent = 'Reopen this same QR to update once. After that, please contact Jason & Rhona Mae.';
+          if (attending === 'no') {
+            if (doneMessage) doneMessage.textContent = 'Thank you for letting us know. We will miss you on the day, and we are grateful you are celebrating with us in spirit.';
+            if (doneHelp) doneHelp.textContent = 'If you would still like to send a gift, the details are below.';
+          } else {
+            if (doneMessage) doneMessage.textContent = 'Thank you! Your family has one correction available if somebody was missed.';
+            if (doneHelp) doneHelp.textContent = 'Reopen this same QR to update once. After that, please contact Jason & Rhona Mae.';
+          }
         }
+        renderInvitationGifts(window.__currentInvitation || {});
       })
       .catch(function (error) {
         btn.disabled = false;

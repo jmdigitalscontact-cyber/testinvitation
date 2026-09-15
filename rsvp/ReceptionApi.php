@@ -2828,3 +2828,165 @@ function handleAdminSaveMenu() {
         'data' => $menu,
     ]);
 }
+
+function weddingGiftsPath() {
+    return __DIR__ . '/data/gifts.json';
+}
+
+function weddingDefaultGifts() {
+    return [
+        'headline' => 'If you cannot celebrate with us in person, a gift toward our future together would mean the world.',
+        'thanks' => 'Thank you for holding us in your hearts from afar.',
+        'methods' => [
+            [
+                'id' => 'gcash',
+                'title' => 'GCash / Maya',
+                'account_name' => 'Jason & Rhona Mae Berber',
+                'account_number' => '',
+                'note' => 'Philippines mobile wallets',
+                'link' => '',
+            ],
+            [
+                'id' => 'bank',
+                'title' => 'Bank transfer',
+                'account_name' => 'Jason Berber',
+                'account_number' => '',
+                'note' => 'BDO',
+                'link' => '',
+            ],
+            [
+                'id' => 'paypal',
+                'title' => 'PayPal / Wise',
+                'account_name' => '',
+                'account_number' => '',
+                'note' => 'Best for guests overseas',
+                'link' => '',
+            ],
+        ],
+    ];
+}
+
+function weddingGiftsSlug($title, array &$used) {
+    $base = strtolower(trim((string)$title));
+    $base = preg_replace('/[^a-z0-9]+/', '-', $base);
+    $base = trim((string)$base, '-');
+    if ($base === '') {
+        $base = 'gift';
+    }
+    $base = substr($base, 0, 24);
+    $id = $base;
+    $n = 2;
+    while (isset($used[$id])) {
+        $id = substr($base, 0, 20) . '-' . $n;
+        $n += 1;
+    }
+    $used[$id] = true;
+    return $id;
+}
+
+function weddingNormalizeGifts($raw) {
+    $defaults = weddingDefaultGifts();
+    $plan = is_array($raw) ? $raw : [];
+    $headline = trim((string)($plan['headline'] ?? $defaults['headline']));
+    $thanks = trim((string)($plan['thanks'] ?? $defaults['thanks']));
+    if ($headline === '') {
+        $headline = $defaults['headline'];
+    }
+    if ($thanks === '') {
+        $thanks = $defaults['thanks'];
+    }
+
+    $methods = [];
+    $used = [];
+    $source = isset($plan['methods']) && is_array($plan['methods']) ? $plan['methods'] : $defaults['methods'];
+    foreach ($source as $method) {
+        if (!is_array($method)) {
+            continue;
+        }
+        $title = trim((string)($method['title'] ?? ''));
+        if ($title === '') {
+            continue;
+        }
+        $idSource = trim((string)($method['id'] ?? ''));
+        $link = trim((string)($method['link'] ?? ''));
+        if ($link !== '' && !preg_match('#^https://#i', $link)) {
+            $link = '';
+        }
+        $methods[] = [
+            'id' => $idSource !== '' ? weddingGiftsSlug($idSource, $used) : weddingGiftsSlug($title, $used),
+            'title' => substr($title, 0, 64),
+            'account_name' => substr(trim((string)($method['account_name'] ?? '')), 0, 96),
+            'account_number' => substr(trim((string)($method['account_number'] ?? '')), 0, 64),
+            'note' => substr(trim((string)($method['note'] ?? '')), 0, 160),
+            'link' => substr($link, 0, 240),
+        ];
+        if (count($methods) >= 6) {
+            break;
+        }
+    }
+    if (!$methods) {
+        $methods = $defaults['methods'];
+    }
+
+    return [
+        'headline' => substr($headline, 0, 280),
+        'thanks' => substr($thanks, 0, 180),
+        'methods' => $methods,
+    ];
+}
+
+function weddingReadGifts() {
+    $path = weddingGiftsPath();
+    if (!is_file($path)) {
+        return weddingDefaultGifts();
+    }
+    $decoded = json_decode((string)file_get_contents($path), true);
+    return weddingNormalizeGifts($decoded);
+}
+
+function weddingPublicGifts() {
+    $gifts = weddingReadGifts();
+    $gifts['methods'] = array_values(array_filter($gifts['methods'], function ($method) {
+        return $method['account_number'] !== '' || $method['link'] !== '';
+    }));
+    return $gifts;
+}
+
+function invitationGiftResponse($showGifts) {
+    if (!$showGifts) {
+        return [
+            'show_gifts' => false,
+        ];
+    }
+    return [
+        'show_gifts' => true,
+        'gifts' => weddingPublicGifts(),
+    ];
+}
+
+function handleAdminGetGifts() {
+    requireAdminAuth();
+    sendResponse([
+        'success' => true,
+        'data' => weddingReadGifts(),
+    ]);
+}
+
+function handleAdminSaveGifts() {
+    requireAdminAuth();
+    $input = getRequestInput();
+    $gifts = weddingNormalizeGifts($input['gifts'] ?? $input);
+    $path = weddingGiftsPath();
+    $dir = dirname($path);
+    if (!is_dir($dir) && !@mkdir($dir, 0755, true)) {
+        sendResponse(['success' => false, 'error' => 'Could not create gifts folder.'], 500);
+    }
+    $json = json_encode($gifts, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    if ($json === false || @file_put_contents($path, $json) === false) {
+        sendResponse(['success' => false, 'error' => 'Could not save gift details. Check that reception/data is writable.'], 500);
+    }
+    sendResponse([
+        'success' => true,
+        'data' => $gifts,
+    ]);
+}

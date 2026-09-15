@@ -5,6 +5,7 @@ class Authentication {
     private $db;
     private $mysqli;
     private $hasInvitedGuestNamesColumn = null;
+    private $hasShowGiftsColumn = null;
 
     public function __construct() {
         $this->db = Database::getInstance();
@@ -19,6 +20,29 @@ class Authentication {
         $result = $this->mysqli->query("SHOW COLUMNS FROM invitations LIKE 'invited_guest_names'");
         $this->hasInvitedGuestNamesColumn = (bool)($result && $result->num_rows > 0);
         return $this->hasInvitedGuestNamesColumn;
+    }
+
+    private function hasShowGiftsColumn() {
+        if ($this->hasShowGiftsColumn !== null) {
+            return $this->hasShowGiftsColumn;
+        }
+
+        $result = $this->mysqli->query("SHOW COLUMNS FROM invitations LIKE 'show_gifts'");
+        $this->hasShowGiftsColumn = (bool)($result && $result->num_rows > 0);
+        return $this->hasShowGiftsColumn;
+    }
+
+    private function invitationGiftsSelect($alias = '') {
+        if (!$this->hasShowGiftsColumn()) {
+            return '';
+        }
+        $prefix = $alias !== '' ? $alias . '.' : '';
+        return ", {$prefix}show_gifts";
+    }
+
+    private function attachInvitationGifts(array $invitation) {
+        $invitation['show_gifts'] = $this->hasShowGiftsColumn() ? !empty($invitation['show_gifts']) : false;
+        return $invitation;
     }
 
     private function decodeInvitedGuestNames($value) {
@@ -49,7 +73,7 @@ class Authentication {
 
         $selectInvited = $this->hasInvitedGuestNamesColumn() ? ", invited_guest_names" : ", notes";
         $stmt = $this->mysqli->prepare("
-            SELECT id, invitation_id, guest_name, max_guests, status{$selectInvited}
+            SELECT id, invitation_id, guest_name, max_guests, status{$selectInvited}{$this->invitationGiftsSelect()}
             FROM invitations
             WHERE invitation_id = ?
         ");
@@ -71,6 +95,7 @@ class Authentication {
         $invitation['invited_guest_names'] = $this->hasInvitedGuestNamesColumn()
             ? $this->decodeInvitedGuestNames($invitation['invited_guest_names'] ?? '')
             : $this->decodeInvitedGuestNamesFromNotes($invitation['notes'] ?? '');
+        $invitation = $this->attachInvitationGifts($invitation);
         $stmt->close();
 
         // Get password hash from database
@@ -137,7 +162,7 @@ class Authentication {
 
         $selectInvited = $this->hasInvitedGuestNamesColumn() ? ", i.invited_guest_names" : ", i.notes";
         $stmt = $this->mysqli->prepare("
-            SELECT i.id, i.invitation_id, i.guest_name, i.max_guests, i.status{$selectInvited}
+            SELECT i.id, i.invitation_id, i.guest_name, i.max_guests, i.status{$selectInvited}{$this->invitationGiftsSelect('i')}
             FROM invitations i
             WHERE i.invitation_id = ?
         ");
@@ -165,6 +190,7 @@ class Authentication {
             fn($n) => html_entity_decode((string)$n, ENT_QUOTES, 'UTF-8'),
             $invitation['invited_guest_names']
         );
+        $invitation = $this->attachInvitationGifts($invitation);
         $stmt->close();
 
         $this->logLoginAttempt($invitation_id, true);
@@ -463,7 +489,7 @@ class Authentication {
     public function getInvitationDetails($invitation_id) {
         $selectInvited = $this->hasInvitedGuestNamesColumn() ? ", i.invited_guest_names" : ", i.notes";
         $stmt = $this->mysqli->prepare("
-            SELECT i.id, i.invitation_id, i.guest_name, i.max_guests, i.status{$selectInvited},
+            SELECT i.id, i.invitation_id, i.guest_name, i.max_guests, i.status{$selectInvited}{$this->invitationGiftsSelect('i')},
                    COALESCE(r.attending, 'pending') as rsvp_status,
                    COALESCE(r.attendee_count, 0) as attendee_count,
                    COALESCE(r.dietary_restrictions, '') as dietary_restrictions,
@@ -491,6 +517,7 @@ class Authentication {
             fn($n) => html_entity_decode((string)$n, ENT_QUOTES, 'UTF-8'),
             $data['invited_guest_names']
         );
+        $data = $this->attachInvitationGifts($data);
         $stmt->close();
         return $data;
     }
