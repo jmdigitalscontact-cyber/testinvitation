@@ -48,7 +48,7 @@
 
     lazyImages.forEach(function (img) {
       var src = img.getAttribute('src');
-      if (!src || img.getAttribute('data-src') || img.getAttribute('loading') === 'eager' || img.closest('.banner')) return;
+      if (!src || img.getAttribute('data-src') || img.getAttribute('loading') === 'eager' || img.closest('.banner') || img.classList.contains('rsvp-gift-qr') || img.closest('.rsvp-gift-qr-btn')) return;
       if (img.getAttribute('loading') === 'lazy' || img.closest('.gallery-item') || img.closest('.photo-card') || img.closest('.page-card') || img.closest('.lightbox-thumbs')) {
         img.setAttribute('data-src', src);
         img.removeAttribute('src');
@@ -274,6 +274,44 @@
     return div.innerHTML;
   }
 
+  function giftQrFileName(name) {
+    var base = String(name || 'gift-qr').replace(/[^a-z0-9._-]+/gi, '-').replace(/^-+|-+$/g, '');
+    if (!base) base = 'gift-qr';
+    return /\.(jpe?g|png|webp)$/i.test(base) ? base : (base + '.png');
+  }
+
+  function downloadGiftQrImage(src, filename) {
+    if (!src) return;
+    var name = giftQrFileName(filename);
+    fetch(src, { credentials: 'same-origin' })
+      .then(function (res) {
+        if (!res.ok) throw new Error('Could not download QR');
+        var type = (res.headers.get('content-type') || '').toLowerCase();
+        if (type.indexOf('webp') !== -1) name = name.replace(/\.[^.]+$/, '.webp');
+        else if (type.indexOf('png') !== -1) name = name.replace(/\.[^.]+$/, '.png');
+        else if (type.indexOf('jpeg') !== -1 || type.indexOf('jpg') !== -1) name = name.replace(/\.[^.]+$/, '.jpg');
+        return res.blob();
+      })
+      .then(function (blob) {
+        var objectUrl = URL.createObjectURL(blob);
+        var link = document.createElement('a');
+        link.href = objectUrl;
+        link.download = name;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        setTimeout(function () { URL.revokeObjectURL(objectUrl); }, 2000);
+      })
+      .catch(function () {
+        var fallback = src + (src.indexOf('?') === -1 ? '?' : '&') + 'download=1';
+        window.open(fallback, '_blank', 'noopener');
+      });
+  }
+
+  var openGiftQrLightbox = function (src) {
+    if (src) window.open(src, '_blank', 'noopener');
+  };
+
   function renderInvitationGifts(invitation) {
     var wrap = document.getElementById('rsvp-gifts');
     var methodsRoot = document.getElementById('rsvp-gifts-methods');
@@ -302,8 +340,15 @@
         var copy = method.account_number
           ? '<button type="button" class="rsvp-gift-copy" data-copy="' + escapeInviteHtml(method.account_number) + '">Copy</button>'
           : '';
+        var qrName = giftQrFileName((method.id || method.title || 'gift') + '-qr');
         var qr = method.qr_url
-          ? '<img class="rsvp-gift-qr" src="' + escapeInviteHtml(method.qr_url) + '" alt="Scan to send a gift">'
+          ? (
+            '<button type="button" class="rsvp-gift-qr-btn" data-gift-qr-src="' + escapeInviteHtml(method.qr_url) + '" data-gift-qr-name="' + escapeInviteHtml(qrName) + '" aria-label="Zoom ' + escapeInviteHtml(method.title || 'gift') + ' QR code">' +
+              '<img class="rsvp-gift-qr" src="' + escapeInviteHtml(method.qr_url) + '" alt="Scan to send a gift via ' + escapeInviteHtml(method.title || 'this method') + '">' +
+            '</button>' +
+            '<p class="rsvp-gift-qr-hint">Tap to zoom</p>' +
+            '<button type="button" class="rsvp-gift-download" data-gift-qr-download="' + escapeInviteHtml(method.qr_url) + '" data-gift-qr-name="' + escapeInviteHtml(qrName) + '">Download QR</button>'
+          )
           : '';
         return '<article class="rsvp-gift-card"><h4>' + escapeInviteHtml(method.title || 'Gift') + '</h4>' + qr + number + name + note + link + copy + '</article>';
       }).join('');
@@ -319,6 +364,29 @@
           }
         });
       });
+      if (!methodsRoot.dataset.giftQrBound) {
+        methodsRoot.dataset.giftQrBound = '1';
+        methodsRoot.addEventListener('click', function (event) {
+          var zoomBtn = event.target.closest('[data-gift-qr-src]');
+          if (zoomBtn) {
+            event.preventDefault();
+            var img = zoomBtn.querySelector('img');
+            openGiftQrLightbox(
+              zoomBtn.getAttribute('data-gift-qr-src'),
+              (img && img.alt) || 'Gift QR',
+              zoomBtn.getAttribute('data-gift-qr-name')
+            );
+            return;
+          }
+          var downloadBtn = event.target.closest('[data-gift-qr-download]');
+          if (!downloadBtn) return;
+          event.preventDefault();
+          downloadGiftQrImage(
+            downloadBtn.getAttribute('data-gift-qr-download'),
+            downloadBtn.getAttribute('data-gift-qr-name')
+          );
+        });
+      }
     }
     wrap.hidden = false;
   }
@@ -855,6 +923,7 @@
   if (lightbox) {
     var viewImg = lightbox.querySelector('.lightbox-view img');
     var lightboxClose = lightbox.querySelector('.lightbox-close');
+    var lightboxDownload = document.getElementById('lightbox-download');
     var prevBtn = lightbox.querySelector('.lightbox-prev');
     var nextBtn = lightbox.querySelector('.lightbox-next');
     var thumbsWrap = lightbox.querySelector('.lightbox-thumbs');
@@ -865,6 +934,8 @@
     var currentIndex = 0;
     var standaloneImageMode = false;
     var entourageMode = false;
+    var giftQrDownloadSrc = '';
+    var giftQrDownloadName = 'gift-qr.png';
     var entourageImages = Array.from(document.querySelectorAll('.photo-page .page-front img'))
       .map(function (img) { return img.currentSrc || img.src || img.getAttribute('data-src') || ''; })
       .filter(Boolean);
@@ -873,9 +944,17 @@
     var renderedAllThumbs = false;
     var lightboxImageCache = {};
 
+    function setGiftQrMode(enabled, src, filename) {
+      giftQrDownloadSrc = enabled ? (src || '') : '';
+      giftQrDownloadName = enabled ? giftQrFileName(filename) : 'gift-qr.png';
+      if (lightboxDownload) lightboxDownload.hidden = !enabled;
+      if (enabled) setStandaloneImageMode(true);
+    }
+
     function setStandaloneImageMode(enabled) {
       standaloneImageMode = !!enabled;
       lightbox.classList.toggle('is-standalone', standaloneImageMode);
+      if (!enabled && lightboxDownload) lightboxDownload.hidden = true;
     }
 
     function setEntourageMode(enabled) {
@@ -895,6 +974,7 @@
     function openEntourageLightboxAt(index) {
       if (!entourageImages.length) return;
       currentIndex = (index + entourageImages.length) % entourageImages.length;
+      setGiftQrMode(false);
       setEntourageMode(true);
       showLightboxImage(entourageImages[currentIndex], 'Entourage photo ' + (currentIndex + 1));
       updateLightboxCounter();
@@ -979,6 +1059,7 @@
     }
 
     function openLightboxAt(index) {
+      setGiftQrMode(false);
       setEntourageMode(false);
       setStandaloneImageMode(false);
       currentIndex = (index + trpList.length) % trpList.length;
@@ -997,6 +1078,7 @@
     // Fallback: open lightbox directly from a filename when trpList isn't available
     function openLightboxByName(name) {
       if (!name) return;
+      setGiftQrMode(false);
       setEntourageMode(false);
       setStandaloneImageMode(false);
       var src = name.indexOf('/') === -1 ? ('images/' + name) : name;
@@ -1015,6 +1097,7 @@
 
     function openSingleLightboxImage(src, alt) {
       if (!src) return;
+      setGiftQrMode(false);
       setEntourageMode(false);
       setStandaloneImageMode(true);
       showLightboxImage(src, alt || '');
@@ -1022,8 +1105,18 @@
       document.body.style.overflow = 'hidden';
     }
 
+    openGiftQrLightbox = function (src, alt, filename) {
+      if (!src) return;
+      setEntourageMode(false);
+      setGiftQrMode(true, src, filename);
+      showLightboxImage(src, alt || 'Gift QR');
+      lightbox.classList.add('open');
+      document.body.style.overflow = 'hidden';
+    };
+
     function closeLightbox() {
       lightbox.classList.remove('open');
+      setGiftQrMode(false);
       setStandaloneImageMode(false);
       setEntourageMode(false);
       document.body.style.overflow = '';
@@ -1060,6 +1153,13 @@
     // Keyboard and button handlers
     if (galleryOpenBtn) galleryOpenBtn.addEventListener('click', openGalleryFromButton);
     if (lightboxClose) lightboxClose.addEventListener('click', closeLightbox);
+    if (lightboxDownload) {
+      lightboxDownload.addEventListener('click', function (event) {
+        event.preventDefault();
+        event.stopPropagation();
+        downloadGiftQrImage(giftQrDownloadSrc, giftQrDownloadName);
+      });
+    }
     if (prevBtn) prevBtn.addEventListener('click', showPrev);
     if (nextBtn) nextBtn.addEventListener('click', showNext);
     function makeImageZoomable(img) {

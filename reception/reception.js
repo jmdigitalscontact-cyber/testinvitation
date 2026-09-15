@@ -125,6 +125,11 @@
     els.giftBoxLid = document.getElementById("gift-box-lid");
     els.giftBoxCta = document.querySelector(".rec-gift-box__cta");
     els.giftDetails = document.getElementById("gifts-details");
+    els.giftsMethods = document.getElementById("gifts-methods");
+    els.giftsThanks = document.getElementById("gifts-thanks");
+    els.giftQrZoom = document.getElementById("gift-qr-zoom");
+    els.giftQrZoomImg = document.getElementById("gift-qr-zoom-img");
+    els.giftQrZoomDownload = document.getElementById("gift-qr-zoom-download");
     els.lockOverlay = document.getElementById("rec-lock-overlay");
     els.lockCard = document.getElementById("rec-lock-card");
     els.lockKeyInput = document.getElementById("rec-lock-key-input");
@@ -2163,6 +2168,168 @@
   /* ───────────────────────────────────────────
      GIFT BOX
      ─────────────────────────────────────────── */
+  let giftQrZoomSrc = "";
+  let giftQrZoomName = "gift-qr.png";
+  let giftQrLastFocus = null;
+
+  function giftQrFileName(name) {
+    const base = String(name || "gift-qr").replace(/[^a-z0-9._-]+/gi, "-").replace(/^-+|-+$/g, "");
+    const safe = base || "gift-qr";
+    return /\.(jpe?g|png|webp)$/i.test(safe) ? safe : `${safe}.png`;
+  }
+
+  function giftQrServeUrl(method) {
+    if (!method || !method.id || !method.qr_url) return "";
+    return apiUrl("serve-gift-qr", { id: method.id });
+  }
+
+  async function downloadGiftQrImage(src, filename) {
+    if (!src) return;
+    let name = giftQrFileName(filename);
+    try {
+      const res = await fetch(src, { credentials: "same-origin" });
+      if (!res.ok) throw new Error("Could not download QR");
+      const type = (res.headers.get("content-type") || "").toLowerCase();
+      if (type.includes("webp")) name = name.replace(/\.[^.]+$/, ".webp");
+      else if (type.includes("png")) name = name.replace(/\.[^.]+$/, ".png");
+      else if (type.includes("jpeg") || type.includes("jpg")) name = name.replace(/\.[^.]+$/, ".jpg");
+      const blob = await res.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = objectUrl;
+      link.download = name;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(objectUrl), 2000);
+    } catch {
+      const fallback = src + (src.includes("?") ? "&" : "?") + "download=1";
+      window.open(fallback, "_blank", "noopener");
+    }
+  }
+
+  function closeGiftQrZoom() {
+    if (!els.giftQrZoom) return;
+    els.giftQrZoom.hidden = true;
+    els.giftQrZoom.classList.remove("is-open");
+    document.body.classList.remove("reception-lightbox-open");
+    giftQrZoomSrc = "";
+    if (els.giftQrZoomImg) {
+      els.giftQrZoomImg.removeAttribute("src");
+      els.giftQrZoomImg.alt = "";
+    }
+    if (giftQrLastFocus && typeof giftQrLastFocus.focus === "function") {
+      giftQrLastFocus.focus();
+    }
+    giftQrLastFocus = null;
+  }
+
+  function openGiftQrZoom(src, alt, filename) {
+    if (!els.giftQrZoom || !src) return;
+    giftQrLastFocus = document.activeElement;
+    giftQrZoomSrc = src;
+    giftQrZoomName = giftQrFileName(filename);
+    if (els.giftQrZoomImg) {
+      els.giftQrZoomImg.src = src;
+      els.giftQrZoomImg.alt = alt || "Gift QR code";
+    }
+    els.giftQrZoom.hidden = false;
+    requestAnimationFrame(() => {
+      els.giftQrZoom.classList.add("is-open");
+      document.body.classList.add("reception-lightbox-open");
+      els.giftQrZoom.querySelector("[data-gift-qr-close]")?.focus();
+    });
+  }
+
+  function renderReceptionGifts(data) {
+    if (!els.giftsMethods) return;
+    const methods = Array.isArray(data?.methods) ? data.methods.filter((method) => (
+      method && (method.account_number || method.link || method.qr_url)
+    )) : [];
+    if (els.giftsThanks && data?.thanks) els.giftsThanks.textContent = data.thanks;
+    if (!methods.length) {
+      els.giftsMethods.innerHTML = '<p class="rec-gifts-empty">Gift details will appear here once the couple adds them.</p>';
+      return;
+    }
+    els.giftsMethods.innerHTML = methods.map((method) => {
+      const qrSrc = giftQrServeUrl(method);
+      const qrName = giftQrFileName(`${method.id || method.title || "gift"}-qr`);
+      const qr = qrSrc
+        ? `<div class="rec-gifts-qr-wrap">
+            <button type="button" class="rec-gifts-qr-btn rec-gifts-qr-animated" data-gift-qr-src="${escapeHtml(qrSrc)}" data-gift-qr-name="${escapeHtml(qrName)}" aria-label="Zoom ${escapeHtml(method.title || "gift")} QR code">
+              <img class="rec-gifts-qr-photo" src="${escapeHtml(qrSrc)}" alt="Scan to send a gift via ${escapeHtml(method.title || "this method")}">
+            </button>
+            <p class="rec-gifts-qr-hint">Tap to zoom</p>
+            <button type="button" class="rec-gifts-qr-download" data-gift-qr-download="${escapeHtml(qrSrc)}" data-gift-qr-name="${escapeHtml(qrName)}">Download QR</button>
+          </div>`
+        : "";
+      const number = method.account_number ? `<p class="rec-gifts-details__number">${escapeHtml(method.account_number)}</p>` : "";
+      const name = method.account_name ? `<p class="rec-gifts-details__name">${escapeHtml(method.account_name)}</p>` : "";
+      const note = method.note ? `<p class="rec-gifts-details__name">${escapeHtml(method.note)}</p>` : "";
+      const link = method.link
+        ? `<a class="rec-gifts-qr-download" href="${escapeHtml(method.link)}" target="_blank" rel="noopener noreferrer">Open link</a>`
+        : "";
+      return `<div class="rec-gifts-col">
+        ${qr}
+        <div class="rec-gifts-details">
+          <h3 class="rec-gifts-details__title">${escapeHtml(method.title || "Gift")}</h3>
+          ${number}${name}${note}${link}
+        </div>
+      </div>`;
+    }).join("");
+  }
+
+  function initGiftQrZoom() {
+    if (els.giftsMethods && !els.giftsMethods.dataset.giftQrBound) {
+      els.giftsMethods.dataset.giftQrBound = "1";
+      els.giftsMethods.addEventListener("click", (event) => {
+        const zoomBtn = event.target.closest("[data-gift-qr-src]");
+        if (zoomBtn) {
+          event.preventDefault();
+          const img = zoomBtn.querySelector("img");
+          openGiftQrZoom(
+            zoomBtn.getAttribute("data-gift-qr-src"),
+            img?.alt || "Gift QR code",
+            zoomBtn.getAttribute("data-gift-qr-name")
+          );
+          return;
+        }
+        const downloadBtn = event.target.closest("[data-gift-qr-download]");
+        if (!downloadBtn) return;
+        event.preventDefault();
+        downloadGiftQrImage(
+          downloadBtn.getAttribute("data-gift-qr-download"),
+          downloadBtn.getAttribute("data-gift-qr-name")
+        );
+      });
+    }
+
+    els.giftQrZoom?.querySelectorAll("[data-gift-qr-close]").forEach((el) => {
+      el.addEventListener("click", closeGiftQrZoom);
+    });
+    els.giftQrZoomDownload?.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      downloadGiftQrImage(giftQrZoomSrc, giftQrZoomName);
+    });
+    document.addEventListener("keydown", (event) => {
+      if (event.key !== "Escape" || !els.giftQrZoom || els.giftQrZoom.hidden) return;
+      closeGiftQrZoom();
+    });
+  }
+
+  async function loadGifts() {
+    if (!els.giftsMethods) return;
+    try {
+      const result = await apiGet("get-reception-gifts");
+      if (result && result.success && result.data) {
+        renderReceptionGifts(result.data);
+      }
+    } catch {
+      els.giftsMethods.innerHTML = '<p class="rec-gifts-empty">Gift details are unavailable right now.</p>';
+    }
+  }
+
   function initGiftBox() {
     if (!els.giftBox) return;
     els.giftBox.addEventListener("click", () => {
@@ -2197,9 +2364,11 @@
     initFloorZoom();
     initCoupleMessageForm();
     initGiftBox();
+    initGiftQrZoom();
     initWelcome();
     loadGuests();
     loadMenu();
+    loadGifts();
     loadGoogleMoments();
     window.addEventListener("resize", () => {
       if (els.momentsLive && !els.momentsLive.hidden) syncGoogleMomentsMarqueeMotion();

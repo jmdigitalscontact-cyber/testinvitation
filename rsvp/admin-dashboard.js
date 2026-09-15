@@ -2311,9 +2311,10 @@
           </div>
         </div>
         <div class="admin-gift-qr-row">
-          ${method.qr_url ? `<img class="admin-gift-qr-preview" src="${escapeHtml(method.qr_url)}" alt="${escapeHtml(method.title || "Gift")} QR">` : '<p class="admin-muted">No QR uploaded yet.</p>'}
+          ${method.qr_url ? `<a class="admin-gift-qr-preview-link" href="${escapeHtml(method.qr_url)}" target="_blank" rel="noopener noreferrer" title="Open QR to zoom"><img class="admin-gift-qr-preview" src="${escapeHtml(method.qr_url)}" alt="${escapeHtml(method.title || "Gift")} QR"></a>` : '<p class="admin-muted">No QR uploaded yet.</p>'}
           <div class="admin-gift-qr-actions">
             <button type="button" class="admin-btn admin-btn-secondary admin-btn-sm" data-upload-gift-qr="${index}">Upload QR</button>
+            ${method.qr_url ? `<a class="admin-btn admin-btn-secondary admin-btn-sm" href="${escapeHtml(method.qr_url)}${String(method.qr_url).includes("?") ? "&" : "?"}download=1" download="${escapeHtml((method.id || "gift") + "-qr")}">Download QR</a>` : ""}
             ${method.qr_url ? `<button type="button" class="admin-btn admin-btn-danger admin-btn-sm" data-remove-gift-qr="${escapeHtml(method.id || "")}">Remove QR</button>` : ""}
             <p class="admin-muted">JPEG, PNG, or WebP · 3MB max. Guests scan this instead of typing the number.</p>
           </div>

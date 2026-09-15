@@ -3176,6 +3176,15 @@ function handleAdminDeleteGiftQr() {
     ]);
 }
 
+function handleGetReceptionGifts() {
+    receptionRequireApiKey();
+    header('Cache-Control: no-store');
+    sendResponse([
+        'success' => true,
+        'data' => weddingPublicGifts(),
+    ]);
+}
+
 function handleServeGiftQr() {
     $methodId = preg_replace('/[^a-z0-9-]/', '', strtolower(trim((string)($_GET['id'] ?? ''))));
     if ($methodId === '') {
@@ -3214,6 +3223,13 @@ function handleServeGiftQr() {
     header('Content-Type: ' . $mime);
     header('Content-Length: ' . (string)filesize($path));
     header('Cache-Control: private, max-age=3600');
+    $ext = strtolower((string)pathinfo($path, PATHINFO_EXTENSION));
+    if (!in_array($ext, ['jpg', 'jpeg', 'png', 'webp'], true)) {
+        $ext = 'jpg';
+    }
+    $filename = $methodId . '-gift-qr.' . $ext;
+    $wantsDownload = isset($_GET['download']) && $_GET['download'] !== '' && $_GET['download'] !== '0';
+    header('Content-Disposition: ' . ($wantsDownload ? 'attachment' : 'inline') . '; filename="' . $filename . '"');
     readfile($path);
     exit;
 }

@@ -1187,6 +1187,17 @@ body.admin-app {
   border-radius: 10px;
   background: #fff;
   border: 1px solid var(--admin-border);
+  cursor: zoom-in;
+}
+
+.admin-gift-qr-preview-link {
+  display: inline-flex;
+  border-radius: 10px;
+}
+
+.admin-gift-qr-preview-link:focus-visible {
+  outline: 2px solid var(--admin-accent, #4a7c5c);
+  outline-offset: 3px;
 }
 
 .admin-gift-qr-actions {

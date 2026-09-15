@@ -236,6 +236,10 @@ try {
             handleGetMenu();
             break;
 
+        case 'get-reception-gifts':
+            handleGetReceptionGifts();
+            break;
+
         case 'admin-get-menu':
             handleAdminGetMenu();
             break;

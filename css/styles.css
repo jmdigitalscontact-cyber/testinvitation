@@ -1553,6 +1553,23 @@ audio#wedding-audio { display: none; }
   transition: 0.2s;
 }
 .lightbox-close:hover { opacity: 1; }
+.lightbox-download {
+  position: absolute;
+  top: 1.15rem;
+  right: 4.4rem;
+  z-index: 2010;
+  background: rgba(255,255,255,0.14);
+  color: #fff;
+  border: 1px solid rgba(255,255,255,0.28);
+  border-radius: 999px;
+  padding: 0.4rem 0.9rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+}
+.lightbox-download:hover { background: rgba(255,255,255,0.22); }
+.lightbox-download[hidden] { display: none; }
 
 /* Lightbox navigation and thumbnail strip */
 .lightbox-view { max-width: 90vw; max-height: 80vh; display: grid; place-items: center; }
@@ -1825,14 +1842,34 @@ audio#wedding-audio { display: none; }
   margin: 0 0 0.35rem;
   font-size: 0.92rem;
 }
-.rsvp-gift-qr {
+.rsvp-gift-qr-btn {
   display: block;
   width: min(100%, 180px);
+  margin: 0.55rem auto 0.2rem;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: zoom-in;
+  border-radius: 12px;
+}
+.rsvp-gift-qr-btn:focus-visible {
+  outline: 2px solid var(--accent, #9ab69d);
+  outline-offset: 3px;
+}
+.rsvp-gift-qr {
+  display: block;
+  width: 100%;
   height: auto;
-  margin: 0.55rem auto 0.35rem;
+  margin: 0;
   border-radius: 12px;
   background: #fff;
   border: 1px solid rgba(154,182,157,0.22);
+}
+.rsvp-gift-qr-hint {
+  margin: 0 0 0.4rem;
+  font-size: 0.72rem;
+  color: var(--muted);
+  text-align: center;
 }
 .rsvp-gift-number {
   margin: 0;
@@ -1848,7 +1885,8 @@ audio#wedding-audio { display: none; }
   color: var(--muted);
 }
 .rsvp-gift-link,
-.rsvp-gift-copy {
+.rsvp-gift-copy,
+.rsvp-gift-download {
   display: inline-block;
   margin-top: 0.55rem;
   margin-right: 0.45rem;
@@ -1863,7 +1901,8 @@ audio#wedding-audio { display: none; }
   text-decoration: none;
 }
 .rsvp-gift-copy:hover,
-.rsvp-gift-link:hover {
+.rsvp-gift-link:hover,
+.rsvp-gift-download:hover {
   background: rgba(154,182,157,0.12);
 }
 
@@ -2095,6 +2134,7 @@ footer .footer-names {
   .lightbox-prev { left: 0.4rem; }
   .lightbox-next { right: 0.4rem; }
   .lightbox-thumbs { display: none; }
+  .lightbox-download { top: 0.7rem; right: 3.6rem; padding: 0.32rem 0.7rem; font-size: 0.74rem; }
 }
 
 /* Very small: 320px */
