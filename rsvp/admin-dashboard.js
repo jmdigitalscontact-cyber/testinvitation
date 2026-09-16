@@ -1942,9 +1942,14 @@
 
   let menuDraft = null;
   let menuEditorBound = false;
+  let menuDirty = false;
 
   function cloneMenu(menu) {
     return JSON.parse(JSON.stringify(menu || {}));
+  }
+
+  function markMenuDirty() {
+    menuDirty = true;
   }
 
   function menuTagKeys(menu) {
@@ -2052,6 +2057,25 @@
     menuDraft.tagLegend = next;
   }
 
+  function collectMenuFromDom() {
+    if (!menuDraft) return;
+    collectMenuLegendFromDom();
+    document.querySelectorAll("#menu-editor-root [data-section-index]").forEach((sectionEl) => {
+      const sIndex = parseInt(sectionEl.dataset.sectionIndex, 10);
+      const section = menuDraft.sections[sIndex];
+      if (!section) return;
+      section.title = String(sectionEl.querySelector("[data-section-field='title']")?.value || "").trim();
+      sectionEl.querySelectorAll("[data-item-index]").forEach((itemEl) => {
+        const item = section.items[parseInt(itemEl.dataset.itemIndex, 10)];
+        if (!item) return;
+        item.name = String(itemEl.querySelector("[data-item-field='name']")?.value || "").trim();
+        item.description = String(itemEl.querySelector("[data-item-field='description']")?.value || "").trim();
+        item.recommended = !!itemEl.querySelector("[data-item-field='recommended']")?.checked;
+        item.tags = Array.from(itemEl.querySelectorAll("[data-menu-tag]:checked")).map((el) => el.getAttribute("data-menu-tag")).filter(Boolean);
+      });
+    });
+  }
+
   function bindMenuEditor() {
     if (menuEditorBound) return;
     menuEditorBound = true;
@@ -2065,6 +2089,7 @@
       if (!section) return;
       if (event.target.matches("[data-section-field='title']")) {
         section.title = String(event.target.value || "").slice(0, 48);
+        markMenuDirty();
         return;
       }
       const itemEl = event.target.closest("[data-item-index]");
@@ -2073,6 +2098,7 @@
       if (!item) return;
       if (event.target.matches("[data-item-field='name']")) item.name = String(event.target.value || "").slice(0, 96);
       if (event.target.matches("[data-item-field='description']")) item.description = String(event.target.value || "").slice(0, 280);
+      markMenuDirty();
     });
 
     $("menu-editor-root")?.addEventListener("change", (event) => {
@@ -2086,6 +2112,7 @@
       if (!item) return;
       if (event.target.matches("[data-item-field='recommended']")) {
         item.recommended = !!event.target.checked;
+        markMenuDirty();
         return;
       }
       if (event.target.matches("[data-menu-tag]")) {
@@ -2094,6 +2121,7 @@
         if (event.target.checked) tags.add(code);
         else tags.delete(code);
         item.tags = [...tags];
+        markMenuDirty();
       }
     });
 
@@ -2108,6 +2136,7 @@
           return;
         }
         menuDraft.sections[sIndex].items.push(blankMenuItem());
+        markMenuDirty();
         renderMenuEditor();
         return;
       }
@@ -2123,6 +2152,7 @@
           return;
         }
         section.items.splice(iIndex, 1);
+        markMenuDirty();
         renderMenuEditor();
         return;
       }
@@ -2133,6 +2163,7 @@
           return;
         }
         menuDraft.sections.splice(parseInt(removeSection.getAttribute("data-remove-section"), 10), 1);
+        markMenuDirty();
         renderMenuEditor();
       }
     });
@@ -2144,6 +2175,7 @@
       const code = String(codeInput?.value || "").toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 6);
       if (code && menuDraft.tagLegend[code] !== undefined) {
         menuDraft.tagLegend[code] = String(event.target.value || "").trim().slice(0, 32) || code;
+        markMenuDirty();
       }
     });
 
@@ -2161,6 +2193,7 @@
           });
         });
       }
+      markMenuDirty();
       renderMenuEditor();
     });
 
@@ -2174,6 +2207,7 @@
           item.tags = (item.tags || []).filter((tag) => tag !== code);
         });
       });
+      markMenuDirty();
       renderMenuEditor();
     });
 
@@ -2189,6 +2223,7 @@
         title: "New course",
         items: [blankMenuItem()],
       });
+      markMenuDirty();
       renderMenuEditor();
       hideFlash("menu-editor-message");
     });
@@ -2203,14 +2238,35 @@
       let n = 1;
       while (menuDraft.tagLegend[`T${n}`]) n += 1;
       menuDraft.tagLegend[`T${n}`] = "New tag";
+      markMenuDirty();
       renderMenuEditor();
     });
 
     $("menu-save-btn")?.addEventListener("click", saveMenuEditor);
+    $("menu-reset-btn")?.addEventListener("click", resetMenuEditor);
+    window.addEventListener("beforeunload", (event) => {
+      if (!menuDirty) return;
+      event.preventDefault();
+      event.returnValue = "";
+    });
+  }
+
+  function applyMenuPayload(payload, message) {
+    menuDraft = cloneMenu(payload.data);
+    if (!menuDraft.tagLegend) menuDraft.tagLegend = {};
+    if (!Array.isArray(menuDraft.sections)) menuDraft.sections = [];
+    menuDirty = false;
+    renderMenuEditor();
+    showFlash("menu-editor-message", message, "success");
   }
 
   function loadMenuEditor() {
     bindMenuEditor();
+    if (menuDraft && menuDirty) {
+      renderMenuEditor();
+      showFlash("menu-editor-message", "Unsaved menu changes are still here. Save them to keep this food on the reception menu.", "success");
+      return;
+    }
     AdminAuth.apiCall("api.php?action=admin-get-menu")
       .then((res) => res.json())
       .then((payload) => {
@@ -2218,6 +2274,7 @@
         menuDraft = cloneMenu(payload.data);
         if (!menuDraft.tagLegend) menuDraft.tagLegend = {};
         if (!Array.isArray(menuDraft.sections)) menuDraft.sections = [];
+        menuDirty = false;
         renderMenuEditor();
         hideFlash("menu-editor-message");
       })
@@ -2228,7 +2285,7 @@
 
   function saveMenuEditor() {
     if (!menuDraft) return;
-    collectMenuLegendFromDom();
+    collectMenuFromDom();
     const used = new Set();
     menuDraft.sections = (menuDraft.sections || []).map((section) => ({
       ...section,
@@ -2249,15 +2306,33 @@
       .then((res) => res.json())
       .then((payload) => {
         if (!payload || !payload.success) throw new Error(payload?.error || "Save failed");
-        menuDraft = cloneMenu(payload.data);
-        renderMenuEditor();
-        showFlash("menu-editor-message", "Menu saved. Guests will see this on the reception Menu tab.", "success");
+        applyMenuPayload(payload, payload.message || "Menu saved. This will stay until you change or reset it.");
       })
       .catch((error) => {
         showFlash("menu-editor-message", error.message || "Could not save the menu.", "error");
       })
       .finally(() => {
         if (saveBtn) saveBtn.disabled = false;
+      });
+  }
+
+  function resetMenuEditor() {
+    if (!window.confirm("Reset the reception menu to the starter dishes? Your current food list will be replaced. You can edit it again after this.")) {
+      return;
+    }
+    const resetBtn = $("menu-reset-btn");
+    if (resetBtn) resetBtn.disabled = true;
+    AdminAuth.apiCall("api.php?action=admin-reset-menu", { method: "POST" })
+      .then((res) => res.json())
+      .then((payload) => {
+        if (!payload || !payload.success) throw new Error(payload?.error || "Reset failed");
+        applyMenuPayload(payload, payload.message || "Menu reset to the starter dishes.");
+      })
+      .catch((error) => {
+        showFlash("menu-editor-message", error.message || "Could not reset the menu.", "error");
+      })
+      .finally(() => {
+        if (resetBtn) resetBtn.disabled = false;
       });
   }
 
@@ -2316,7 +2391,7 @@
             <button type="button" class="admin-btn admin-btn-secondary admin-btn-sm" data-upload-gift-qr="${index}">Upload QR</button>
             ${method.qr_url ? `<a class="admin-btn admin-btn-secondary admin-btn-sm" href="${escapeHtml(method.qr_url)}${String(method.qr_url).includes("?") ? "&" : "?"}download=1" download="${escapeHtml((method.id || "gift") + "-qr")}">Download QR</a>` : ""}
             ${method.qr_url ? `<button type="button" class="admin-btn admin-btn-danger admin-btn-sm" data-remove-gift-qr="${escapeHtml(method.id || "")}">Remove QR</button>` : ""}
-            <p class="admin-muted">JPEG, PNG, or WebP · 3MB max. Guests scan this instead of typing the number.</p>
+            <p class="admin-muted">Optional. JPEG, PNG, or WebP · 3MB max. Guests can still send a gift with the account name and number if you skip the QR.</p>
           </div>
         </div>
       </div>
@@ -2439,7 +2514,7 @@
       .then((res) => res.json())
       .then((payload) => {
         if (!payload || !payload.success) throw new Error(payload?.error || "Upload failed");
-        applyGiftsPayload(payload, payload.message || "QR code uploaded. Guests can scan it for a faster gift.");
+        applyGiftsPayload(payload, payload.message || "QR code uploaded. Guests can zoom, scan, or download it on the invitation.");
       })
       .catch((error) => {
         renderGiftsEditor();
@@ -2545,7 +2620,7 @@
         if (!payload || !payload.success) throw new Error(payload?.error || "Save failed");
         giftsDraft = cloneGifts(payload.data);
         renderGiftsEditor();
-        showFlash("gifts-editor-message", "Gift details saved. Only invitations with Show gifts turned on will see them.", "success");
+        showFlash("gifts-editor-message", "Gift details saved. They will appear on the invitation, just before the FAQs.", "success");
       })
       .catch((error) => {
         showFlash("gifts-editor-message", error.message || "Could not save gift details.", "error");

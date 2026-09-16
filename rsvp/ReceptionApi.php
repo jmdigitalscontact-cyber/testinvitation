@@ -2623,8 +2623,16 @@ function handleAdminSaveFloorPlan() {
     ]);
 }
 
-function receptionMenuPath() {
+function receptionMenuStarterPath() {
     return __DIR__ . '/../reception/data/menu.json';
+}
+
+function receptionMenuLivePath() {
+    return __DIR__ . '/data/menu.live.json';
+}
+
+function receptionMenuPath() {
+    return receptionMenuLivePath();
 }
 
 function receptionDefaultMenu() {
@@ -2693,7 +2701,7 @@ function receptionMenuSlug($title, array &$used) {
     return $id;
 }
 
-function receptionNormalizeMenu($raw) {
+function receptionNormalizeMenu($raw, $fallbackToDefault = true) {
     $defaults = receptionDefaultMenu();
     $plan = is_array($raw) ? $raw : [];
 
@@ -2775,7 +2783,13 @@ function receptionNormalizeMenu($raw) {
         }
     }
     if (!$sections) {
-        return $defaults;
+        if ($fallbackToDefault) {
+            return $defaults;
+        }
+        return [
+            'sections' => [],
+            'tagLegend' => $tagLegend ?: $defaults['tagLegend'],
+        ];
     }
 
     return [
@@ -2784,13 +2798,61 @@ function receptionNormalizeMenu($raw) {
     ];
 }
 
-function receptionReadMenu() {
-    $path = receptionMenuPath();
-    if (!is_file($path)) {
-        return receptionDefaultMenu();
+function receptionReadStarterMenu() {
+    $path = receptionMenuStarterPath();
+    if (is_file($path)) {
+        $decoded = json_decode((string)file_get_contents($path), true);
+        $menu = receptionNormalizeMenu($decoded, false);
+        if (!empty($menu['sections'])) {
+            return $menu;
+        }
     }
-    $decoded = json_decode((string)file_get_contents($path), true);
-    return receptionNormalizeMenu($decoded);
+    return receptionDefaultMenu();
+}
+
+function receptionWriteLiveMenu(array $menu) {
+    $path = receptionMenuLivePath();
+    $dir = dirname($path);
+    if (!is_dir($dir) && !@mkdir($dir, 0755, true)) {
+        return false;
+    }
+    $json = json_encode($menu, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    if ($json === false) {
+        return false;
+    }
+    $tmp = $path . '.tmp';
+    if (@file_put_contents($tmp, $json, LOCK_EX) === false) {
+        return false;
+    }
+    if (!@rename($tmp, $path)) {
+        @unlink($tmp);
+        return @file_put_contents($path, $json, LOCK_EX) !== false;
+    }
+    return true;
+}
+
+function receptionEnsureLiveMenu() {
+    $live = receptionMenuLivePath();
+    if (is_file($live) && filesize($live) > 2) {
+        return;
+    }
+    $starter = receptionMenuStarterPath();
+    if (is_file($starter)) {
+        @copy($starter, $live);
+    }
+}
+
+function receptionReadMenu() {
+    receptionEnsureLiveMenu();
+    $live = receptionMenuLivePath();
+    if (is_file($live)) {
+        $decoded = json_decode((string)file_get_contents($live), true);
+        $menu = receptionNormalizeMenu($decoded, false);
+        if (!empty($menu['sections'])) {
+            return $menu;
+        }
+    }
+    return receptionReadStarterMenu();
 }
 
 function handleGetMenu() {
@@ -2813,19 +2875,30 @@ function handleAdminGetMenu() {
 function handleAdminSaveMenu() {
     requireAdminAuth();
     $input = getRequestInput();
-    $menu = receptionNormalizeMenu($input['menu'] ?? $input);
-    $path = receptionMenuPath();
-    $dir = dirname($path);
-    if (!is_dir($dir) && !@mkdir($dir, 0755, true)) {
-        sendResponse(['success' => false, 'error' => 'Could not create menu folder.'], 500);
+    $menu = receptionNormalizeMenu($input['menu'] ?? $input, false);
+    if (empty($menu['sections'])) {
+        sendResponse(['success' => false, 'error' => 'Add at least one dish before saving.'], 400);
     }
-    $json = json_encode($menu, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-    if ($json === false || @file_put_contents($path, $json) === false) {
-        sendResponse(['success' => false, 'error' => 'Could not save the menu. Check that reception/data is writable.'], 500);
+    if (!receptionWriteLiveMenu($menu)) {
+        sendResponse(['success' => false, 'error' => 'Could not save the menu. Check that rsvp/data is writable.'], 500);
     }
     sendResponse([
         'success' => true,
+        'message' => 'Menu saved. This will stay until you change or reset it.',
         'data' => $menu,
+    ]);
+}
+
+function handleAdminResetMenu() {
+    requireAdminAuth();
+    $starter = receptionReadStarterMenu();
+    if (!receptionWriteLiveMenu($starter)) {
+        sendResponse(['success' => false, 'error' => 'Could not reset the menu. Check that rsvp/data is writable.'], 500);
+    }
+    sendResponse([
+        'success' => true,
+        'message' => 'Menu reset to the starter dishes. You can edit and save again whenever you like.',
+        'data' => $starter,
     ]);
 }
 
@@ -2835,8 +2908,8 @@ function weddingGiftsPath() {
 
 function weddingDefaultGifts() {
     return [
-        'headline' => 'If you cannot celebrate with us in person, a gift toward our future together would mean the world.',
-        'thanks' => 'Thank you for holding us in your hearts from afar.',
+        'headline' => 'Your presence is our greatest gift. If you would like to honor us with something more, here are a few ways to send a gift.',
+        'thanks' => 'Thank you for celebrating with us. Your love and generosity mean the world to us.',
         'methods' => [
             [
                 'id' => 'gcash',
@@ -3025,7 +3098,12 @@ function weddingPublicGifts() {
     $public = [];
     foreach ($gifts['methods'] as $method) {
         $hasQr = weddingMethodHasGiftQr($method);
-        if ($method['account_number'] === '' && $method['link'] === '' && !$hasQr) {
+        $hasDetails = $method['account_name'] !== ''
+            || $method['account_number'] !== ''
+            || $method['note'] !== ''
+            || $method['link'] !== ''
+            || $hasQr;
+        if (!$hasDetails) {
             continue;
         }
         $row = $method;
@@ -3143,7 +3221,7 @@ function handleAdminUploadGiftQr() {
 
     sendResponse([
         'success' => true,
-        'message' => 'QR code uploaded. Guests can scan it for a faster gift.',
+        'message' => 'QR code uploaded. Guests can zoom, scan, or download it on the invitation.',
         'data' => weddingAdminGiftsView($saved),
     ]);
 }
@@ -3173,6 +3251,14 @@ function handleAdminDeleteGiftQr() {
         'success' => true,
         'message' => 'QR code removed.',
         'data' => weddingAdminGiftsView($saved),
+    ]);
+}
+
+function handleGetPublicGifts() {
+    header('Cache-Control: no-store');
+    sendResponse([
+        'success' => true,
+        'data' => weddingPublicGifts(),
     ]);
 }
 

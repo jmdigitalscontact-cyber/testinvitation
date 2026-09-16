@@ -312,21 +312,24 @@
     if (src) window.open(src, '_blank', 'noopener');
   };
 
-  function renderInvitationGifts(invitation) {
-    var wrap = document.getElementById('rsvp-gifts');
-    var methodsRoot = document.getElementById('rsvp-gifts-methods');
-    if (!wrap) return;
-    var gifts = invitation && invitation.show_gifts ? invitation.gifts : null;
-    var methods = gifts && Array.isArray(gifts.methods) ? gifts.methods.filter(function (method) {
-      return method && (method.account_number || method.link || method.qr_url);
-    }) : [];
+  function giftMethodHasDetails(method) {
+    return !!(method && (method.account_name || method.account_number || method.note || method.link || method.qr_url));
+  }
+
+  function renderInvitationGifts(gifts) {
+    var section = document.getElementById('gifts');
+    var methodsRoot = document.getElementById('invite-gifts-methods');
+    if (!section) return;
+    var methods = gifts && Array.isArray(gifts.methods) ? gifts.methods.filter(giftMethodHasDetails) : [];
     if (!gifts || !methods.length) {
-      wrap.hidden = true;
+      section.hidden = true;
       if (methodsRoot) methodsRoot.innerHTML = '';
+      var hiddenNav = document.querySelector('.nav-btn[data-target="gifts"]');
+      if (hiddenNav && hiddenNav.closest('li')) hiddenNav.closest('li').hidden = true;
       return;
     }
-    var headline = document.getElementById('rsvp-gifts-headline');
-    var thanks = document.getElementById('rsvp-gifts-thanks');
+    var headline = document.getElementById('invite-gifts-headline');
+    var thanks = document.getElementById('invite-gifts-thanks');
     if (headline && gifts.headline) headline.textContent = gifts.headline;
     if (thanks && gifts.thanks) thanks.textContent = gifts.thanks;
     if (methodsRoot) {
@@ -346,7 +349,7 @@
             '<button type="button" class="rsvp-gift-qr-btn" data-gift-qr-src="' + escapeInviteHtml(method.qr_url) + '" data-gift-qr-name="' + escapeInviteHtml(qrName) + '" aria-label="Zoom ' + escapeInviteHtml(method.title || 'gift') + ' QR code">' +
               '<img class="rsvp-gift-qr" src="' + escapeInviteHtml(method.qr_url) + '" alt="Scan to send a gift via ' + escapeInviteHtml(method.title || 'this method') + '">' +
             '</button>' +
-            '<p class="rsvp-gift-qr-hint">Tap to zoom</p>' +
+            '<p class="rsvp-gift-qr-hint">Tap to zoom or download</p>' +
             '<button type="button" class="rsvp-gift-download" data-gift-qr-download="' + escapeInviteHtml(method.qr_url) + '" data-gift-qr-name="' + escapeInviteHtml(qrName) + '">Download QR</button>'
           )
           : '';
@@ -388,7 +391,26 @@
         });
       }
     }
-    wrap.hidden = false;
+    section.hidden = false;
+    var giftsNav = document.querySelector('.nav-btn[data-target="gifts"]');
+    if (giftsNav && giftsNav.closest('li')) giftsNav.closest('li').hidden = false;
+  }
+
+  function loadPublicGifts() {
+    fetch('rsvp/api.php?action=get-public-gifts', { cache: 'no-cache' })
+      .then(function (response) { return response.json(); })
+      .then(function (data) {
+        if (!data || !data.success || !data.data) {
+          throw new Error('Unable to load gift details');
+        }
+        renderInvitationGifts(data.data);
+      })
+      .catch(function () {
+        var section = document.getElementById('gifts');
+        if (section) section.hidden = true;
+        var giftsNav = document.querySelector('.nav-btn[data-target="gifts"]');
+        if (giftsNav && giftsNav.closest('li')) giftsNav.closest('li').hidden = true;
+      });
   }
 
   function renderInvitedParty(invitation) {
@@ -435,12 +457,10 @@
       if (meta) {
         meta.textContent = 'We already have your final RSVP on record. Thank you for responding!';
       }
-      renderInvitationGifts(invitation);
       return;
     }
 
     if (!list) {
-      renderInvitationGifts(invitation);
       return;
     }
     list.innerHTML = '';
@@ -503,7 +523,6 @@
     setInviteLoading(false);
     var form = document.getElementById('rsvp-form');
     if (form) form.hidden = false;
-    renderInvitationGifts(invitation);
   }
 
   function loadInvitationDetails() {
@@ -564,6 +583,7 @@
 
   applyRSVPGating();
   loadInvitationDetails();
+  loadPublicGifts();
 
   /* ===== RSVP Form ===== */
   var form = document.getElementById('rsvp-form');
@@ -660,13 +680,12 @@
           if (doneTitle) doneTitle.textContent = 'RSVP received';
           if (attending === 'no') {
             if (doneMessage) doneMessage.textContent = 'Thank you for letting us know. We will miss you on the day, and we are grateful you are celebrating with us in spirit.';
-            if (doneHelp) doneHelp.textContent = 'If you would still like to send a gift, the details are below.';
+            if (doneHelp) doneHelp.textContent = 'If you would still like to send a gift, please see the Gifts section above.';
           } else {
             if (doneMessage) doneMessage.textContent = 'Thank you! Your family has one correction available if somebody was missed.';
             if (doneHelp) doneHelp.textContent = 'Reopen this same QR to update once. After that, please contact Jason & Rhona Mae.';
           }
         }
-        renderInvitationGifts(window.__currentInvitation || {});
       })
       .catch(function (error) {
         btn.disabled = false;

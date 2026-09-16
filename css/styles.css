@@ -384,6 +384,7 @@ section h2::after {
 #attire,
 #program,
 #entourage-photos,
+#gifts,
 #faq,
 #rsvp {
   background: linear-gradient(160deg, rgba(255,255,255,0.96), rgba(250,246,245,0.92));
@@ -1832,6 +1833,24 @@ audio#wedding-audio { display: none; }
   margin: 1rem 0 0.6rem;
   text-align: left;
 }
+.invite-gifts-methods {
+  max-width: 720px;
+  margin: 1.2rem auto 0;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+.invite-gifts-thanks {
+  margin: 1.1rem auto 0;
+  max-width: 52ch;
+  text-align: center;
+  font-style: italic;
+  color: var(--muted);
+  font-size: 0.95rem;
+  line-height: 1.55;
+}
+#gifts {
+  scroll-margin-top: 80px;
+  text-align: center;
+}
 .rsvp-gift-card {
   border: 1px solid rgba(154,182,157,0.2);
   border-radius: 14px;
@@ -1987,6 +2006,7 @@ footer .footer-names {
   #details,
   #attire,
   #program,
+  #gifts,
   #faq,
   #rsvp {
     width: calc(100% - 26px);
@@ -2036,6 +2056,7 @@ footer .footer-names {
   #details,
   #attire,
   #program,
+  #gifts,
   #faq,
   #rsvp {
     width: calc(100% - 18px);

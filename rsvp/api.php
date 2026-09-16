@@ -236,6 +236,10 @@ try {
             handleGetMenu();
             break;
 
+        case 'get-public-gifts':
+            handleGetPublicGifts();
+            break;
+
         case 'get-reception-gifts':
             handleGetReceptionGifts();
             break;
@@ -246,6 +250,10 @@ try {
 
         case 'admin-save-menu':
             handleAdminSaveMenu();
+            break;
+
+        case 'admin-reset-menu':
+            handleAdminResetMenu();
             break;
 
         case 'admin-get-gifts':

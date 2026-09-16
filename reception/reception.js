@@ -2244,7 +2244,7 @@
   function renderReceptionGifts(data) {
     if (!els.giftsMethods) return;
     const methods = Array.isArray(data?.methods) ? data.methods.filter((method) => (
-      method && (method.account_number || method.link || method.qr_url)
+      method && (method.account_number || method.link || method.qr_url || method.account_name || method.note)
     )) : [];
     if (els.giftsThanks && data?.thanks) els.giftsThanks.textContent = data.thanks;
     if (!methods.length) {

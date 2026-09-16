@@ -152,7 +152,7 @@
                     </div>
                         <label class="admin-checkbox">
                             <input type="checkbox" id="invite-show-gifts">
-                            <span>Show wedding gifts on this invitation (for overseas guests who cannot attend)</span>
+                            <span>This guest was previously marked for gift details (the invitation Gifts section is shown to everyone)</span>
                         </label>
                         <label class="admin-checkbox">
                             <input type="checkbox" id="auto-send-invite">
@@ -350,10 +350,11 @@
             <section id="menu" class="admin-panel" aria-label="Menu">
                 <div class="admin-card">
                     <h2>Reception food menu</h2>
-                    <p class="admin-card-lead">Edit courses and dishes here. Guests see this on the reception Menu tab after you save. Use dietary tags so they can filter vegan, gluten-free, and nut dishes.</p>
+                    <p class="admin-card-lead">Edit courses and dishes here, then save. Guests see this on the reception Menu tab. Saved food stays in place through later site updates unless you choose <strong>Reset to starter menu</strong>.</p>
                     <div id="menu-editor-message" class="admin-flash" role="status"></div>
                     <div class="admin-floor-toolbar">
                         <button type="button" class="admin-btn admin-btn-secondary admin-btn-sm" id="menu-add-section-btn">Add course</button>
+                        <button type="button" class="admin-btn admin-btn-secondary admin-btn-sm" id="menu-reset-btn">Reset to starter menu</button>
                         <button type="button" class="admin-btn admin-btn-primary admin-btn-sm" id="menu-save-btn">Save menu</button>
                     </div>
                     <div id="menu-editor-root" class="admin-menu-editor"></div>
@@ -373,15 +374,15 @@
             <section id="gifts" class="admin-panel" aria-label="Gifts">
                 <div class="admin-card">
                     <h2>Wedding gift details</h2>
-                    <p class="admin-card-lead">These payment methods are <strong>not</strong> added to every invitation. They appear only on the specific invitations you turn on below. Upload a GCash or bank QR so those guests can scan and send a gift faster.</p>
+                    <p class="admin-card-lead">These payment methods appear on the invitation itself, just before the FAQs, for every guest. A QR code is optional: you can publish account name and number only, or upload a QR so guests can zoom, scan, and download it.</p>
                     <div id="gifts-editor-message" class="admin-flash" role="status"></div>
                     <div class="admin-field">
                         <label for="gifts-headline">Message on the invitation</label>
-                        <textarea id="gifts-headline" rows="2" maxlength="280" placeholder="If you cannot celebrate with us in person…"></textarea>
+                        <textarea id="gifts-headline" rows="2" maxlength="280" placeholder="Your presence is our greatest gift. If you would like to honor us with something more…"></textarea>
                     </div>
                     <div class="admin-field">
                         <label for="gifts-thanks">Thank-you line</label>
-                        <input type="text" id="gifts-thanks" maxlength="180" placeholder="Thank you for holding us in your hearts from afar.">
+                        <input type="text" id="gifts-thanks" maxlength="180" placeholder="Thank you for celebrating with us.">
                     </div>
                     <div class="admin-floor-toolbar">
                         <button type="button" class="admin-btn admin-btn-secondary admin-btn-sm" id="gifts-add-method-btn">Add payment method</button>
@@ -392,8 +393,8 @@
                 </div>
 
                 <div class="admin-card">
-                    <h2>Show gifts on invitations</h2>
-                    <p class="admin-card-lead">Off by default. Turn this on only for the guests who should see gift details. All other invitations stay unchanged.</p>
+                    <h2>Invitation notes</h2>
+                    <p class="admin-card-lead">The Gifts section is now on the invitation for every guest. This list is only a note of which invitations were previously marked. It does not hide or show that page section.</p>
                     <div class="admin-field">
                         <input type="search" id="gifts-invitation-search" placeholder="Search guest or invitation ID" autocomplete="off">
                     </div>
@@ -610,7 +611,7 @@
                 </div>
                 <label class="admin-checkbox" style="margin:0.85rem 0 0">
                     <input type="checkbox" id="edit-show-gifts">
-                    <span>Show wedding gifts on this invitation (overseas / unable to attend)</span>
+                    <span>This guest was previously marked for gift details (the invitation Gifts section is shown to everyone)</span>
                 </label>
                 <div class="admin-card" style="margin-top:1rem;padding:1rem;background:var(--admin-surface-alt, #f7f9f7)">
                     <h4 style="margin:0 0 0.75rem;font-size:0.95rem">RSVP override</h4>
