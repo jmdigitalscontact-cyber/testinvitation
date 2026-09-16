@@ -2248,9 +2248,11 @@
     )) : [];
     if (els.giftsThanks && data?.thanks) els.giftsThanks.textContent = data.thanks;
     if (!methods.length) {
+      els.giftsMethods.removeAttribute("data-count");
       els.giftsMethods.innerHTML = '<p class="rec-gifts-empty">Gift details will appear here once the couple adds them.</p>';
       return;
     }
+    els.giftsMethods.dataset.count = String(methods.length);
     els.giftsMethods.innerHTML = methods.map((method) => {
       const qrSrc = giftQrServeUrl(method);
       const qrName = giftQrFileName(`${method.id || method.title || "gift"}-qr`);

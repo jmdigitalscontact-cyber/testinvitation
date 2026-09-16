@@ -333,6 +333,7 @@
     if (headline && gifts.headline) headline.textContent = gifts.headline;
     if (thanks && gifts.thanks) thanks.textContent = gifts.thanks;
     if (methodsRoot) {
+      methodsRoot.setAttribute('data-count', String(methods.length));
       methodsRoot.innerHTML = methods.map(function (method) {
         var number = method.account_number ? '<p class="rsvp-gift-number">' + escapeInviteHtml(method.account_number) + '</p>' : '';
         var name = method.account_name ? '<p class="rsvp-gift-name">' + escapeInviteHtml(method.account_name) + '</p>' : '';

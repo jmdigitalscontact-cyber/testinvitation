@@ -2507,15 +2507,28 @@ body.reception-lightbox-open { overflow: hidden; }
 
 .rec-gifts-cols {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  grid-template-columns: 1fr;
   gap: 1rem;
-  align-items: start;
+  align-items: stretch;
+  justify-content: center;
+}
+
+.rec-gifts-cols[data-count="2"],
+.rec-gifts-cols[data-count="4"] {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.rec-gifts-cols[data-count="3"],
+.rec-gifts-cols[data-count="5"],
+.rec-gifts-cols[data-count="6"] {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .rec-gifts-col {
   display: flex;
   flex-direction: column;
   align-items: center;
+  height: 100%;
 }
 
 .rec-gifts-qr-wrap {
@@ -2903,7 +2916,14 @@ body.reception-lightbox-open { overflow: hidden; }
   .rec-welcome-card { padding: 2.1rem 1.25rem 1.6rem; border-radius: 22px; }
   .rec-lock-key-wrap { flex-direction: column; }
   .rec-lock-enter-btn { width: 100%; justify-content: center; }
-  .rec-gifts-cols { grid-template-columns: 1fr; gap: 1.2rem; }
+  .rec-gifts-cols[data-count="2"],
+  .rec-gifts-cols[data-count="3"],
+  .rec-gifts-cols[data-count="4"],
+  .rec-gifts-cols[data-count="5"],
+  .rec-gifts-cols[data-count="6"] {
+    grid-template-columns: 1fr;
+    gap: 1.2rem;
+  }
   .rec-gifts-qr-animated { width: min(130px, 40vw); height: min(130px, 40vw); }
   .reception-gallery-masonry { grid-template-columns: repeat(2, 1fr); }
   .rec-bg__img { object-position: 72% 54%; animation-name: recKenBurnsMobile; }
