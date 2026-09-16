@@ -20,9 +20,11 @@ reception/uploads/*
 !reception/uploads/.gitkeep
 !reception/uploads/.htaccess
 
-# Live reception menu (dashboard edits; do not overwrite on deploy)
-rsvp/data/menu.live.json
-rsvp/data/menu.live.json.tmp
+# Live dashboard content (do not overwrite on deploy)
+rsvp/data/*.live.json
+rsvp/data/*.live.json.tmp
+rsvp/data/gift-qr/*
+!rsvp/data/gift-qr/.htaccess
 
 # Google service-account / credential JSON
 **/credentials/*.json

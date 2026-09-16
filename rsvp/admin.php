@@ -256,7 +256,7 @@
             <section id="tables" class="admin-panel" aria-label="Seating">
                 <div class="admin-card">
                     <h2>Reception floor plan</h2>
-                    <p class="admin-card-lead">This is the official Alta Terra Tagaytay layout. Round tables are 1–14. Grey rectangles are VIP 1 (table 15) and VIP 2 (table 16). Drag any table to match the printed seats, then save.</p>
+                    <p class="admin-card-lead">This is the official Alta Terra Tagaytay layout. Round tables are 1–14. Grey rectangles are VIP 1 (table 15) and VIP 2 (table 16). Drag any table to match the printed seats, then save. Saved layout stays until you choose <strong>Reset to starter layout</strong>.</p>
                     <div id="floor-plan-message" class="admin-flash" role="status"></div>
                     <div class="admin-floor-toolbar">
                         <button type="button" class="admin-btn admin-btn-secondary admin-btn-sm" id="floor-add-table-btn">Add table</button>
@@ -265,6 +265,7 @@
                             <span>Selected label</span>
                             <input type="text" id="floor-marker-label" maxlength="24" placeholder="VIP 1, Table 8…" disabled>
                         </label>
+                        <button type="button" class="admin-btn admin-btn-secondary admin-btn-sm" id="floor-reset-btn">Reset to starter layout</button>
                         <button type="button" class="admin-btn admin-btn-primary admin-btn-sm" id="floor-save-btn">Save floor plan</button>
                     </div>
                     <div class="admin-floor-key" aria-hidden="true">
@@ -374,7 +375,7 @@
             <section id="gifts" class="admin-panel" aria-label="Gifts">
                 <div class="admin-card">
                     <h2>Wedding gift details</h2>
-                    <p class="admin-card-lead">These payment methods appear on the invitation itself, just before the FAQs, for every guest. A QR code is optional: you can publish account name and number only, or upload a QR so guests can zoom, scan, and download it.</p>
+                    <p class="admin-card-lead">These payment methods appear on the invitation itself, just before the FAQs, for every guest. A QR code is optional. Saved gift details stay until you choose <strong>Reset to starter gifts</strong>.</p>
                     <div id="gifts-editor-message" class="admin-flash" role="status"></div>
                     <div class="admin-field">
                         <label for="gifts-headline">Message on the invitation</label>
@@ -386,6 +387,7 @@
                     </div>
                     <div class="admin-floor-toolbar">
                         <button type="button" class="admin-btn admin-btn-secondary admin-btn-sm" id="gifts-add-method-btn">Add payment method</button>
+                        <button type="button" class="admin-btn admin-btn-secondary admin-btn-sm" id="gifts-reset-btn">Reset to starter gifts</button>
                         <button type="button" class="admin-btn admin-btn-primary admin-btn-sm" id="gifts-save-btn">Save gift details</button>
                     </div>
                     <div id="gifts-methods-root" class="admin-menu-editor"></div>

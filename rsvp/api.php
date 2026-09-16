@@ -232,6 +232,10 @@ try {
             handleAdminSaveFloorPlan();
             break;
 
+        case 'admin-reset-floor-plan':
+            handleAdminResetFloorPlan();
+            break;
+
         case 'get-menu':
             handleGetMenu();
             break;
@@ -262,6 +266,10 @@ try {
 
         case 'admin-save-gifts':
             handleAdminSaveGifts();
+            break;
+
+        case 'admin-reset-gifts':
+            handleAdminResetGifts();
             break;
 
         case 'admin-upload-gift-qr':

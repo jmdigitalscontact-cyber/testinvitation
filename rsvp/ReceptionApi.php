@@ -2441,8 +2441,45 @@ function handleAdminDownloadPhotosZip() {
     }
 }
 
-function receptionFloorPlanPath() {
+function weddingWriteAtomicJson($path, $data) {
+    $dir = dirname($path);
+    if (!is_dir($dir) && !@mkdir($dir, 0755, true)) {
+        return false;
+    }
+    $json = json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    if ($json === false) {
+        return false;
+    }
+    $tmp = $path . '.tmp';
+    if (@file_put_contents($tmp, $json, LOCK_EX) === false) {
+        return false;
+    }
+    if (!@rename($tmp, $path)) {
+        @unlink($tmp);
+        return @file_put_contents($path, $json, LOCK_EX) !== false;
+    }
+    return true;
+}
+
+function weddingEnsureLiveCopy($livePath, $starterPath) {
+    if (is_file($livePath) && filesize($livePath) > 2) {
+        return;
+    }
+    if (is_file($starterPath)) {
+        @copy($starterPath, $livePath);
+    }
+}
+
+function receptionFloorPlanStarterPath() {
     return __DIR__ . '/../reception/data/floor-plan.json';
+}
+
+function receptionFloorPlanLivePath() {
+    return __DIR__ . '/data/floor-plan.live.json';
+}
+
+function receptionFloorPlanPath() {
+    return receptionFloorPlanLivePath();
 }
 
 function receptionDefaultFloorPlan() {
@@ -2493,12 +2530,14 @@ function receptionClampPercent($value, $min = 0, $max = 100) {
     return round($number, 2);
 }
 
-function receptionNormalizeFloorPlan($raw) {
+function receptionNormalizeFloorPlan($raw, $fallbackToDefault = true) {
     $defaults = receptionDefaultFloorPlan();
     $plan = is_array($raw) ? $raw : [];
     $tables = [];
     $seen = [];
-    $sourceTables = isset($plan['tables']) && is_array($plan['tables']) ? $plan['tables'] : $defaults['tables'];
+    $sourceTables = isset($plan['tables']) && is_array($plan['tables'])
+        ? $plan['tables']
+        : ($fallbackToDefault ? $defaults['tables'] : []);
 
     foreach ($sourceTables as $table) {
         if (!is_array($table)) {
@@ -2533,6 +2572,13 @@ function receptionNormalizeFloorPlan($raw) {
         return $a['number'] <=> $b['number'];
     });
     if (!$tables) {
+        if (!$fallbackToDefault) {
+            return [
+                'legend' => [],
+                'tables' => [],
+                'markers' => [],
+            ];
+        }
         $tables = $defaults['tables'];
     }
 
@@ -2578,13 +2624,29 @@ function receptionNormalizeFloorPlan($raw) {
     ];
 }
 
-function receptionReadFloorPlan() {
-    $path = receptionFloorPlanPath();
-    if (!is_file($path)) {
-        return receptionDefaultFloorPlan();
+function receptionReadStarterFloorPlan() {
+    $path = receptionFloorPlanStarterPath();
+    if (is_file($path)) {
+        $decoded = json_decode((string)file_get_contents($path), true);
+        $plan = receptionNormalizeFloorPlan($decoded, false);
+        if (!empty($plan['tables'])) {
+            return $plan;
+        }
     }
-    $decoded = json_decode((string)file_get_contents($path), true);
-    return receptionNormalizeFloorPlan($decoded);
+    return receptionDefaultFloorPlan();
+}
+
+function receptionReadFloorPlan() {
+    weddingEnsureLiveCopy(receptionFloorPlanLivePath(), receptionFloorPlanStarterPath());
+    $live = receptionFloorPlanLivePath();
+    if (is_file($live)) {
+        $decoded = json_decode((string)file_get_contents($live), true);
+        $plan = receptionNormalizeFloorPlan($decoded, false);
+        if (!empty($plan['tables'])) {
+            return $plan;
+        }
+    }
+    return receptionReadStarterFloorPlan();
 }
 
 function handleGetFloorPlan() {
@@ -2607,19 +2669,30 @@ function handleAdminGetFloorPlan() {
 function handleAdminSaveFloorPlan() {
     requireAdminAuth();
     $input = getRequestInput();
-    $plan = receptionNormalizeFloorPlan($input['plan'] ?? $input);
-    $path = receptionFloorPlanPath();
-    $dir = dirname($path);
-    if (!is_dir($dir) && !@mkdir($dir, 0755, true)) {
-        sendResponse(['success' => false, 'error' => 'Could not create floor plan folder.'], 500);
+    $plan = receptionNormalizeFloorPlan($input['plan'] ?? $input, false);
+    if (empty($plan['tables'])) {
+        sendResponse(['success' => false, 'error' => 'Keep at least one table on the floor plan before saving.'], 400);
     }
-    $json = json_encode($plan, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
-    if ($json === false || @file_put_contents($path, $json) === false) {
-        sendResponse(['success' => false, 'error' => 'Could not save the floor plan. Check that reception/data is writable.'], 500);
+    if (!weddingWriteAtomicJson(receptionFloorPlanLivePath(), $plan)) {
+        sendResponse(['success' => false, 'error' => 'Could not save the floor plan. Check that rsvp/data is writable.'], 500);
     }
     sendResponse([
         'success' => true,
+        'message' => 'Floor plan saved. This will stay until you change or reset it.',
         'data' => $plan,
+    ]);
+}
+
+function handleAdminResetFloorPlan() {
+    requireAdminAuth();
+    $starter = receptionReadStarterFloorPlan();
+    if (!weddingWriteAtomicJson(receptionFloorPlanLivePath(), $starter)) {
+        sendResponse(['success' => false, 'error' => 'Could not reset the floor plan. Check that rsvp/data is writable.'], 500);
+    }
+    sendResponse([
+        'success' => true,
+        'message' => 'Floor plan reset to the starter layout. You can edit and save again whenever you like.',
+        'data' => $starter,
     ]);
 }
 
@@ -2811,24 +2884,7 @@ function receptionReadStarterMenu() {
 }
 
 function receptionWriteLiveMenu(array $menu) {
-    $path = receptionMenuLivePath();
-    $dir = dirname($path);
-    if (!is_dir($dir) && !@mkdir($dir, 0755, true)) {
-        return false;
-    }
-    $json = json_encode($menu, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-    if ($json === false) {
-        return false;
-    }
-    $tmp = $path . '.tmp';
-    if (@file_put_contents($tmp, $json, LOCK_EX) === false) {
-        return false;
-    }
-    if (!@rename($tmp, $path)) {
-        @unlink($tmp);
-        return @file_put_contents($path, $json, LOCK_EX) !== false;
-    }
-    return true;
+    return weddingWriteAtomicJson(receptionMenuLivePath(), $menu);
 }
 
 function receptionEnsureLiveMenu() {
@@ -2902,8 +2958,16 @@ function handleAdminResetMenu() {
     ]);
 }
 
-function weddingGiftsPath() {
+function weddingGiftsStarterPath() {
     return __DIR__ . '/data/gifts.json';
+}
+
+function weddingGiftsLivePath() {
+    return __DIR__ . '/data/gifts.live.json';
+}
+
+function weddingGiftsPath() {
+    return weddingGiftsLivePath();
 }
 
 function weddingDefaultGifts() {
@@ -2960,21 +3024,23 @@ function weddingGiftsSlug($title, array &$used) {
     return $id;
 }
 
-function weddingNormalizeGifts($raw) {
+function weddingNormalizeGifts($raw, $fallbackToDefault = true) {
     $defaults = weddingDefaultGifts();
     $plan = is_array($raw) ? $raw : [];
-    $headline = trim((string)($plan['headline'] ?? $defaults['headline']));
-    $thanks = trim((string)($plan['thanks'] ?? $defaults['thanks']));
-    if ($headline === '') {
+    $headline = trim((string)($plan['headline'] ?? ''));
+    $thanks = trim((string)($plan['thanks'] ?? ''));
+    if ($headline === '' && $fallbackToDefault) {
         $headline = $defaults['headline'];
     }
-    if ($thanks === '') {
+    if ($thanks === '' && $fallbackToDefault) {
         $thanks = $defaults['thanks'];
     }
 
     $methods = [];
     $used = [];
-    $source = isset($plan['methods']) && is_array($plan['methods']) ? $plan['methods'] : $defaults['methods'];
+    $source = isset($plan['methods']) && is_array($plan['methods'])
+        ? $plan['methods']
+        : ($fallbackToDefault ? $defaults['methods'] : []);
     foreach ($source as $method) {
         if (!is_array($method)) {
             continue;
@@ -3005,7 +3071,7 @@ function weddingNormalizeGifts($raw) {
             break;
         }
     }
-    if (!$methods) {
+    if (!$methods && $fallbackToDefault) {
         $methods = $defaults['methods'];
     }
 
@@ -3016,13 +3082,29 @@ function weddingNormalizeGifts($raw) {
     ];
 }
 
-function weddingReadGifts() {
-    $path = weddingGiftsPath();
-    if (!is_file($path)) {
-        return weddingDefaultGifts();
+function weddingReadStarterGifts() {
+    $path = weddingGiftsStarterPath();
+    if (is_file($path)) {
+        $decoded = json_decode((string)file_get_contents($path), true);
+        $gifts = weddingNormalizeGifts($decoded, false);
+        if (!empty($gifts['methods'])) {
+            return $gifts;
+        }
     }
-    $decoded = json_decode((string)file_get_contents($path), true);
-    return weddingNormalizeGifts($decoded);
+    return weddingDefaultGifts();
+}
+
+function weddingReadGifts() {
+    weddingEnsureLiveCopy(weddingGiftsLivePath(), weddingGiftsStarterPath());
+    $live = weddingGiftsLivePath();
+    if (is_file($live)) {
+        $decoded = json_decode((string)file_get_contents($live), true);
+        $gifts = weddingNormalizeGifts($decoded, false);
+        if (!empty($gifts['methods'])) {
+            return $gifts;
+        }
+    }
+    return weddingReadStarterGifts();
 }
 
 function weddingGiftQrDir() {
@@ -3049,14 +3131,11 @@ function weddingMethodHasGiftQr(array $method) {
 }
 
 function weddingWriteGifts(array $gifts) {
-    $gifts = weddingNormalizeGifts($gifts);
-    $path = weddingGiftsPath();
-    $dir = dirname($path);
-    if (!is_dir($dir) && !@mkdir($dir, 0755, true)) {
+    $gifts = weddingNormalizeGifts($gifts, false);
+    if (empty($gifts['methods'])) {
         return false;
     }
-    $json = json_encode($gifts, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-    if ($json === false || @file_put_contents($path, $json) === false) {
+    if (!weddingWriteAtomicJson(weddingGiftsLivePath(), $gifts)) {
         return false;
     }
     $keep = [];
@@ -3138,13 +3217,32 @@ function handleAdminGetGifts() {
 function handleAdminSaveGifts() {
     requireAdminAuth();
     $input = getRequestInput();
-    $gifts = weddingWriteGifts($input['gifts'] ?? $input);
+    $normalized = weddingNormalizeGifts($input['gifts'] ?? $input, false);
+    if (empty($normalized['methods'])) {
+        sendResponse(['success' => false, 'error' => 'Add at least one payment method before saving.'], 400);
+    }
+    $gifts = weddingWriteGifts($normalized);
     if ($gifts === false) {
         sendResponse(['success' => false, 'error' => 'Could not save gift details. Check that rsvp/data is writable.'], 500);
     }
     sendResponse([
         'success' => true,
+        'message' => 'Gift details saved. This will stay until you change or reset it.',
         'data' => weddingAdminGiftsView($gifts),
+    ]);
+}
+
+function handleAdminResetGifts() {
+    requireAdminAuth();
+    $starter = weddingReadStarterGifts();
+    $saved = weddingWriteGifts($starter);
+    if ($saved === false) {
+        sendResponse(['success' => false, 'error' => 'Could not reset gift details. Check that rsvp/data is writable.'], 500);
+    }
+    sendResponse([
+        'success' => true,
+        'message' => 'Gift details reset to the starter list. You can edit and save again whenever you like.',
+        'data' => weddingAdminGiftsView($saved),
     ]);
 }
 

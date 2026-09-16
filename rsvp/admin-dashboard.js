@@ -1893,6 +1893,12 @@
     });
 
     $("floor-save-btn")?.addEventListener("click", saveFloorPlanEditor);
+    $("floor-reset-btn")?.addEventListener("click", resetFloorPlanEditor);
+    window.addEventListener("beforeunload", (event) => {
+      if (!floorPlanDirty) return;
+      event.preventDefault();
+      event.returnValue = "";
+    });
     window.addEventListener("resize", () => {
       if (floorPlanDraft && $("admin-floor-room")) renderAdminFloorPlan();
     });
@@ -1900,6 +1906,11 @@
 
   function loadFloorPlanEditor() {
     bindFloorPlanEditor();
+    if (floorPlanDraft && floorPlanDirty) {
+      renderAdminFloorPlan();
+      showFlash("floor-plan-message", "Unsaved floor plan changes are still here. Save them to keep this layout.", "success");
+      return;
+    }
     AdminAuth.apiCall("api.php?action=admin-get-floor-plan")
       .then((res) => res.json())
       .then((payload) => {
@@ -1930,13 +1941,39 @@
         floorPlanDraft = cloneFloorPlan(payload.data);
         floorPlanDirty = false;
         renderAdminFloorPlan();
-        showFlash("floor-plan-message", "Floor plan saved. Guests will see this layout on the reception Floor tab.", "success");
+        showFlash("floor-plan-message", payload.message || "Floor plan saved. This will stay until you change or reset it.", "success");
       })
       .catch((error) => {
         showFlash("floor-plan-message", error.message || "Could not save the floor plan.", "error");
       })
       .finally(() => {
         if (saveBtn) saveBtn.disabled = false;
+      });
+  }
+
+  function resetFloorPlanEditor() {
+    if (!window.confirm("Reset the floor plan to the starter layout? Your current table positions will be replaced. You can edit and save again after this.")) {
+      return;
+    }
+    const resetBtn = $("floor-reset-btn");
+    if (resetBtn) resetBtn.disabled = true;
+    AdminAuth.apiCall("api.php?action=admin-reset-floor-plan", { method: "POST" })
+      .then((res) => res.json())
+      .then((payload) => {
+        if (!payload || !payload.success) throw new Error(payload?.error || "Reset failed");
+        floorPlanDraft = cloneFloorPlan(payload.data);
+        floorPlanSelected = null;
+        floorPlanDirty = false;
+        renderAdminFloorPlan();
+        populateTableNumberSelect();
+        renderSeatingGuestTable();
+        showFlash("floor-plan-message", payload.message || "Floor plan reset to the starter layout.", "success");
+      })
+      .catch((error) => {
+        showFlash("floor-plan-message", error.message || "Could not reset the floor plan.", "error");
+      })
+      .finally(() => {
+        if (resetBtn) resetBtn.disabled = false;
       });
   }
 
@@ -2339,6 +2376,11 @@
   let giftsDraft = null;
   let giftsEditorBound = false;
   let giftsInvitations = [];
+  let giftsDirty = false;
+
+  function markGiftsDirty() {
+    giftsDirty = true;
+  }
 
   function blankGiftMethod() {
     return { id: "", title: "New method", account_name: "", account_number: "", note: "", link: "", qr_image: "", qr_url: "" };
@@ -2486,12 +2528,14 @@
       .then((payload) => {
         if (!payload || !payload.success) throw new Error(payload?.error || "Save failed");
         giftsDraft = cloneGifts(payload.data);
+        giftsDirty = false;
         return giftsDraft;
       });
   }
 
   function applyGiftsPayload(payload, message) {
     giftsDraft = cloneGifts(payload.data);
+    giftsDirty = false;
     renderGiftsEditor();
     showFlash("gifts-editor-message", message, "success");
   }
@@ -2562,6 +2606,7 @@
       collectGiftsEditorFromDom();
       const index = parseInt(btn.getAttribute("data-remove-gift"), 10);
       giftsDraft.methods.splice(index, 1);
+      markGiftsDirty();
       renderGiftsEditor();
     });
     $("gift-qr-file")?.addEventListener("change", () => {
@@ -2581,14 +2626,36 @@
         return;
       }
       giftsDraft.methods.push(blankGiftMethod());
+      markGiftsDirty();
       renderGiftsEditor();
     });
+    $("gifts-headline")?.addEventListener("input", markGiftsDirty);
+    $("gifts-thanks")?.addEventListener("input", markGiftsDirty);
+    $("gifts-methods-root")?.addEventListener("input", markGiftsDirty);
     $("gifts-save-btn")?.addEventListener("click", saveGiftsEditor);
+    $("gifts-reset-btn")?.addEventListener("click", resetGiftsEditor);
     $("gifts-invitation-search")?.addEventListener("input", renderGiftsInvitationList);
+    window.addEventListener("beforeunload", (event) => {
+      if (!giftsDirty) return;
+      event.preventDefault();
+      event.returnValue = "";
+    });
   }
 
   function loadGiftsEditor() {
     bindGiftsEditor();
+    if (giftsDraft && giftsDirty) {
+      renderGiftsEditor();
+      showFlash("gifts-editor-message", "Unsaved gift changes are still here. Save them to keep this on the invitation.", "success");
+      AdminAuth.apiCall("api.php?action=get-invitations")
+        .then((r) => r.json())
+        .then((invRes) => {
+          giftsInvitations = invRes && invRes.success ? (invRes.data || []) : giftsInvitations;
+          renderGiftsInvitationList();
+        })
+        .catch(() => {});
+      return;
+    }
     Promise.all([
       AdminAuth.apiCall("api.php?action=admin-get-gifts").then((r) => r.json()),
       AdminAuth.apiCall("api.php?action=get-invitations").then((r) => r.json()),
@@ -2596,6 +2663,7 @@
       .then(([giftsRes, invRes]) => {
         if (!giftsRes || !giftsRes.success) throw new Error(giftsRes?.error || "Could not load gift details.");
         giftsDraft = cloneGifts(giftsRes.data);
+        giftsDirty = false;
         giftsInvitations = invRes && invRes.success ? (invRes.data || []) : [];
         renderGiftsEditor();
         renderGiftsInvitationList();
@@ -2618,15 +2686,33 @@
       .then((res) => res.json())
       .then((payload) => {
         if (!payload || !payload.success) throw new Error(payload?.error || "Save failed");
-        giftsDraft = cloneGifts(payload.data);
-        renderGiftsEditor();
-        showFlash("gifts-editor-message", "Gift details saved. They will appear on the invitation, just before the FAQs.", "success");
+        applyGiftsPayload(payload, payload.message || "Gift details saved. This will stay until you change or reset it.");
       })
       .catch((error) => {
         showFlash("gifts-editor-message", error.message || "Could not save gift details.", "error");
       })
       .finally(() => {
         if (saveBtn) saveBtn.disabled = false;
+      });
+  }
+
+  function resetGiftsEditor() {
+    if (!window.confirm("Reset gift details to the starter list? Your current payment methods will be replaced. You can edit and save again after this.")) {
+      return;
+    }
+    const resetBtn = $("gifts-reset-btn");
+    if (resetBtn) resetBtn.disabled = true;
+    AdminAuth.apiCall("api.php?action=admin-reset-gifts", { method: "POST" })
+      .then((res) => res.json())
+      .then((payload) => {
+        if (!payload || !payload.success) throw new Error(payload?.error || "Reset failed");
+        applyGiftsPayload(payload, payload.message || "Gift details reset to the starter list.");
+      })
+      .catch((error) => {
+        showFlash("gifts-editor-message", error.message || "Could not reset gift details.", "error");
+      })
+      .finally(() => {
+        if (resetBtn) resetBtn.disabled = false;
       });
   }
 
